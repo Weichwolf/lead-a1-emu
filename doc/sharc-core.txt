@@ -9,8 +9,10 @@ Sharc operates on SharcMemory word addresses. It currently implements NOP,
 Type8a absolute/relative JUMP/CALL, plain Type11a RTS, Type17a immediate moves
 to reviewed system registers, Type18a SET/CLR/TGL/TST/XOR and Type14a 32-bit IOP
 transfers for reviewed system/sequencer registers. Execution is native-48 only.
-Data/PX/DAG registers, computation fields, general DO loops, RAM data-width
-selection/SYSCTL, forced LW, VISA, IDLE, interrupt entry/return and caches remain
+Primary/secondary data/DAG registers, SYSCTL width selection and compute-free
+SISD Type4a indexed NW32/40 RAM transfers are documented in sharc-data.txt.
+PX, computation fields, general DO loops/DAG modes, direct RAM moves,
+forced LW, VISA, IDLE, interrupt entry/return and caches remain
 pending. Unsupported forms fail with PC, fetched opcode and access context.
 
 State and control
@@ -95,6 +97,8 @@ sharc-clock.txt documents PMCTL, explicit clock-reference inputs and native
 one-instruction NOP counter loops. With that device mapped, all four original
 kernels now execute 8291 instructions through their entire clock setup and stop
 at FLAGS PC 0x8c0b2. The two following direction operations now execute, reaching
-the unsupported I0 immediate at PC 0x8c0b4 after 8293 instructions. The
-unconfigured-clock prefix case above remains a separate regression. General loops, counter-register
+I0 setup at PC 0x8c0b4 after 8293 instructions. sharc-data.txt extends this
+composition through actual RAM clearing and loader register setup to PC0x8c013
+after 171769 instructions. The unconfigured-clock prefix above remains separate.
+General loops, counter-register
 readback, other bodies and full pipeline/board timing remain pending.

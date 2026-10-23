@@ -49,10 +49,11 @@ partial BTF knowledge, full-register writes, rejection/repair and IOP rollback.
 The optional original SPI composition retains the clock phase's 8291-instruction
 oracle. It then executes the unchanged FLAG0-input and FLAG1-output operations
 in all four kernel placements, reaching PC 0x8c0b4 after 8293 instructions.
-The next original I0 immediate fails unchanged because DAG execution is still
-unsupported, preserving the pending FLAG1 selection. No FLAG level/sample,
-ARM GPIO connection or readiness is invented. Original RAM-clear loops, remaining
-loader/application execution, cold boot and audio remain open.
+sharc-data.txt extends this phase through actual I0 setup and original RAM-clear
+stores. The original later FLAG1 level write establishes a high core output;
+its return then reaches caller0x8c008. No input sample, physical pin/ARM GPIO
+connection or readiness is invented. Remaining loader/application execution,
+cold boot and audio remain open.
 
   cmake --build --preset strict
   ctest --test-dir build/strict -R '^sharc_' --output-on-failure

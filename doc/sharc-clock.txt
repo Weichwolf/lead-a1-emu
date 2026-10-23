@@ -39,7 +39,8 @@ events are delivered on the owning emulation thread outside instructions.
 
 Short-loop contract
 The native core implements Type 12a immediate/UREG-count loops whose body is a
-single NOP. It executes every fetched NOP; the loop is not a host wait or a
+single NOP or a reviewed SISD RAM move (sharc-data.txt). It executes every
+fetched body instruction; the loop is not a host wait or a
 successful initialization callback. Count 0 means 2^32 iterations. Remaining
 iteration state is logical bookkeeping, not fabricated LCNTR/CURLCNTR readback.
 Other bodies, multiple instructions, nesting, arithmetic loops and loop-resource
@@ -69,8 +70,9 @@ oracles check all five reads and six writes, final PMCTL 0x40012, an empty loop
 pipeline/stack and preserved CALL frame 0x108c008. Ideal logical ratios finish
 at CCLK 18, PCLK 9, external 36/5 relative to CLKIN; no MHz value is inferred.
 The next two original FLAGS direction operations now execute under the separate
-core-FLAG reference, reaching the unsupported I0 immediate at PC 0x8c0b4 after
-8293 instructions (sharc-flags.txt). RAM clearing, remaining loader records,
+core-FLAG reference, reaching I0 setup at PC 0x8c0b4 after 8293 instructions
+(sharc-flags.txt). sharc-data.txt extends the original composition through RAM
+clearing and loader setup to PC0x8c013/171769 instructions. Remaining loader records,
 application execution, MIDI/audio and complete boot remain open.
 
 sharc_clock independently checks three reset-pin profiles, unknown pins, shadow

@@ -2,6 +2,7 @@
 #include "lead_a1/sharc.hpp"
 
 #include "lead_a1/memory.hpp"
+#include "lead_a1/sharc_control.hpp"
 #include "lead_a1/sharc_memory.hpp"
 #include "sharc_internal.hpp"
 
@@ -33,6 +34,7 @@ constexpr unsigned int system_bit_class = 20;
 constexpr std::uint32_t all_bits = std::numeric_limits<std::uint32_t>::max();
 
 void validate(const SharcState &state) {
+  detail::sharc_validate_registers(state);
   detail::sharc_validate_flag_inputs(state.flag_inputs);
   if (state.pc > detail::sharc_pc_mask || (state.depth && *state.depth > state.pc_stack.size())) {
     throw std::invalid_argument("Invalid SHARC PC/stack state");
@@ -160,7 +162,14 @@ void direct_move(SharcMemory &memory, SharcState &state, std::uint64_t opcode) t
   throw std::runtime_error(message.str());
 }
 
-std::optional<std::uint32_t> execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode) {
+std::optional<std::uint32_t>
+execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const SharcControl *control) {
+  constexpr std::uint64_t indexed_mask = 0xf00000000000;
+  constexpr std::uint64_t indexed_move = 0x600000000000;
+  if ((opcode & indexed_mask) == indexed_move) {
+    detail::sharc_data_move(memory, state, opcode, control);
+    return {};
+  }
   const auto type = opcode >> class_shift;
   switch (type) {
     case 0:
@@ -199,9 +208,41 @@ std::optional<std::uint32_t> execute(SharcMemory &memory, SharcState &state, std
   }
 }
 
+unsigned int execute_loop(SharcMemory &memory,
+                          SharcState &state,
+                          std::uint64_t opcode,
+                          const SharcControl *control) {
+  if (opcode != 0) {
+    constexpr std::uint64_t indexed_mask = 0xf00000000000;
+    constexpr std::uint64_t indexed_move = 0x600000000000;
+    if ((opcode & indexed_mask) != indexed_move) {
+      throw std::runtime_error("SHARC count-loop body instruction/pipeline not implemented");
+    }
+    detail::sharc_data_move(memory, state, opcode, control);
+  }
+  return detail::sharc_count_loop_step(state, opcode);
 }
 
-Sharc::Sharc(SharcMemory &memory, SharcState initial) : memory_(memory), state_(initial) {
+void execution_guard(const SharcState &state) {
+  constexpr unsigned int almost_full = 29;
+  if (state.depth && *state.depth >= almost_full) {
+    throw std::runtime_error("SHARC stack-full interrupt state not implemented");
+  }
+  if ((!state.loops_empty || !*state.loops_empty) && !state.count_loop) {
+    throw std::runtime_error("SHARC active/unknown loop sequencing not implemented");
+  }
+  detail::sharc_interrupt_guard(state);
+  constexpr std::uint32_t visa_start = 0x100000;
+  constexpr std::uint32_t visa_end = 0x200000;
+  if (state.pc >= visa_start && state.pc < visa_end) {
+    throw std::runtime_error("SHARC VISA execution not implemented");
+  }
+}
+
+}
+
+Sharc::Sharc(SharcMemory &memory, SharcState initial, SharcControl *control)
+    : memory_(memory), state_(initial), control_(control) {
   validate(state_);
   detail::sharc_validate_count_loop(state_);
   detail::sharc_stack_status(state_);
@@ -231,34 +272,27 @@ SharcState Sharc::reset_reference_214xx(std::uint32_t entry) {
 SharcStep Sharc::step() {
   std::optional<std::uint64_t> opcode;
   bool transaction{};
+  bool control_transaction{};
   try {
     if (memory_.active()) {
       throw std::logic_error("SHARC core step during another memory transaction");
     }
-    constexpr unsigned int almost_full = 29;
-    if (state_.depth && *state_.depth >= almost_full) {
-      throw std::runtime_error("SHARC stack-full interrupt state not implemented");
-    }
-    if ((!state_.loops_empty || !*state_.loops_empty) && !state_.count_loop) {
-      throw std::runtime_error("SHARC active/unknown loop sequencing not implemented");
-    }
-    detail::sharc_interrupt_guard(state_);
-    constexpr std::uint32_t visa_start = 0x100000;
-    constexpr std::uint32_t visa_end = 0x200000;
-    if (state_.pc >= visa_start && state_.pc < visa_end) {
-      throw std::runtime_error("SHARC VISA execution not implemented");
-    }
+    execution_guard(state_);
     memory_.set_pc(state_.pc);
     memory_.begin_instruction();
     transaction = true;
+    if (control_ != nullptr) {
+      control_->begin_core_instruction();
+      control_transaction = true;
+    }
     opcode = memory_.read({.address = state_.pc, .width = SharcWidth::wide48}, AccessKind::fetch);
     auto next = state_;
     next.pending.fill({});
     unsigned int minimum_cycles = 1;
     if (state_.count_loop) {
-      minimum_cycles = detail::sharc_count_loop_step(next, *opcode);
+      minimum_cycles = execute_loop(memory_, next, *opcode, control_);
     } else {
-      const auto target = execute(memory_, next, *opcode);
+      const auto target = execute(memory_, next, *opcode, control_);
       next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
     }
     for (unsigned int index = 0; index < state_.pending.size(); ++index) {
@@ -275,6 +309,10 @@ SharcStep Sharc::step() {
     }
     memory_.commit_instruction();
     transaction = false;
+    if (control_transaction) {
+      control_->commit_core_instruction();
+      control_transaction = false;
+    }
     const SharcStep result{.pc = state_.pc,
                            .opcode = *opcode,
                            .next_pc = next.pc,
@@ -283,6 +321,7 @@ SharcStep Sharc::step() {
     return result;
   } catch (const std::exception &error) {
     if (transaction) { memory_.abort_instruction(); }
+    if (control_transaction) { control_->abort_core_instruction(); }
     std::ostringstream message;
     message << "SHARC native48 pc=0x" << std::hex << state_.pc << " opcode=";
     if (opcode) {

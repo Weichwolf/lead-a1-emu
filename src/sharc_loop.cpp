@@ -82,7 +82,9 @@ void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode) {
 }
 
 unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode) {
-  if (opcode != 0) {
+  constexpr std::uint64_t indexed_mask = 0xf00000000000;
+  constexpr std::uint64_t indexed_move = 0x600000000000;
+  if (opcode != 0 && (opcode & indexed_mask) != indexed_move) {
     throw std::runtime_error("SHARC count-loop body instruction/pipeline not implemented");
   }
   auto loop = state.count_loop;
@@ -92,7 +94,7 @@ unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode) {
   const bool first = loop->remaining == loop->total;
   const bool last = loop->remaining == 1;
   // PGR4-61..63: stack pre-pop occurs before the final executions have drained.
-  // Non-NOP bodies and architectural counter/register observations are guarded.
+  // Reviewed RAM moves cannot access loop resources; other bodies stay guarded.
   if ((loop->total > 4 && loop->remaining == 4) || (loop->total < 4 && loop->total > 1 && last)) {
     pop(state, *loop);
   }

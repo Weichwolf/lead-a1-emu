@@ -1,0 +1,91 @@
+SHARC data/DAG registers, SYSCTL and normal-word RAM moves
+
+This is independent native-core implementation from ADI Programming Reference
+rev2.4: 2-5 data registers, 6-18 extended data, 6-23 base/index relationships,
+9-17/18 and 10-8 Type4a fields, 10-31 UREG codes, A-4 bank selection and
+A-45/47 SYSCTL. HWR rev1.1 A-5/7 describes family-specific SYSCTL fields.
+reference/sharc.json records manual provenance; manufacturer/private sources
+are not build inputs. Physical Nord reset, muxes and board timing remain open.
+
+Registers
+State retains 40 known bits for every primary/secondary PEx/PEy data register,
+plus all primary/secondary I/M/L/B registers. Reset data/DAG contents are unknown.
+32-bit UREG writes left-justify into 40 bits and establish eight low zero bits;
+32-bit reads ignore those eight bits. R/F are bit aliases, not host float
+conversions. This does not implement computational instructions.
+
+MODE1 selects primary/secondary data low/high halves and four DAG groups using
+its effective, delayed view. Bx writes update the corresponding Ix in the same
+bank even with circular mode disabled; Ix writes leave Bx unchanged. Reviewed
+Type17 immediate and Type14 32-bit IOP forms access these registers. SIMD data
+transfers, PX and additional register/compute instruction forms remain guarded.
+
+SYSCTL
+SharcControl maps device offset0/read-write32 to word0x30024. The owning core
+binds the same device explicitly; missing binding prevents RAM data-width
+selection. The decoder queries effective control directly without an extra
+guest IOP read. The device must outlive its Memory and core bindings.
+
+The constructor takes known/unknown valid boot mode. PGR A-46 sets IIVT bit2
+for every valid BOOT_CFG mode, despite the generic reset listing0. A reserved
+mode clears it; unknown mode leaves it unknown and prevents a complete register
+read. Reset IMDW0..3 are known zero independently of that unknown bit.
+The current reference permits IIVT and IMDW9..12 writes. Reset, arbitration,
+mux, family/reserved settings fail rather than pretending to act. Interrupt
+entry/vector routing, software reset and those board functions remain open.
+
+Read views update immediately; width effects follow one committed internal
+instruction. Consecutive writes retain ordered effects. CPU state, memory,
+device accesses and due/new SYSCTL effects share rollback. Reading or failing
+an instruction cannot consume a delayed change. The owner stages control at
+instruction entry and joins any actual IOP access into that same transaction.
+This is an instruction-order reference, not an external-access/pipeline model.
+
+RAM moves and loops
+Type4a handles compute-free, SISD DM/PM accesses using signed immediate6 and
+I0..7/I8..15 respectively. Post-modify accesses old Ix then updates it modulo
+2^32; pre-modify addresses the sum and leaves Ix unchanged. False conditions
+require no index/data/memory value. SIMD is rejected before evaluating a PEx
+condition because data moves have per-element conditions, not branch AND rules.
+Circular, reversed, broadcast, SW/LW/external/IOP indexed accesses and parallel
+computations remain explicit unsupported forms.
+
+IMDW selects NW32 or extended40 independently for each bank. NW32 stores need
+only the upper32 register bits; loads establish low8 zero. Extended40 stores
+write the 40 data bits into physical48 with low8 zero, as required by 6-18.
+Loads discard physical low8. This native-store behavior differs from the raw
+SharcMemory extended40 bit-view API, which preserves unselected cell bits.
+
+One-instruction counter loops can execute these RAM moves as well as NOPs.
+Every iteration fetches, addresses and transfers separately. Loop frame/pop,
+count-zero and bubble/drain behavior remain as in sharc-clock.txt. Unsupported
+loop-resource observations, general/nested/arithmetic loops and full pipeline,
+bank-conflict/cache/IOP timing remain open. minimum_core_cycles stays a lower
+bound, not a complete execution duration.
+
+Verification
+sharc_data checks primary/secondary UREG identities, bank-effect ordering,
+base/index side effects, normal/extended packing and width latency, PM and
+negative pre-modify, loop stores, malformed state, unsupported modes and false
+conditions. Unknown stores and a read-only second physical column preserve the
+loop, index, first column, pending SYSCTL and CPU state. sharc_control checks
+boot inputs, all four independent width selectors, delayed/repeated writes,
+transaction ownership, unsupported fields and failed-instruction retry.
+
+The optional original SPI composition uses explicit valid-boot, candidate
+5-Mbit RAM, clock and reset-register references. It executes four original
+clear loops: 0x92180/0xbe80, 0xb2000/0xbfff, 0xc0000/0x7fff and
+0xe0000/0x7fff, 163453 NW32 stores total. All 384 kernel words survive;
+owned markers at the three un-cleared final words survive. FLAG1 is driven
+high only by the later original level write; no sampled input or ARM wiring
+is supplied. The routine returns normally after 171758 instructions.
+
+Eleven further original instructions set IRQ-enable and L/M registers, then
+read the real SYSCTL mapping. PC0x8c013 is reached after 171769 instructions;
+the following PASS computation is still unsupported and leaves CPU/control/
+clock/memory state unchanged. All four kernel placements exercise this path.
+This is a local original-code composition, not full cold boot or audio.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^sharc_' --output-on-failure
+  cmake --build build/strict --target quality

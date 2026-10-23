@@ -110,6 +110,7 @@ std::uint32_t sharc_value(SharcKnown32 word) {
 }
 
 SharcKnown32 sharc_ureg(const SharcState &state, unsigned int ureg) {
+  if (sharc_data_ureg(ureg)) { return sharc_register_read(state, ureg); }
   if (ureg >= sreg_base && ureg < sreg_base + state.system.size()) {
     const auto index = ureg - sreg_base;
     if (user_status(index) || (index >= sharc_astat_x && index <= 9)) { require_sisd(state); }
@@ -135,6 +136,10 @@ SharcKnown32 sharc_ureg(const SharcState &state, unsigned int ureg) {
 }
 
 void sharc_ureg(SharcState &state, unsigned int ureg, SharcKnown32 value) {
+  if (sharc_data_ureg(ureg)) {
+    sharc_register_write(state, ureg, value);
+    return;
+  }
   if (ureg >= sreg_base && ureg < sreg_base + state.system.size()) {
     system_write(state, ureg - sreg_base, value);
     return;

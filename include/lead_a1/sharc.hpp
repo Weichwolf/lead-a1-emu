@@ -9,6 +9,8 @@
 
 namespace lead_a1 {
 
+class SharcControl;
+
 struct SharcKnown32 {
   std::uint32_t value{};
   std::uint32_t known{};
@@ -19,6 +21,12 @@ struct SharcBranch {
   std::uint32_t target{};
   unsigned int slots{};
   bool operator==(const SharcBranch &) const = default;
+};
+
+struct SharcKnown40 {
+  std::uint64_t value{};
+  std::uint64_t known{};
+  bool operator==(const SharcKnown40 &) const = default;
 };
 
 struct SharcCountLoop {
@@ -46,6 +54,10 @@ struct SharcState {
   std::array<std::optional<SharcKnown32>, 16> pending{};
   // Packed FLAG0..15 input samples, independent of the output latches in FLAGS.
   SharcKnown32 flag_inputs{};
+  // PEx primary/secondary, PEy primary/secondary; all reset data stays unknown.
+  std::array<std::array<SharcKnown40, 16>, 4> data{};
+  // Primary/secondary, then I/M/L/B, then register number.
+  std::array<std::array<std::array<SharcKnown32, 16>, 4>, 2> dag{};
   // Full 26-bit frames, including CALL/loop/interrupt metadata.
   static constexpr unsigned int pc_stack_capacity = 30;
   std::array<std::optional<std::uint32_t>, pc_stack_capacity> pc_stack{};
@@ -68,7 +80,7 @@ struct SharcStep {
 // No autonomous peripheral clocks, interrupt delivery or cycle timing yet.
 class Sharc {
 public:
-  Sharc(SharcMemory &memory, SharcState initial);
+  Sharc(SharcMemory &memory, SharcState initial, SharcControl *control = nullptr);
   // Documented reset registers with an explicitly supplied execution address.
   // This does not qualify the physical post-boot-DMA processor state.
   [[nodiscard]] static SharcState reset_reference_214xx(std::uint32_t entry);
@@ -84,6 +96,7 @@ public:
 private:
   SharcMemory &memory_;
   SharcState state_;
+  SharcControl *control_;
 };
 
 }

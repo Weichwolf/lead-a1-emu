@@ -58,7 +58,7 @@ constexpr std::uint64_t compare_zero = 0x14a000000000;
 constexpr std::uint64_t read_ustat1 = 0x107000001003;
 constexpr std::uint64_t write_ustat1 = 0x117000001004;
 constexpr std::uint64_t write_pc = 0x136300001005;
-constexpr std::uint64_t read_unsupported_r0 = 0x100000001003;
+constexpr std::uint64_t read_unsupported_px = 0x106b00001003;
 constexpr std::uint64_t read_ustat2 = 0x107100001003;
 constexpr std::uint64_t clear_imask = 0x0f7b00000000;
 constexpr std::uint64_t clear_irptl = 0x0f7a00000000;
@@ -367,7 +367,7 @@ void failed_effect_and_input_guards() {
   lead_a1::SharcMemory memory;
   map(memory);
   code(memory, base, enable_simd);
-  constexpr std::uint64_t load_unsupported_data = 0x0f0012345678;
+  constexpr std::uint64_t load_unsupported_data = 0x0f6b12345678;
   code(memory, base + 1, load_unsupported_data);
   lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(base));
   static_cast<void>(cpu.step());
@@ -405,7 +405,7 @@ void iop_transactions() {
   code(memory, base, read_ustat1);             // USTAT1 = DM(0x1003).
   code(memory, base + 1, write_ustat1);        // DM(0x1004) = USTAT1.
   code(memory, base + 2, write_pc);            // PM(0x1005) = PC.
-  code(memory, base + 3, read_unsupported_r0); // Unsupported R0 target, after device read.
+  code(memory, base + 3, read_unsupported_px); // Unsupported PX target, after device read.
   lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(base));
   static_cast<void>(cpu.step());
   constexpr std::uint32_t supplied = 0x13579bdf;

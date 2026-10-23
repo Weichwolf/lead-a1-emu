@@ -20,10 +20,20 @@ inline constexpr unsigned int sharc_irptl = 10;
 inline constexpr unsigned int sharc_imask = 11;
 inline constexpr std::uint32_t sharc_simd = 0x200000;
 inline constexpr std::uint32_t sharc_btf = 0x40000;
+inline constexpr std::uint64_t sharc_data_mask = 0xffffffffff;
 
 [[nodiscard]] std::uint32_t sharc_value(SharcKnown32 word);
 [[nodiscard]] SharcKnown32 sharc_ureg(const SharcState &state, unsigned int ureg);
 void sharc_ureg(SharcState &state, unsigned int ureg, SharcKnown32 value);
+[[nodiscard]] bool sharc_data_ureg(unsigned int ureg);
+[[nodiscard]] SharcKnown32 sharc_register_read(const SharcState &state, unsigned int ureg);
+void sharc_register_write(SharcState &state, unsigned int ureg, SharcKnown32 value);
+void sharc_validate_registers(const SharcState &state);
+[[nodiscard]] SharcKnown40 &sharc_data_register(SharcState &state, unsigned int reg);
+void sharc_data_move(SharcMemory &memory,
+                     SharcState &state,
+                     std::uint64_t opcode,
+                     const SharcControl *control);
 void sharc_bit_operation(SharcState &state, std::uint64_t opcode);
 [[nodiscard]] SharcKnown32 sharc_flags_read(const SharcState &state);
 void sharc_flags_write(SharcState &state, SharcKnown32 value, std::uint32_t mask);

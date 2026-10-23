@@ -9,7 +9,7 @@
       "local_copy_bytes": 5516505,
       "local_copy_sha256": "0b40637d05c7f33bc8e39235ee8a9d2c734b12c0372aff1eeac56a7554895869",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified. Official document independently consulted; no source reused.",
-      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending); 4-12/24 CALL/return stack and delay slots; 9/10 native instruction forms; A-10 26-bit frame metadata, A-39 interrupt RO bits, A-32/35 effects, A-54/56 reset register reference; 4-61/63 single-instruction counter loops, stack pre-pop and pipeline bubbles; 4-90/91 FLAG direction/level separation and toggle spacing; A-13/14 detailed FLAGS fields, sampled input read view, A-34 effect latency"
+      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending); 4-12/24 CALL/return stack and delay slots; 9/10 native instruction forms; A-10 26-bit frame metadata, A-39 interrupt RO bits, A-32/35 effects, A-54/56 reset register reference; 4-61/63 single-instruction counter loops, stack pre-pop and pipeline bubbles; 4-90/91 FLAG direction/level separation and toggle spacing; A-13/14 detailed FLAGS fields, sampled input read view, A-34 effect latency; 2-5 40-bit registers/32-bit left justification; 6-18 extended stores zero low8, 6-23 B/I relationship; 9-17/18 and 10-8 Type4a; A-4 register banks, A-45/47 boot-dependent SYSCTL/IMDW"
     },
     {
       "author": "Analog Devices",
@@ -70,7 +70,7 @@
     ]
   },
   "native_reference": {
-    "supported": "NOP; Type8a direct/relative branches; plain Type11a RTS; reviewed SREG Type17a immediate and Type18a bit operations; reviewed Type14a 32-bit IOP moves",
+    "supported": "NOP; Type8a direct/relative branches; plain Type11a RTS; reviewed SREG Type17a immediate and Type18a bit operations; reviewed Type14a 32-bit IOP moves; primary/secondary data/DAG UREGs; compute-free SISD Type4a indexed NW32/40 RAM moves with explicit SYSCTL binding",
     "state": "Known-bit system registers, delayed effects, full 26-bit PC frames; explicit reset-register candidate input, not physical post-DMA qualification",
     "original_frontier": {
       "committed_instructions": 8,
@@ -127,9 +127,9 @@
         "external": "36/5"
       },
       "next_pc_word": "0x8c0b2",
-      "next_operation": "Two FLAGS direction operations execute; then I0 immediate at 0x8c0b4 is unsupported, state unchanged"
+      "next_operation": "FLAGS, data/DAG and RAM-clear reference extends execution to PASS at 0x8c013/171769 instructions; sharc-data.txt"
     },
-    "limits": "Only one-instruction NOP counter-loop bodies; no counter-register readback, general loops, physical clock rate, voltage/range/analog failure, full board timing or complete boot claim"
+    "limits": "Single-instruction NOP/reviewed RAM-move loops only; no counter readback, general loops, physical clock rate, analog/voltage/range/failure or complete board/boot claim"
   },
   "flags_reference": {
     "register_fields": "A-5 even FLGx level, odd FLGxO direction; 0 input, 1 output",
@@ -142,7 +142,48 @@
       "direction_instructions": 2,
       "known_direction_mask": "0xaa",
       "direction_view": "0x8",
-      "next_operation": "I0 immediate unsupported; pending FLAG1 output selection and unknown levels retained"
+      "next_operation": "Data/SYSCTL reference executes actual RAM clearing and later FLAG1 level write; no sampled input or physical wiring claim"
     }
+  },
+  "data_reference": {
+    "registers": "Primary/secondary PEx/PEy 40-bit data and I/M/L/B known-bit storage; 32-bit writes left-justify and clear low8; effective MODE1 banks; Bx also loads Ix",
+    "memory": "Compute-free SISD Type4a signed immediate6 pre/postmodify; NW32/extended40 selected by bound SYSCTL; extended stores zero physical low8",
+    "control": {
+      "word_address": "0x30024",
+      "boot_mode": "Explicit valid/reserved/unknown boot input sets/clears/unknown IIVT bit2; IMDW9..12 reset zero independently",
+      "write_mask": "0x1e04",
+      "effects": "One following committed internal instruction; shared core/IOP rollback, no progress by read/failure"
+    },
+    "original_fixture": {
+      "valid_boot_reference": true,
+      "sysctl": "0x4",
+      "clear_spans": [
+        {
+          "first": "0x92180",
+          "words": 48768
+        },
+        {
+          "first": "0xb2000",
+          "words": 49151
+        },
+        {
+          "first": "0xc0000",
+          "words": 32767
+        },
+        {
+          "first": "0xe0000",
+          "words": 32767
+        }
+      ],
+      "nw32_stores": 163453,
+      "kernel_words_preserved": 384,
+      "uncleared_tail_markers_preserved": 3,
+      "return_instruction_count": 171758,
+      "committed_instructions": 171769,
+      "pc_word": "0x8c013",
+      "next_operation": "PASS computation unsupported; unchanged CPU/control/clock/RAM",
+      "flag1_core_output": "high only after original level write; no physical pin/sample/ARM-ready inference"
+    },
+    "limits": "General/circular/reversed/broadcast/SIMD DAG, direct RAM moves, SW/LW/external/indexed-IOP transfers, computation, VISA, runtime peripherals and physical timing remain open"
   }
 }

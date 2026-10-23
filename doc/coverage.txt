@@ -65,7 +65,12 @@ ID  State    Evidence / remaining work
              HWR24-28 qualifies four reset-input directions against A-5 fields;
              other reset bits stay unknown. Pin mux/wiring, level-toggle feedback
              timing and FLAG conditional instructions remain open (sharc-flags.txt).
-             Computation/DAG/VISA, runtime SPI/DMA/interrupts and timing remain
+             Primary/secondary 40-bit data and I/M/L/B registers, explicit SYSCTL
+             boot-mode/width controls and signed Type4a NW32/40 RAM moves have
+             owned literal tests. Short counter loops execute every load/store;
+             failed accesses preserve index/count/columns/control effects
+             (sharc-data.txt). General DAG/circular/broadcast/SIMD transfers,
+             computation/VISA, runtime SPI/DMA/interrupts and timing remain
              open. No automatic ready signal or programmable-port stub.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
              external/debug/undefined exception delivery, nonidentity MMU
@@ -125,8 +130,13 @@ ID  State    Evidence / remaining work
              kernels additionally execute 8291 instructions and 8256 NOP iterations,
              checking five PMCTL reads/six writes, final logical ratios and parent
              CALL frame. Two further FLAGS direction instructions reach word PC
-             0x8c0b4 after 8293 instructions; unsupported I0 loading preserves the
-             pending output select and unknown levels/samples (sharc-flags.txt).
+             0x8c0b4 after 8293 instructions (sharc-flags.txt). The explicit
+             valid-boot/SYSCTL reference extends each placement through 163453
+             actual RAM-clear stores, preserving kernel words and the three
+             original uncleared tails. Original FLAG1 level write/RTS and loader
+             L/M/SYSCTL setup reach PC0x8c013 after 171769 instructions. The next
+             PASS computation fails unchanged; no pin samples/ARM wiring are
+             invented (sharc-data.txt).
              This does not qualify physical MHz, bridge/mux timing or board reset; general
              loader/application boot and audio remain open (sharc-clock.txt).
              All-way fixture stops on unknown random replacement. No cold boot or

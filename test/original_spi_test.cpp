@@ -6,6 +6,7 @@
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_boot.hpp"
 #include "lead_a1/sharc_clock.hpp"
+#include "lead_a1/sharc_control.hpp"
 #include "lead_a1/sharc_memory.hpp"
 #include "lead_a1/spi.hpp"
 
@@ -170,6 +171,7 @@ struct Fixture {
   Recorded<lead_a1::SharcClock> clock{
       lead_a1::SharcClockReference{.configuration = 0, .input_stable = true, .reset_settled = true},
       dsp_steps};
+  Recorded<lead_a1::SharcControl> control{std::optional<bool>{true}, dsp_steps};
   lead_a1::SharcMemory dsp_memory;
   unsigned int dsp_channel{};
 
@@ -515,6 +517,99 @@ void flag_setup(Fixture &fixture, lead_a1::Sharc &cpu) {
   require(cpu.state().flag_inputs.known == 0); // No ARM connection/pull-up invented.
 }
 
+void clear_ram(Fixture &fixture, lead_a1::Sharc &cpu) {
+  constexpr std::uint32_t kernel = 0x92000;
+  constexpr unsigned int kernel_words = 384;
+  std::array<std::uint32_t, kernel_words> preserved{};
+  for (unsigned int index = 0; index < preserved.size(); ++index) {
+    preserved[index] =
+        static_cast<std::uint32_t>(fixture.dsp_memory.read({.address = kernel + index}));
+  }
+
+  struct ClearSpan {
+    std::uint32_t address;
+    unsigned int words;
+  };
+
+  constexpr std::array<ClearSpan, 4> spans{{{.address = 0x92180, .words = 0xbe80},
+                                            {.address = 0xb2000, .words = 0xbfff},
+                                            {.address = 0xc0000, .words = 0x7fff},
+                                            {.address = 0xe0000, .words = 0x7fff}}};
+  constexpr std::uint32_t tail_marker = 0x6e5d4c3b;
+  for (unsigned int index = 1; index < spans.size(); ++index) {
+    fixture.dsp_memory.write({.address = spans[index].address + spans[index].words}, tail_marker);
+  }
+  constexpr std::uint32_t caller = 0x8c008;
+  constexpr unsigned int limit = 200000;
+  while (cpu.state().pc != caller && fixture.dsp_steps < limit) {
+    static_cast<void>(cpu.step());
+    ++fixture.dsp_steps;
+  }
+  constexpr unsigned int expected_instructions = 171758;
+  require(cpu.state().pc == caller && fixture.dsp_steps == expected_instructions);
+  require(cpu.state().depth == 0 && cpu.state().loops_empty == true && !cpu.state().count_loop);
+  constexpr std::uint32_t parent = 0x108c008;
+  require(cpu.state().pc_stack[0] == parent); // Physical popped frame retained.
+  for (const auto span : spans) {
+    for (unsigned int index = 0; index < span.words; ++index) {
+      require(fixture.dsp_memory.read({.address = span.address + index}) == 0);
+    }
+  }
+  for (unsigned int index = 1; index < spans.size(); ++index) {
+    require(fixture.dsp_memory.read({.address = spans[index].address + spans[index].words}) ==
+            tail_marker);
+  }
+  for (unsigned int index = 0; index < preserved.size(); ++index) {
+    require(fixture.dsp_memory.read({.address = kernel + index}) == preserved[index]);
+  }
+  constexpr std::uint32_t final_index = 0xe7fff;
+  constexpr std::uint64_t all_data_bits = 0xffffffffff;
+  require(cpu.state().dag[0][0][0].value == final_index);
+  require(cpu.state().data[0][0].value == 0 && cpu.state().data[0][0].known == all_data_bits);
+  constexpr std::uint16_t remaining = 0xfff0;
+  require((cpu.flag_drives() ==
+           lead_a1::SharcFlagDrive{.high = 2, .high_impedance = 13, .unresolved = remaining}));
+  require(cpu.state().flag_inputs.known == 0 && !cpu.state().pending[5]);
+  require(fixture.control.events.empty() && fixture.control.device.state().effective == 4);
+}
+
+void loader_frontier(Fixture &fixture, lead_a1::Sharc &cpu) {
+  constexpr unsigned int register_instructions = 11;
+  for (unsigned int index = 0; index < register_instructions; ++index) {
+    static_cast<void>(cpu.step());
+    ++fixture.dsp_steps;
+  }
+  constexpr std::uint32_t compute_pc = 0x8c013;
+  constexpr unsigned int instructions = 171769;
+  require(cpu.state().pc == compute_pc && fixture.dsp_steps == instructions);
+  constexpr std::uint32_t interrupt_enable = 0x1000;
+  require(cpu.state().effective[2].value == interrupt_enable);
+  for (const unsigned int reg : {0U, 4U, 8U, 12U, 15U}) {
+    require(cpu.state().dag[0][2][reg].value == 0);
+  }
+  require(cpu.state().dag[0][1][5].value == 0 && cpu.state().dag[0][1][13].value == 0);
+  require(cpu.state().dag[0][1][6].value == 1 && cpu.state().dag[0][1][14].value == 1);
+  constexpr std::uint64_t sysctl_left_justified = 0x400;
+  require(cpu.state().data[0][11].value == sysctl_left_justified);
+  require(fixture.control.events.size() == 1);
+  const auto &read = fixture.control.events.front();
+  require(!read.write && read.offset == 0 && read.width == 4 && read.value == 4 &&
+          read.instruction == instructions - 1);
+  const auto before = cpu.state();
+  const auto control = fixture.control.device.state();
+  bool stopped{};
+  try {
+    static_cast<void>(cpu.step());
+  } catch (const std::exception &error) {
+    const std::string message(error.what());
+    require(message.find("native48 pc=0x8c013") != std::string::npos);
+    require(message.find("instruction class not implemented") != std::string::npos);
+    stopped = true;
+  }
+  require(stopped && cpu.state() == before && fixture.control.device.state() == control &&
+          !fixture.dsp_memory.active());
+}
+
 void clock_setup(Fixture &fixture) {
   constexpr std::uint32_t pmctl = 0x2000;
   constexpr std::uint32_t entry = 0x8c000;
@@ -523,7 +618,10 @@ void clock_setup(Fixture &fixture) {
   constexpr unsigned int instruction_count = 8291;
   constexpr std::uint32_t bypass = 0x8000;
   fixture.dsp_memory.map_io({.first_word = pmctl, .words = 1}, fixture.clock);
-  lead_a1::Sharc cpu(fixture.dsp_memory, lead_a1::Sharc::reset_reference_214xx(entry));
+  constexpr std::uint32_t sysctl = 0x30024;
+  fixture.dsp_memory.map_io({.first_word = sysctl, .words = 1}, fixture.control);
+  lead_a1::Sharc cpu(
+      fixture.dsp_memory, lead_a1::Sharc::reset_reference_214xx(entry), &fixture.control.device);
   while (cpu.state().pc != flags_entry && fixture.dsp_steps < instruction_limit) {
     const auto events = fixture.clock.events.size();
     const auto step = cpu.step();
@@ -553,19 +651,9 @@ void clock_setup(Fixture &fixture) {
   require(
       (rates.external == lead_a1::SharcClockRatio{.numerator = ep_numerator, .denominator = 5}));
   flag_setup(fixture, cpu);
-  const auto before = cpu.state();
-  bool stopped{};
-  try {
-    static_cast<void>(cpu.step());
-  } catch (const std::exception &error) {
-    const std::string message(error.what());
-    require(message.find("native48 pc=0x8c0b4") != std::string::npos);
-    require(message.find("data/DAG/PX or sequencer register write not implemented") !=
-            std::string::npos);
-    stopped = true;
-  }
-  require(stopped && cpu.state() == before && fixture.clock.device.state() == clock &&
-          !fixture.dsp_memory.active());
+  clear_ram(fixture, cpu);
+  loader_frontier(fixture, cpu);
+  require(fixture.clock.device.state() == clock);
 }
 
 void kernel_transfer(std::span<const std::byte> image,
@@ -623,8 +711,8 @@ void kernel_transfer(std::span<const std::byte> image,
     kernel_prefix(fixture.dsp_memory, reset_word);
     clock_setup(fixture);
     std::cout << "Part " << part << " transport " << channel
-              << ": original ARM/SPI loading and 8293 SHARC instructions through clock setup "
-                 "and FLAGS directions; DAG loading remains unsupported\n";
+              << ": original ARM/SPI loading and 171769 SHARC instructions through clock/FLAGS, "
+                 "RAM clearing and loader setup; computation remains unsupported\n";
   }
 }
 
