@@ -29,13 +29,28 @@ set(CMAKE_CXX_CLANG_TIDY "${LEAD_A1_CLANG_TIDY};--warnings-as-errors=*")
 add_library(lead_a1_core STATIC src/firmware.cpp src/image.cpp)
 target_include_directories(lead_a1_core PUBLIC include)
 target_link_libraries(lead_a1_core PUBLIC lead_a1_quality PRIVATE lead_a1_lzo)
-add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp src/arm_status.cpp)
+add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp src/arm_status.cpp src/arm_system.cpp)
 target_include_directories(lead_a1_arm PUBLIC include)
 target_link_libraries(lead_a1_arm PUBLIC lead_a1_quality PRIVATE lead_a1_sleigh)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-system-cases.bin"
+    COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
+      --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/arm_system_cases.S"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-system-cases.o"
+    COMMAND "${LEAD_A1_LLVM_OBJCOPY}" -O binary -j .text
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-system-cases.o"
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-system-cases.bin"
+    DEPENDS test/arm_system_cases.S VERBATIM)
+  add_custom_target(lead-a1-arm-system-cases DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-system-cases.bin")
+  add_executable(lead-a1-arm-system-test test/arm_system_test.cpp)
+  target_link_libraries(lead-a1-arm-system-test PRIVATE lead_a1_arm)
+  add_dependencies(lead-a1-arm-system-test lead-a1-arm-system-cases)
+  add_test(NAME arm_system COMMAND lead-a1-arm-system-test
+    "${CMAKE_CURRENT_BINARY_DIR}/share/ARM5_le.sla"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-system-cases.bin")
   add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cases.bin"
     COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
       --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/arm_cases.S"
@@ -107,7 +122,8 @@ if(BUILD_TESTING)
   add_custom_target(quality
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
     DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
-      lead-a1-arm-test lead-a1-arm-status-test lead-a1-memory-test lead-a1-original-arm-test VERBATIM)
+      lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
+      lead-a1-memory-test lead-a1-original-arm-test VERBATIM)
 endif()
 
 install(TARGETS lead-a1-emu RUNTIME DESTINATION bin)

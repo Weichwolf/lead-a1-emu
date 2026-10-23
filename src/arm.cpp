@@ -5,9 +5,11 @@
 
 #include "address.hh"
 #include "arm_status.hpp"
+#include "arm_system.hpp"
 #include "emulate.hh"
 #include "error.hh"
 #include "globalcontext.hh"
+#include "lead_a1/arm_system.hpp"
 #include "lead_a1/memory.hpp"
 #include "loadimage.hh"
 #include "memstate.hh"
@@ -85,11 +87,27 @@ std::string xml_path(const std::filesystem::path &path) {
 
 class CodeImage final : public ghidra::LoadImage {
 public:
+  struct Instruction {
+    std::uint32_t address;
+    std::uint32_t word;
+  };
+
   explicit CodeImage(Memory &memory) : LoadImage("Lead A1 ARM reference RAM"), memory_(memory) {}
+
+  void set_instruction(Instruction instruction) {
+    pc_ = instruction.address;
+    instruction_ = instruction.word;
+  }
 
   void loadFill(ghidra::uint1 *bytes, ghidra::int4 size, const ghidra::Address &address) override {
     for (ghidra::int4 index = 0; index < size; ++index) {
       const auto offset = address.getOffset() + static_cast<ghidra::uintb>(index);
+      if (offset >= pc_ && offset - pc_ < instruction_bytes) {
+        constexpr unsigned int byte_bits = 8;
+        const auto shift = static_cast<unsigned int>(offset - pc_) * byte_bits;
+        bytes[index] = static_cast<ghidra::uint1>((instruction_ >> shift) & byte_mask);
+        continue;
+      }
       // Decoder lookahead is side-effect-free. Actual executed bytes are checked separately.
       const auto value = offset <= std::numeric_limits<std::uint32_t>::max()
                              ? memory_.peek(static_cast<std::uint32_t>(offset))
@@ -106,6 +124,8 @@ public:
 
 private:
   Memory &memory_;
+  std::uint32_t pc_{};
+  std::uint32_t instruction_{};
 };
 
 class SparseBank final : public ghidra::MemoryBank {
@@ -337,8 +357,15 @@ private:
 
 class Arm::Impl {
 public:
-  Impl(Memory &bus, const std::filesystem::path &specification, const ArmState &initial)
-      : bus(bus), image(bus), translator(&image, &context), memory(&translator) {
+  Impl(Memory &bus,
+       const std::filesystem::path &specification,
+       const ArmState &initial,
+       const std::optional<ArmSystemInitial> &system_initial)
+      : system(bus, system_initial),
+        bus(bus),
+        image(bus),
+        translator(&image, &context),
+        memory(&translator) {
     std::istringstream configuration(xml_path(specification));
     ghidra::DocumentStorage documents;
     auto *root = documents.parseDocument(configuration)->getRoot();
@@ -397,11 +424,12 @@ public:
     if (pc % instruction_bytes != 0) {
       throw std::runtime_error(fault_context(pc, "Unaligned ARM PC"));
     }
-    const auto opcode = static_cast<std::uint32_t>(
-        bus.read({.address = pc, .size = instruction_bytes}, AccessKind::fetch));
     auto saved_registers = registers->bytes;
     bus.begin_instruction();
+    system.begin_instruction();
     try {
+      const auto opcode = system.fetch(pc);
+      image.set_instruction({.address = pc, .word = opcode});
       translator.reset(&image, &context);
       ghidra::DocumentStorage documents;
       translator.initialize(documents);
@@ -410,7 +438,7 @@ public:
       const ghidra::Address address(translator.getDefaultCodeSpace(), pc);
       translator.printAssembly(assembly, address);
       auto after = before;
-      if (detail::execute_arm_status(opcode, after)) {
+      if (detail::execute_arm_status(opcode, after) || system.execute(opcode, after)) {
         apply(after);
       } else {
         executor->execute(pc);
@@ -420,22 +448,26 @@ public:
       const auto next_pc = after.registers[program_counter_index];
       if (!next_pc) { throw std::runtime_error("ARM produced an unknown program counter"); }
       bus.commit_instruction();
+      system.commit_instruction();
       banks = after.banks;
       return {.before = pc, .after = *next_pc, .assembly = std::move(assembly.text)};
     } catch (const ghidra::LowlevelError &error) {
       registers->bytes = std::move(saved_registers);
       banks = before.banks;
       bus.abort_instruction();
+      system.abort_instruction();
       throw std::runtime_error(fault_context(pc, error.explain));
     } catch (const std::exception &error) {
       registers->bytes = std::move(saved_registers);
       banks = before.banks;
       bus.abort_instruction();
+      system.abort_instruction();
       throw std::runtime_error(fault_context(pc, error.what()));
     }
   }
 
   ArmBanks banks;
+  detail::ArmSystem system;
   Memory &bus;
   CodeImage image;
   ghidra::ContextInternal context;
@@ -446,8 +478,11 @@ public:
   std::unique_ptr<Executor> executor;
 };
 
-Arm::Arm(Memory &memory, const std::filesystem::path &specification, const ArmState &initial) try
-    : impl_(std::make_unique<Impl>(memory, specification, initial)) {
+Arm::Arm(Memory &memory,
+         const std::filesystem::path &specification,
+         const ArmState &initial,
+         const std::optional<ArmSystemInitial> &system) try
+    : impl_(std::make_unique<Impl>(memory, specification, initial, system)) {
 } catch (const ghidra::LowlevelError &error) {
 
   throw std::runtime_error("Cannot initialize ARM semantics: " + error.explain);
@@ -457,6 +492,10 @@ Arm::~Arm() = default;
 
 ArmState Arm::state() const {
   return impl_->state();
+}
+
+ArmSystemState Arm::system_state() const {
+  return impl_->system.state();
 }
 
 ArmStep Arm::step() {

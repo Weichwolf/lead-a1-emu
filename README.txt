@@ -5,9 +5,9 @@ audio, and reproducible firmware-development tests. The native GTK4 UI presents
 current parameter values in a table for slots A-D. The complete acceptance scope
 is in doc/objective.txt; actual evidence and missing work are in doc/coverage.txt.
 
-Current state: native ARM-state reference execution, bounded original ARM0
-software entry, image parsing and safe LZO decoding, verified references, strict
-build gates and a working snapshot viewer. Complete CPU/board boot, DSP, MIDI,
+Current state: native ARM-state reference execution with bounded cache setup and
+banked stacks from original ARM0/CODE, image parsing and safe LZO decoding,
+verified references, strict build gates and a working snapshot viewer. Complete CPU/board boot, DSP, MIDI,
 audio and a parameter-state producer remain pending. The UI starts with unknown
 values and waits for snapshots. See doc/arm-reference.txt.
 

@@ -1,6 +1,6 @@
 {
   "author": "ARM Limited",
-  "use": "Independent ARMv5 status, bank and instruction expectations; manuals remain local references, never build inputs or redistributed assets.",
+  "use": "Independent ARMv5 status, bank, system and instruction expectations; manuals remain local references, never build inputs or redistributed assets.",
   "documents": [
     {
       "title": "ARM Architecture Reference Manual, ARM DDI 0100E",
@@ -15,6 +15,13 @@
       "bytes": 5740865,
       "sha256": "c441eb7f981f3beb5ad901716808cd54d86e9b41aa68b42a2ce9701831b0b7ea",
       "sections": "Supplementary PSR fields and conditional-instruction review"
+    },
+    {
+      "title": "ARM926EJ-S Technical Reference Manual, ARM DDI 0198E, r0p5",
+      "url": "https://documentation-service.arm.com/static/5e8e3d1088295d1e18d3a9b2",
+      "bytes": 1495050,
+      "sha256": "baa4122918a4e54057ccd1e2199ec4b61e8ee28fab73f764b3f4c04662fad55c",
+      "sections": "2.3.2 control c1; 2.3.7 cache operations c7; chapter 4 cache organization"
     }
   ]
 }

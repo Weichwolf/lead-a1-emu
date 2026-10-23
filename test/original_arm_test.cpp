@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "lead_a1/arm.hpp"
+#include "lead_a1/arm_system.hpp"
 #include "lead_a1/memory.hpp"
 
 #include <array>
@@ -44,10 +45,9 @@ void require(bool condition) {
   if (!condition) { throw std::runtime_error("Original ARM software-entry expectation failed"); }
 }
 
-void run_part(const std::filesystem::path &spec,
-              unsigned int part,
-              const std::filesystem::path &directory) {
-  lead_a1::Memory memory;
+void map_sections(lead_a1::Memory &memory,
+                  unsigned int part,
+                  const std::filesystem::path &directory) {
   constexpr std::array<const char *, 3> names{"SRAM", "CODE", "ARM0"};
   constexpr std::array bases{shared_base, code_base, entry};
   for (std::size_t index = 0; index < names.size(); ++index) {
@@ -56,6 +56,13 @@ void run_part(const std::filesystem::path &spec,
     memory.map({.address = bases[index], .size = data.size(), .name = names[index]},
                std::as_bytes(std::span(data)));
   }
+}
+
+void run_part(const std::filesystem::path &spec,
+              unsigned int part,
+              const std::filesystem::path &directory) {
+  lead_a1::Memory memory;
+  map_sections(memory, part, directory);
   lead_a1::ArmState initial;
   initial.registers[pc_index] = entry;
   initial.cpsr = reference_cpsr;
@@ -79,7 +86,7 @@ void run_part(const std::filesystem::path &spec,
   } catch (const std::runtime_error &error) {
     const std::string message = error.what();
     require(message.find("pc=0xc0000010 width=4") != std::string::npos);
-    require(message.find("coprocessor_moveto") != std::string::npos);
+    require(message.find("CP15 write opc1=0 crn=7 crm=7 opc2=0 rt=0") != std::string::npos);
     stopped = true;
   }
   require(stopped);
@@ -89,6 +96,51 @@ void run_part(const std::filesystem::path &spec,
       << ": original ARM0/CODE entry executes status updates; CP15 frontier remains explicit\n";
 }
 
+void configured_startup(const std::filesystem::path &spec,
+                        unsigned int part,
+                        const std::filesystem::path &directory) {
+  lead_a1::Memory memory;
+  map_sections(memory, part, directory);
+  lead_a1::ArmState initial;
+  initial.registers[pc_index] = entry;
+  initial.cpsr = reference_cpsr;
+  // Explicit reference inputs, not a claim about the physical software-entry state.
+  constexpr std::uint32_t reference_control = 0x50078;
+  constexpr std::size_t reference_icache_bytes = std::size_t{16} * 1024;
+  const lead_a1::ArmSystemInitial system{.control = reference_control,
+                                         .instruction_cache_bytes = reference_icache_bytes,
+                                         .instruction_cache_invalid = false,
+                                         .data_cache_invalid = false,
+                                         .write_buffer = std::vector<lead_a1::ArmBufferedWrite>{}};
+  lead_a1::Arm cpu(memory, spec, initial, system);
+  constexpr std::uint32_t memory_initializer = code_base + 0x158;
+  constexpr unsigned int instruction_limit = 256;
+  unsigned int count{};
+  while (cpu.state().registers[pc_index] != memory_initializer && count < instruction_limit) {
+    static_cast<void>(cpu.step());
+    ++count;
+  }
+  const auto state = cpu.state();
+  require(state.registers[pc_index] == memory_initializer);
+  constexpr std::uint32_t system_cpsr = 0xdf;
+  require(state.cpsr == system_cpsr);
+  constexpr std::array<std::array<std::uint32_t, 6>, 2> stack_tops{
+      {{0x8001e7a0, 0x8001efa0, 0x8001eba0, 0x8001efc0, 0x8001f000, 0x8001efe0},
+       {0x8001f790, 0x8001ff90, 0x8001fb90, 0x8001ffb0, 0x8001fff0, 0x8001ffd0}}};
+  for (std::size_t bank = 0; bank < stack_tops[part].size(); ++bank) {
+    require(state.banks.modes[bank].sp == stack_tops[part][bank]);
+  }
+  constexpr unsigned int sp_index = 13;
+  require(state.registers[sp_index] == stack_tops[part][0]);
+  const auto cache = cpu.system_state();
+  constexpr std::uint32_t icache_enable = 0x1000;
+  require(cache.control == (reference_control | icache_enable));
+  require(cache.instruction_invalidations == 1 && cache.data_invalidations == 1);
+  require(cache.write_buffer_drains == 1 && cache.instruction_misses != 0);
+  std::cout << "Part " << part << ": original cache setup and all six stack banks reach CODE"
+            << "+0x158 in " << count << " instructions under explicit reference inputs\n";
+}
+
 }
 
 int main(int argc, char **argv) {
@@ -96,6 +148,8 @@ int main(int argc, char **argv) {
   try {
     run_part(argv[1], 0, argv[2]);
     run_part(argv[1], 1, argv[2]);
+    configured_startup(argv[1], 0, argv[2]);
+    configured_startup(argv[1], 1, argv[2]);
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

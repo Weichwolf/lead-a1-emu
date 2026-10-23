@@ -10,11 +10,14 @@ ID  State    Evidence / remaining work
 2   partial  Native SLEIGH ARM-state reference, explicit known/unknown RAM and
              instruction rollback. Independent arithmetic/condition/load/store/
              BX/mutation/status/bank tests pass, including all ARM conditions and
-             modes. CP15, exception return, interrupts, board and
-             scheduler remain pending. No Blofeld hardware behavior imported.
+             modes. Explicit ARM926 reference CP15 c1/c7 and transactional I-cache
+             tests pass. MMU/TCM, other CP15 operations, exception return,
+             interrupts, board and scheduler remain pending. No Blofeld behavior
+             imported; reference inputs do not establish physical entry state.
 3   partial  Both original ARM0 software entries reach CODE in two instructions;
-             four CODE startup instructions execute; first CP15 operation stops
-             unchanged at CODE +0x10. No cold boot or
+             under explicit reference control/cache/buffer inputs both reach
+             CODE +0x158 in 46 instructions, checking six banked stack tops.
+             Unconfigured CP15 stops unchanged at CODE +0x10. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
 5   pending  No firmware audio, serial/DMA model, host audio or timing evidence.

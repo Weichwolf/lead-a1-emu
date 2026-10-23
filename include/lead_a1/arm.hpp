@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include "lead_a1/arm_system.hpp"
+
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -49,11 +51,15 @@ struct ArmStep {
 // ARM-state instruction reference, not a reset/SoC/clock or complete ARM926 model.
 class Arm {
 public:
-  Arm(Memory &memory, const std::filesystem::path &specification, const ArmState &initial);
+  Arm(Memory &memory,
+      const std::filesystem::path &specification,
+      const ArmState &initial,
+      const std::optional<ArmSystemInitial> &system = std::nullopt);
   ~Arm();
   Arm(const Arm &) = delete;
   Arm &operator=(const Arm &) = delete;
   [[nodiscard]] ArmState state() const;
+  [[nodiscard]] ArmSystemState system_state() const;
   [[nodiscard]] ArmStep step();
 
 private:

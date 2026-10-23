@@ -193,6 +193,10 @@ std::size_t arm_bank_index(std::uint32_t cpsr) {
   throw std::runtime_error("Unsupported ARM processor mode");
 }
 
+bool arm_condition_passes(std::uint32_t opcode, const ArmState &state) {
+  return condition_passes(opcode, state);
+}
+
 void capture_arm_banks(ArmState &state) {
   const auto index = arm_bank_index(state.cpsr);
   const auto high = index == 1 ? 1U : 0U;

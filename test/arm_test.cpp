@@ -99,7 +99,7 @@ void rollback(const std::filesystem::path &spec, std::span<const std::byte> byte
     if (index == 3) { memory.write({.address = data_base, .size = 4}, 11); }
     lead_a1::Arm cpu(memory, spec, state);
     constexpr std::array<const char *, 6> messages{
-        "", "", "uninitialized", "uninitialized", "uninitialized", "intrinsic"};
+        "", "", "uninitialized", "uninitialized", "uninitialized", "CP15"};
     const std::string message = messages[index];
     rejected([&cpu] { static_cast<void>(cpu.step()); }, message);
     require(cpu.state().registers == state.registers && cpu.state().cpsr == state.cpsr);

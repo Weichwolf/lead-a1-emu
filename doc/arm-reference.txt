@@ -6,8 +6,10 @@ its static zlib dependency receive native sanitizers/hardening. Adapted public
 executor infrastructure and the byte-memory patch are credited in THIRD_PARTY.txt.
 
 Each step decodes/commits one instruction without fetching the next. Lookahead
-is side-effect-free; executed bytes must be known/executable. RAM code changes
-invalidate translations. Registers/temporaries are unknown until provided or
+is side-effect-free; executed bytes must be known/executable. Decoding uses the
+fetched instruction, including stale I-cache contents when configured. Without
+an enabled I-cache, RAM code changes are visible on the next fetch.
+Registers/temporaries are unknown until provided or
 written. Caller-supplied CPSR flags synchronize individual flag storage. Explicit
 RAM mappings distinguish unknown from loaded/written bytes. Access errors give
 operation, address, width and PC. Failed instructions roll back register and
@@ -44,22 +46,51 @@ N/Z/C/V combinations. Native ADC observes MSR-written carry. Complete state
 comparisons include bank contents on failures; conditional failures do not read
 unknown operands.
 
-Current original frontier
-Both unchanged ARM0 entries transfer to CODE, then execute its first four
-instructions: full status read, interrupt-mask update, control write and operand
-initialization. The next CP15 cache-maintenance operation stops visibly at CODE
-+0x10 with unchanged state. Cache/system-control, interrupts, exception return,
-unaligned data access, Thumb/Jazelle, board timing and complete core qualification
-remain pending. No cache-maintenance operation is silently accepted.
+Bounded ARM926 system reference
+This flat-memory profile assumes disabled MMU and TCM regions.
+An optional explicit system profile adds CP15 control c1 and whole I/D-cache
+invalidation plus write-buffer drain through c7. The ARM926 TRM is pinned in
+arm-architecture.json. Control SBO bits are 0x00050078; V and B depend on reset
+inputs and the actual software-entry state is not established. No profile means
+executed CP15 access fails, preserving the earlier flat instruction reference.
+Unknown supplied control, cache validity/geometry or write-buffer contents fail
+when needed. Conditional CP15 operations do not inspect untaken operands.
 
-This is software-entry execution, not physical reset, ROM loading, MMU/cache
+Enabled instruction fetch uses 32-byte, four-way cache lines. Guest data writes
+leave cached instructions intact; invalidation discards them. Disabling I-cache
+bypasses it without discarding lines. MMU-disabled data accesses bypass D-cache
+regardless of C, as documented by the TRM. Supplied pending buffer writes drain
+through the real memory transaction; partial failures roll back CPU, RAM and
+system state. Cache fills/invalidation/counters also commit only on success.
+The profile deliberately supplies cache size; it does not fabricate a CPU/cache
+ID. Replacing a valid line stops until random/round-robin internal replacement
+state is qualified. MMU, TCM, big endian, legacy PC loads, WFI and other CP15
+operations remain unsupported. Exception delivery and cycle timing are pending.
+
+Owned assembly verifies stale instructions, Harvard data visibility, invalidation,
+disable/re-enable retention, control masks/privilege, NZCV reads to PC, unknown
+fetch inputs, incomplete lines, conditional skips and transactional buffer faults.
+Conflicting cache sets fail unchanged rather than using invented replacement
+state. These are bounded reference semantics, not hardware cache qualification.
+
+Current original checkpoint
+Without a system profile, both originals stop unchanged at CODE +0x10 with a
+complete CP15 diagnostic. With explicit reference inputs (control 0x00050078,
+16 KiB instruction cache, initially unresolved cache validity and known-empty
+write buffer), both unchanged ARM0/CODE paths reach CODE +0x158 after 46 guest
+instructions. Original invalidation resolves cache validity before enabling it.
+All six banked stack tops and System mode with IRQ/FIQ masked match independent
+private reconstruction expectations. Section-sized memory mappings still leave
+stack storage and BSS initialization pending; this checkpoint precedes them.
+
+This is software-entry execution, not physical reset, ROM loading, hardware cache
 qualification, DSP loading, audio or MIDI. Original instructions/disassembly and
 private reconstruction sources are not embedded in public tests.
 
   python3 tools/dependencies.py --fetch --ghidra
   cmake --preset strict
   cmake --build --preset strict
-  ctest --test-dir build/strict -R 'arm_status_banks|arm_instructions|reference_memory|original_images|native_build' --output-on-failure
+  ctest --test-dir build/strict -R 'arm_system|arm_status_banks|arm_instructions|reference_memory|original_images|native_build' --output-on-failure
 
 Original checks skip explicitly without local firmware. Owned instruction/RAM
 tests remain mandatory. Native checks audit actual compile commands, all three
