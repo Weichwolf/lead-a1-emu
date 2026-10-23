@@ -1,0 +1,73 @@
+ARM926 data cache and RAM-bus reference
+
+This is a functional reference, not a cycle-level board/AHB model. The primary
+architectural reference is ARM DDI 0198E, sections 2.3.8/2.3.10 and chapter 4,
+pinned in reference/arm-architecture.json. Exact physical SoC/loader state
+remains unqualified. See arm-reference.txt for MMU/entry constraints.
+
+Cache
+ArmSystemInitial supplies data_cache_bytes and explicit initial cache validity.
+Unresolved validity fails until whole-cache invalidation. Lines are 32 bytes,
+four-way, indexed/tagged by MVA; each retains its fill's physical address for
+writeback. Two dirty bits track the separate 16-byte halves. Read misses request
+the critical word first, then wrap around the line. The complete known line
+commits with the instruction; early restart/asynchronous linefill is pending.
+
+M=1/C=1 and the descriptor C bit enable cache access. Disabled/noncacheable
+accesses bypass the cache and retain its contents. Translation and permissions
+still precede hits. Reads allocate; writes do not allocate. C/B=10 updates a hit
+and queues a write-through store; C/B=11 updates a hit and marks dirty halves.
+Cacheable write misses queue stores. Noncacheable B=1 stores are buffered;
+nonbufferable stores reach RAM in the instruction transaction. M=0 bypasses
+D-cache and buffering regardless of c1.C, through the MMU reference's flat
+attributes. No cache contents or memory values are fabricated.
+
+c9 lockdown controls allocation, preserving hits on locked ways. All four
+locked selects way 3. Single-way eviction is deterministic. A full set with
+multiple eligible ways fails on unresolved random/round-robin state. Geometry
+is caller supplied; tiny owned fixtures do not qualify a physical cache size.
+
+c7 supports whole invalidation, plus single-line invalidate, clean and clean/
+invalidate by MVA or Set/Way. MVA operands are already modified addresses; no
+translation/PID is added. Word/SBZ and unused index bits are checked. Cleaning
+queues only dirty halves using the stored PA tag, clears dirty state and retains
+validity unless invalidation is requested. Invalidation discards dirty cache
+data but preserves previously queued writes. Test-and-clean MRC, I-cache single
+entry operations/prefetch and WFI remain unsupported. No successful substitute
+for their unqualified scan/result flags is supplied.
+
+Buffers and ordering
+The explicit write_buffer input describes independently addressed scalar stores;
+writeback_buffer_empty must separately establish the cache write-back buffer's
+empty state. False means unknown, not a known pending entry. There are no silent
+defaults for configured profiles. ArmDataState reports committed cache/buffer
+counts and functional events; these are not guest cycles.
+
+The RAM-bus reference keeps at most four scalar address entries (width 1/2/4/8)
+and one eight-word cache write-back entry with half-line masks. It does not yet
+qualify the silicon's 16-word main-buffer packing, burst allocation or merging.
+This conservative functional policy drains FIFO writes when address capacity is
+needed, changing between store/write-back queues, before nonbuffered stores,
+on overlapping physical reads, and on explicit c7 drain. It supplies no background
+device service or bus timing. Exact buffer occupancy/retirement and AHB scheduling
+remain board work, not performance or concurrency evidence.
+
+Reads never forward queued store values directly: overlapping reads drain to
+the real Memory transaction, then read RAM. Instruction fetches and physical MMU
+table walks use this same path. Dirty D-cache contents remain invisible to those
+paths until cleaned and drained. Clean/drain does not invalidate I-cache.
+
+Rollback and tests
+CPU registers, RAM stores, TLB changes, D-cache line edits, both buffers and their
+counters commit together. A bounded 32-line journal avoids copying the whole
+cache each instruction. Failed partial STM, unknown linefill and partial dirty
+write-back faults preserve prior committed state. Unknown RAM is a diagnostic
+failure, not a fabricated external-abort response; CPU abort delivery is pending.
+
+Owned tests use independent little-endian width/value expectations, stale RAM
+and modified/physical tags, half-line dirty masks, no-write-allocate, write-through,
+lockdown masks/protected hits, Set/Way validation and capacity-triggered drains.
+Executed ARM programs check write-back visibility/maintenance, disable/re-enable
+retention and cached partial-STM rollback. Buffered page-table tests check both
+successful walks and failed-walk rollback, including the queued store's survival.
+Run through the normal strict build/quality target; originals remain optional.

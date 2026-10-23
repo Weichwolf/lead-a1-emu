@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "arm_system.hpp"
 
+#include "arm_data.hpp"
 #include "arm_mmu.hpp"
 #include "arm_status.hpp"
 #include "lead_a1/arm.hpp"
@@ -26,6 +27,7 @@ constexpr std::uint32_t round_robin = 0x4000;
 constexpr std::uint32_t control_sbo = 0x00050078;
 constexpr std::uint32_t control_supported = control_sbo | 0x7307;
 constexpr std::uint32_t mmu_enable = 1;
+constexpr std::uint32_t data_cache_enable = 4;
 constexpr std::uint32_t endian_and_legacy = 0x8080;
 constexpr unsigned int register_mask = 15;
 constexpr unsigned int pc_index = 15;
@@ -45,8 +47,9 @@ std::string data_error(MemoryAccess access, AccessKind kind, const std::exceptio
 }
 
 ArmSystem::ArmSystem(Memory &memory, const std::optional<ArmSystemInitial> &initial)
-    : memory_(memory), mmu_(memory, initial ? initial->mmu : std::nullopt) {
+    : data_(memory, initial), mmu_(memory, initial ? initial->mmu : std::nullopt, &data_) {
   state_.mmu = mmu_.state();
+  summarize_data(state_);
   if (!initial) { return; }
   state_.configured = true;
   state_.control = initial->control;
@@ -60,29 +63,15 @@ ArmSystem::ArmSystem(Memory &memory, const std::optional<ArmSystemInitial> &init
     lines_.resize(*capacity / line_bytes);
   }
   state_.instruction_cache_known = initial->instruction_cache_invalid;
-  state_.data_cache_invalid = initial->data_cache_invalid;
   state_.instruction_lockdown = initial->instruction_lockdown;
   state_.data_lockdown = initial->data_lockdown;
   if (initial->instruction_lockdown) { validate_lockdown(*initial->instruction_lockdown); }
   if (initial->data_lockdown) { validate_lockdown(*initial->data_lockdown); }
-  if (initial->write_buffer) {
-    constexpr std::size_t maximum_buffer_entries = 16;
-    if (initial->write_buffer->size() > maximum_buffer_entries) {
-      throw std::invalid_argument("Reference ARM write-buffer input exceeds supported capacity");
-    }
-    write_buffer_ = *initial->write_buffer;
-    state_.write_buffer_known = true;
-    state_.buffered_writes = write_buffer_.size();
-  }
 }
 
 void ArmSystem::validate_control(std::uint32_t value) {
   if ((value & control_sbo) != control_sbo) {
     throw std::runtime_error("ARM926 control register requires documented SBO bits");
-  }
-  constexpr std::uint32_t data_cache_enable = 4;
-  if ((value & mmu_enable) != 0 && (value & data_cache_enable) != 0) {
-    throw std::runtime_error("Unsupported ARM data cache with MMU enabled");
   }
   if ((value & endian_and_legacy) != 0) {
     throw std::runtime_error("Unsupported ARM endian/legacy-PC control");
@@ -107,15 +96,16 @@ void ArmSystem::begin_instruction(std::uint32_t cpsr) {
   constexpr std::uint32_t user_mode = 0x10;
   user_ = (cpsr & mode_mask) == user_mode;
   data_user_ = user_;
+  data_.begin_instruction();
   mmu_.begin_instruction();
   fill_.reset();
   invalidate_instruction_ = false;
-  clear_buffer_ = false;
 }
 
 void ArmSystem::abort_instruction() {
   fill_.reset();
   mmu_.abort_instruction();
+  data_.abort_instruction();
   active_ = false;
 }
 
@@ -126,8 +116,9 @@ void ArmSystem::commit_instruction() {
   } else if (fill_) {
     lines_[fill_->slot] = fill_->line;
   }
-  if (clear_buffer_) { write_buffer_.clear(); }
   mmu_.commit_instruction();
+  data_.commit_instruction();
+  summarize_data(pending_);
   pending_.mmu = mmu_.state();
   state_ = pending_;
   fill_.reset();
@@ -179,9 +170,9 @@ ArmSystem::Fill ArmSystem::fill(const MmuTranslation &translation) {
   const auto slot = allocation_slot(set_index(address));
   Fill result{.slot = slot, .line = {.address = address, .bytes = {}, .valid = true}};
   for (std::size_t offset = 0; offset < line_bytes; offset += word_bytes) {
-    const auto word =
-        memory_.read({.address = physical + static_cast<std::uint32_t>(offset), .size = word_bytes},
-                     AccessKind::fetch);
+    const auto word = data_.physical_read(
+        {.address = physical + static_cast<std::uint32_t>(offset), .size = word_bytes},
+        AccessKind::fetch);
     for (unsigned int byte = 0; byte < word_bytes; ++byte) {
       constexpr auto byte_mask = std::numeric_limits<std::uint8_t>::max();
       result.line.bytes[offset + byte] =
@@ -211,7 +202,7 @@ std::uint32_t ArmSystem::fetch_instruction(std::uint32_t pc) {
   const auto translation =
       mmu_.translate(request({.address = pc, .size = word_bytes}, AccessKind::fetch));
   if (!pending_.configured || (control() & instruction_enable) == 0 || !translation.cacheable) {
-    return static_cast<std::uint32_t>(memory_.read(translation.physical, AccessKind::fetch));
+    return static_cast<std::uint32_t>(data_.physical_read(translation.physical, AccessKind::fetch));
   }
   if (!pending_.instruction_cache_known) {
     throw std::runtime_error("Unknown initial ARM instruction cache validity");
@@ -248,10 +239,6 @@ std::uint32_t ArmSystem::fetch_instruction(std::uint32_t pc) {
 
 MmuRequest ArmSystem::request(MemoryAccess access, AccessKind kind) const {
   const auto current_control = pending_.configured ? control() : 0;
-  if ((current_control & mmu_enable) != 0 &&
-      (!pending_.write_buffer_known || (!clear_buffer_ && !write_buffer_.empty()))) {
-    throw std::runtime_error("Unsupported unknown/pending ARM write buffer during MMU translation");
-  }
   return {.access = access,
           .kind = kind,
           .control = current_control,
@@ -261,13 +248,7 @@ MmuRequest ArmSystem::request(MemoryAccess access, AccessKind kind) const {
 
 std::uint64_t ArmSystem::read(MemoryAccess access) try {
   const auto translation = mmu_.translate(request(access, AccessKind::read));
-  if (pending_.configured) {
-    if (!pending_.write_buffer_known) {
-      throw std::runtime_error("Unknown ARM write buffer on read");
-    }
-    if (!clear_buffer_ && !write_buffer_.empty()) { drain_buffer(); }
-  }
-  return memory_.read(translation.physical);
+  return data_.read(translation, data_policy());
 } catch (const std::exception &error) {
 
   throw std::runtime_error(data_error(access, AccessKind::read, error));
@@ -275,12 +256,7 @@ std::uint64_t ArmSystem::read(MemoryAccess access) try {
 
 void ArmSystem::write(MemoryAccess access, std::uint64_t value) try {
   const auto translation = mmu_.translate(request(access, AccessKind::write));
-  if (translation.bufferable) { throw std::runtime_error("Unsupported ARM MMU bufferable store"); }
-  if (pending_.configured && !pending_.write_buffer_known) {
-    throw std::runtime_error("Unknown ARM write buffer on write");
-  }
-  if (!clear_buffer_ && !write_buffer_.empty()) { drain_buffer(); }
-  memory_.write(translation.physical, value);
+  data_.write(translation, data_policy(), value);
 } catch (const std::exception &error) {
 
   throw std::runtime_error(data_error(access, AccessKind::write, error));
@@ -316,6 +292,9 @@ void ArmSystem::verify_transition(std::uint32_t value, const ArmState &cpu) {
 void ArmSystem::write_control(std::uint32_t value, const ArmState &cpu) {
   validate_control(value);
   verify_transition(value, cpu);
+  if ((value & (mmu_enable | data_cache_enable)) == (mmu_enable | data_cache_enable)) {
+    data_.require_cache();
+  }
   if ((value & instruction_enable) != 0) {
     if (!pending_.instruction_cache_known) {
       throw std::runtime_error("Cannot enable an unknown ARM instruction cache");
@@ -326,33 +305,46 @@ void ArmSystem::write_control(std::uint32_t value, const ArmState &cpu) {
 }
 
 void ArmSystem::drain_buffer() {
-  if (!pending_.write_buffer_known) {
-    throw std::runtime_error("Unknown initial ARM write buffer");
-  }
-  for (const auto &write : write_buffer_) { memory_.write(write.access, write.value); }
-  clear_buffer_ = true;
-  pending_.buffered_writes = 0;
-  ++pending_.write_buffer_drains;
+  data_.drain();
+}
+
+DataPolicy ArmSystem::data_policy() const {
+  const auto current = pending_.configured ? control() : 0;
+  return {.lockdown = pending_.data_lockdown,
+          .enabled =
+              (current & (mmu_enable | data_cache_enable)) == (mmu_enable | data_cache_enable),
+          .round_robin = (current & round_robin) != 0};
+}
+
+void ArmSystem::summarize_data(ArmSystemState &summary) const {
+  summary.data = data_.state();
+  summary.data_cache_invalid = summary.data.cache_known && summary.data.cached_lines == 0;
+  summary.data_invalidations = summary.data.invalidations;
+  summary.write_buffer_known = summary.data.stores_known && summary.data.writeback_known;
+  summary.buffered_writes = summary.data.buffered_stores;
+  summary.write_buffer_drains = summary.data.explicit_drains;
 }
 
 void ArmSystem::maintenance(const Transfer &transfer, std::uint32_t value) {
-  if (value != 0) { throw std::runtime_error("ARM cache operation requires a zero operand"); }
   if (transfer.selector == 0 && (transfer.crm == 5 || transfer.crm == 6 || transfer.crm == 7)) {
+    if (value != 0) { throw std::runtime_error("ARM cache operation requires a zero operand"); }
     if (transfer.crm != 6) {
       invalidate_instruction_ = true;
       pending_.instruction_cache_known = true;
       pending_.cached_lines = 0;
       ++pending_.instruction_invalidations;
     }
-    if (transfer.crm != 5) {
-      pending_.data_cache_invalid = true;
-      ++pending_.data_invalidations;
-    }
+    if (transfer.crm != 5) { data_.invalidate_all(); }
     return;
   }
   constexpr unsigned int drain_crm = 10;
   if (transfer.crm == drain_crm && transfer.selector == 4) {
+    if (value != 0) { throw std::runtime_error("ARM cache operation requires a zero operand"); }
     drain_buffer();
+    return;
+  }
+  if (transfer.crm == 6 || transfer.crm == 10 || transfer.crm == 14) {
+    data_.maintain({.operation = transfer.crm, .selector = transfer.selector, .operand = value});
     return;
   }
   throw std::runtime_error("Unsupported ARM cache operation");

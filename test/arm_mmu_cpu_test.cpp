@@ -83,11 +83,13 @@ lead_a1::ArmSystemInitial profile() {
   constexpr std::uint32_t unlocked = 0xfff0;
   return {.control = control_mmu,
           .instruction_cache_bytes = 128,
+          .data_cache_bytes = std::nullopt,
           .instruction_cache_invalid = true,
           .data_cache_invalid = true,
           .instruction_lockdown = single_way,
           .data_lockdown = unlocked,
           .write_buffer = std::vector<lead_a1::ArmBufferedWrite>{},
+          .writeback_buffer_empty = true,
           .mmu = lead_a1::ArmMmuInitial{.translation_table = table_base,
                                         .domain_access = 3,
                                         .fcse_pid = 0,
@@ -231,9 +233,10 @@ void unsupported_transitions(const std::filesystem::path &spec, std::span<const 
   lead_a1::Arm cpu(memory, spec, state, system);
   rejected(cpu, "nonidentity ARM MMU");
   constexpr std::uint32_t data_cache_bit = 4;
+  memory.write({.address = table_base, .size = 4}, uncached_section);
   state.registers[0] = control_mmu | data_cache_bit;
   lead_a1::Arm cached_data(memory, spec, state, system);
-  rejected(cached_data, "data cache with MMU");
+  rejected(cached_data, "data cache geometry");
 }
 
 void privilege_and_alignment(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
@@ -269,6 +272,126 @@ void privilege_and_alignment(const std::filesystem::path &spec, std::span<const 
   rejected(unaligned, "status=0x1");
 }
 
+lead_a1::ArmSystemInitial data_profile() {
+  auto system = profile();
+  constexpr std::uint32_t data_cache_bit = 4;
+  constexpr std::uint32_t one_way = 0xfffe;
+  system.control = control_mmu | data_cache_bit;
+  system.data_cache_bytes = 128;
+  system.data_lockdown = one_way;
+  return system;
+}
+
+void data_writeback(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
+  lead_a1::Memory memory;
+  map_fixture(memory, bytes, physical_code);
+  constexpr std::uint32_t writeback_section = 0xc1e;
+  memory.write({.address = data_descriptor_address, .size = 4}, physical_data | writeback_section);
+  for (unsigned int offset = 4; offset < 32; offset += 4) {
+    memory.write({.address = physical_data + offset, .size = 4}, 0);
+  }
+  auto state = initial(virtual_code + (8 * case_bytes));
+  state.registers[1] = virtual_data;
+  state.registers[2] = alternate_marker;
+  state.registers[9] = 0;
+  lead_a1::Arm cpu(memory, spec, state, data_profile());
+  steps(cpu, 3);
+  require(cpu.state().registers[0] == marker && cpu.state().registers[3] == alternate_marker);
+  require(cpu.system_state().data.dirty_halves == 1);
+  require(memory.read({.address = physical_data, .size = 4}) == marker);
+  steps(cpu, 1);
+  require(cpu.system_state().data.writeback_words == 4);
+  require(memory.read({.address = physical_data, .size = 4}) == marker);
+  steps(cpu, 1);
+  require(memory.read({.address = physical_data, .size = 4}) == alternate_marker);
+  steps(cpu, 1);
+  require(cpu.system_state().data_cache_invalid && cpu.system_state().data.cached_lines == 0);
+  steps(cpu, 1);
+  require(cpu.state().registers[4] == alternate_marker && cpu.state().cpsr == cpsr);
+}
+
+void cached_store_rollback(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
+  lead_a1::Memory memory;
+  map_fixture(memory, bytes, physical_code);
+  constexpr std::uint32_t coarse_descriptor = coarse_base | 0x11;
+  constexpr std::uint32_t first_subpage_only = physical_data | 0x3e;
+  constexpr std::uint32_t last_word = 0x3fc;
+  constexpr std::uint32_t last_line = 0x3e0;
+  memory.write({.address = data_descriptor_address, .size = 4}, coarse_descriptor);
+  memory.write({.address = coarse_base, .size = 4}, first_subpage_only);
+  for (std::uint32_t offset = last_line; offset <= last_word; offset += 4) {
+    memory.write({.address = physical_data + offset, .size = 4}, 7);
+  }
+  constexpr auto code_offset = 9 * case_bytes;
+  auto state = initial(virtual_code + code_offset);
+  state.registers[0] = virtual_data + last_word;
+  state.registers[1] = marker;
+  state.registers[2] = alternate_marker;
+  auto system = data_profile();
+  if (!system.mmu) { throw std::runtime_error("Missing MMU fixture state"); }
+  system.mmu->domain_access = 1;
+  lead_a1::Arm cpu(memory, spec, state, system);
+  steps(cpu, 1);
+  require(cpu.state().registers[3] == 7 && cpu.system_state().data.dirty_halves == 0);
+  rejected(cpu, "status=0xf");
+  require(memory.read({.address = physical_data + last_word, .size = 4}) == 7);
+  const auto load = memory.read({.address = physical_code + code_offset, .size = 4});
+  memory.write({.address = physical_code + code_offset + 4, .size = 4}, load);
+  steps(cpu, 1);
+  require(cpu.state().registers[3] == 7 && cpu.system_state().data.dirty_halves == 0);
+}
+
+void data_disable_and_buffered_tables(const std::filesystem::path &spec,
+                                      std::span<const std::byte> bytes) {
+  lead_a1::Memory memory;
+  map_fixture(memory, bytes, physical_code);
+  memory.write({.address = data_descriptor_address, .size = 4}, physical_data | cached_section);
+  for (unsigned int offset = 4; offset < 32; offset += 4) {
+    memory.write({.address = physical_data + offset, .size = 4}, 0);
+  }
+  auto state = initial(virtual_code + (10 * case_bytes));
+  state.registers[1] = virtual_data;
+  state.registers[5] = control_mmu;
+  state.registers[6] = data_profile().control;
+  lead_a1::Arm cpu(memory, spec, state, data_profile());
+  steps(cpu, 1);
+  memory.write({.address = physical_data, .size = 4}, alternate_marker);
+  steps(cpu, 4);
+  require(cpu.state().registers[0] == marker && cpu.state().registers[2] == alternate_marker);
+  require(cpu.state().registers[3] == marker);
+  constexpr std::uint32_t uncached_buffered = 0xc16;
+  constexpr std::uint32_t target_descriptor = 0x12800;
+  constexpr std::uint32_t target_virtual = 0xa0000000;
+  memory.write({.address = table_base, .size = 4}, uncached_buffered);
+  state = initial(virtual_code + (11 * case_bytes));
+  state.registers[1] = target_descriptor;
+  state.registers[2] = physical_data | uncached_section;
+  state.registers[4] = target_virtual;
+  lead_a1::Arm buffered(memory, spec, state, data_profile());
+  steps(buffered, 1);
+  require(buffered.system_state().buffered_writes == 1);
+  require(memory.read({.address = target_descriptor, .size = 4}) == 0);
+  steps(buffered, 1);
+  require(buffered.state().registers[3] == alternate_marker);
+  require(buffered.system_state().buffered_writes == 0);
+  require(memory.read({.address = target_descriptor, .size = 4}) ==
+          (physical_data | uncached_section));
+  memory.write({.address = target_descriptor, .size = 4}, 0);
+  state.registers[2] = physical_data;
+  state.registers[9] = 0;
+  lead_a1::Arm invalid_table(memory, spec, state, data_profile());
+  steps(invalid_table, 1);
+  rejected(invalid_table, "status=0x5");
+  require(invalid_table.system_state().buffered_writes == 1);
+  require(memory.read({.address = target_descriptor, .size = 4}) == 0);
+  constexpr auto drain_offset = (8 * case_bytes) + 16;
+  const auto drain = memory.read({.address = physical_code + drain_offset, .size = 4});
+  memory.write({.address = physical_code + (11 * case_bytes) + 4, .size = 4}, drain);
+  steps(invalid_table, 1);
+  require(invalid_table.system_state().buffered_writes == 0);
+  require(memory.read({.address = target_descriptor, .size = 4}) == physical_data);
+}
+
 }
 
 int main(int argc, char **argv) {
@@ -281,6 +404,9 @@ int main(int argc, char **argv) {
     atomic_page_faults(argv[1], bytes);
     unsupported_transitions(argv[1], bytes);
     privilege_and_alignment(argv[1], bytes);
+    data_writeback(argv[1], bytes);
+    cached_store_rollback(argv[1], bytes);
+    data_disable_and_buffered_tables(argv[1], bytes);
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

@@ -29,13 +29,17 @@ set(CMAKE_CXX_CLANG_TIDY "${LEAD_A1_CLANG_TIDY};--warnings-as-errors=*")
 add_library(lead_a1_core STATIC src/firmware.cpp src/image.cpp)
 target_include_directories(lead_a1_core PUBLIC include)
 target_link_libraries(lead_a1_core PUBLIC lead_a1_quality PRIVATE lead_a1_lzo)
-add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp src/arm_status.cpp src/arm_system.cpp src/arm_mmu.cpp)
+add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp src/arm_status.cpp src/arm_system.cpp src/arm_mmu.cpp src/arm_data.cpp)
 target_include_directories(lead_a1_arm PUBLIC include)
 target_link_libraries(lead_a1_arm PUBLIC lead_a1_quality PRIVATE lead_a1_sleigh)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-arm-data-test test/arm_data_test.cpp)
+  target_include_directories(lead-a1-arm-data-test PRIVATE src)
+  target_link_libraries(lead-a1-arm-data-test PRIVATE lead_a1_arm)
+  add_test(NAME arm_data_path COMMAND lead-a1-arm-data-test)
   add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-mmu-cases.bin"
     COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
       --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/arm_mmu_cases.S"
@@ -143,7 +147,7 @@ if(BUILD_TESTING)
     DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
       lead-a1-memory-test lead-a1-original-arm-test lead-a1-mmu-walk-test
-      lead-a1-mmu-cpu-test VERBATIM)
+      lead-a1-mmu-cpu-test lead-a1-arm-data-test VERBATIM)
 endif()
 
 install(TARGETS lead-a1-emu RUNTIME DESTINATION bin)

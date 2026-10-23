@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include "lead_a1/arm_data.hpp"
 #include "lead_a1/arm_mmu.hpp"
 #include "lead_a1/memory.hpp"
 
@@ -21,11 +22,13 @@ struct ArmBufferedWrite {
 struct ArmSystemInitial {
   std::optional<std::uint32_t> control;
   std::optional<std::size_t> instruction_cache_bytes;
+  std::optional<std::size_t> data_cache_bytes;
   bool instruction_cache_invalid{};
   bool data_cache_invalid{};
   std::optional<std::uint32_t> instruction_lockdown;
   std::optional<std::uint32_t> data_lockdown;
   std::optional<std::vector<ArmBufferedWrite>> write_buffer;
+  bool writeback_buffer_empty{};
   std::optional<ArmMmuInitial> mmu;
 };
 
@@ -46,6 +49,7 @@ struct ArmSystemState {
   std::uint64_t data_invalidations{};
   std::uint64_t write_buffer_drains{};
   ArmMmuState mmu;
+  ArmDataState data;
   bool operator==(const ArmSystemState &) const = default;
 };
 

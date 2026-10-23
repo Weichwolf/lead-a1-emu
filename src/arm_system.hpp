@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include "arm_data.hpp"
 #include "arm_mmu.hpp"
 #include "lead_a1/arm.hpp"
 #include "lead_a1/arm_system.hpp"
@@ -68,18 +69,18 @@ private:
   void verify_transition(std::uint32_t value, const ArmState &cpu);
   void maintenance(const Transfer &transfer, std::uint32_t value);
   void drain_buffer();
+  [[nodiscard]] DataPolicy data_policy() const;
+  void summarize_data(ArmSystemState &summary) const;
   void read_register(const Transfer &transfer, ArmState &cpu) const;
   void write_register(const Transfer &transfer, const ArmState &cpu);
   [[nodiscard]] static std::string diagnostic(const Transfer &transfer);
-  Memory &memory_;
+  ArmDataPath data_;
   ArmMmu mmu_;
   ArmSystemState state_;
   ArmSystemState pending_;
   std::vector<Line> lines_;
-  std::vector<ArmBufferedWrite> write_buffer_;
   std::optional<Fill> fill_;
   bool invalidate_instruction_{};
-  bool clear_buffer_{};
   bool active_{};
   bool user_{};
   bool data_user_{};

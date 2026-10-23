@@ -88,7 +88,8 @@ ID. Each c9 L bit prevents allocation into its way, preserving hits on existing
 lines. Writes do not invalidate lines. If exactly one way is available, linefills
 and eviction are deterministic; all four L bits set selects way 3 as documented.
 With multiple available ways, replacing a valid line still stops until random/
-round-robin internal replacement state is qualified. D-cache with M=1, TCM, big endian,
+round-robin internal replacement state is qualified. The functional D-cache and
+RAM-bus reference is described in arm-data.txt. TCM, big endian,
 legacy PC loads, WFI and other CP15
 operations remain unsupported. Exception delivery and cycle timing are pending.
 
@@ -122,10 +123,10 @@ the silicon's two-way TLB indexing/replacement or speculative table walks.
 
 Instruction-cache tags use modified virtual addresses; fills use translated
 physical addresses. Translation and access permissions are checked even on hits.
-Noncacheable instructions bypass the cache. Data accesses remain uncached; M=1
-with C=1, bufferable stores and MMU accesses with unknown/pending write-buffer
-contents stop explicitly. Software must establish a known-empty buffer before
-using this MMU reference. Control transitions require unchanged physical
+Noncacheable instructions bypass the cache. Data accesses use the functional
+cache/buffer reference in arm-data.txt, including physical table-read coherence
+with buffered stores. Initial buffer contents must be explicit; pending stores
+are not silently forwarded or discarded. Control transitions require unchanged physical
 addresses for the two following instruction words and unchanged cache tag/
 cacheability when I-cache is enabled. Combined MMU/I-cache toggles and active
 FCSE PID changes are guarded pending a qualified prefetch model.
@@ -193,11 +194,12 @@ An additional --single-cache-way argument supplies entry I-lockdown=0xfffe,
 restricting allocation to way 0. This is a documented ARM926 mode selected as a
 separate software-entry experiment; it does not establish the physical loader's
 cache state. It retains the same firmware, RAM sizes, c1 and caller inputs.
-This fixture also supplies FCSE PID=0, TLB lockdown=0 and known-invalid locked
+This fixture also supplies a 16 KiB D-cache, known-empty write-back buffer,
+FCSE PID=0, TLB lockdown=0 and known-invalid locked
 TLB entries. Initial TTBR/domain access/context ID and normal TLB contents are
 unknown. Part 1 reaches the c1 write at 0xc002e16c after 88530 additional steps,
-r0=0x5107f. It stops
-unchanged on unsupported D-cache with M=1/C=1, after original TTBR/domain writes,
+r0=0x5107f. It stops unchanged on unknown ordinary TLB contents during MMU
+transition qualification, after original TTBR/domain writes,
 cache invalidation and buffer drain. There is no TLB invalidation on this enable
 path, so ordinary TLB contents remain unresolved. The inherited c1.V stays zero
 in this fixture; installing high vectors does not select them.

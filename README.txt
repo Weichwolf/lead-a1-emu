@@ -7,7 +7,7 @@ is in doc/objective.txt; actual evidence and missing work are in doc/coverage.tx
 
 Current state: native ARM-state reference execution through original cache setup,
 banked stacks, BSS initialization and MMU register setup under explicit fixture
-inputs; independently tested MMU translation with D-cache disabled; image parsing
+inputs; independently tested MMU, D-cache and RAM-bus buffer semantics; image parsing
 and safe LZO decoding, verified references, strict build gates and a working
 snapshot viewer. Complete CPU/board boot, DSP, MIDI,
 audio and a parameter-state producer remain pending. The UI starts with unknown

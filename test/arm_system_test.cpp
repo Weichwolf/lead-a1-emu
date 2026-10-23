@@ -51,11 +51,13 @@ lead_a1::ArmState initial(unsigned int index) {
 lead_a1::ArmSystemInitial profile() {
   return {.control = control_reset,
           .instruction_cache_bytes = 128,
+          .data_cache_bytes = std::nullopt,
           .instruction_cache_invalid = true,
           .data_cache_invalid = false,
           .instruction_lockdown = unlocked_cache,
           .data_lockdown = unlocked_cache,
           .write_buffer = std::vector<lead_a1::ArmBufferedWrite>{},
+          .writeback_buffer_empty = true,
           .mmu = std::nullopt};
 }
 

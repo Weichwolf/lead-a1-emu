@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "arm_mmu.hpp"
 
+#include "arm_data.hpp"
 #include "lead_a1/arm_mmu.hpp"
 #include "lead_a1/memory.hpp"
 
@@ -92,7 +93,8 @@ MmuFault::MmuFault(const MmuRequest &request,
       status_(status),
       domain_(domain) {}
 
-ArmMmu::ArmMmu(Memory &memory, const std::optional<ArmMmuInitial> &initial) : memory_(memory) {
+ArmMmu::ArmMmu(Memory &memory, const std::optional<ArmMmuInitial> &initial, ArmDataPath *data)
+    : memory_(memory), data_(data) {
   if (!initial) { return; }
   state_.translation_table = initial->translation_table;
   state_.domain_access = initial->domain_access;
@@ -217,7 +219,9 @@ void ArmMmu::invalidate(MmuRegister reg, std::uint32_t value) {
 }
 
 std::uint32_t ArmMmu::descriptor(std::uint32_t address) const {
-  return static_cast<std::uint32_t>(memory_.read({.address = address, .size = 4}));
+  const MemoryAccess access{.address = address, .size = 4};
+  return static_cast<std::uint32_t>(data_ != nullptr ? data_->physical_read(access)
+                                                     : memory_.read(access));
 }
 
 ArmMmu::Entry

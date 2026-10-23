@@ -13,6 +13,8 @@
 
 namespace lead_a1::detail {
 
+class ArmDataPath;
+
 struct MmuRegister {
   unsigned int crn{};
   unsigned int crm{};
@@ -52,7 +54,7 @@ private:
 
 class ArmMmu {
 public:
-  ArmMmu(Memory &memory, const std::optional<ArmMmuInitial> &initial);
+  ArmMmu(Memory &memory, const std::optional<ArmMmuInitial> &initial, ArmDataPath *data = nullptr);
 
   [[nodiscard]] ArmMmuState state() const { return state_; }
 
@@ -91,6 +93,7 @@ private:
   void retain(const Entry &entry);
   void invalidate(MmuRegister reg, std::uint32_t value);
   Memory &memory_;
+  ArmDataPath *data_;
   ArmMmuState state_;
   ArmMmuState pending_;
   Cache entries_{};

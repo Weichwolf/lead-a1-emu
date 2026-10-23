@@ -55,3 +55,32 @@ ldrt r1, [r0], #4
 .balign 256
 strt r1, [r0], #4
 .balign 32
+
+.balign 256
+/* 8: write-back cache visibility, clean/drain, then invalidate and reload. */
+ldr r0, [r1]
+str r2, [r1]
+ldr r3, [r1]
+mcr p15, 0, r1, c7, c10, 1
+mcr p15, 0, r9, c7, c10, 4
+mcr p15, 0, r1, c7, c6, 1
+ldr r4, [r1]
+
+.balign 256
+/* 9: preload the writable subpage, then fail the second STM word. */
+ldr r3, [r0]
+stmia r0!, {r1, r2}
+
+.balign 256
+/* 10: disabling/re-enabling D-cache preserves its lines. */
+ldr r0, [r1]
+mcr p15, 0, r5, c1, c0, 0
+ldr r2, [r1]
+mcr p15, 0, r6, c1, c0, 0
+ldr r3, [r1]
+
+.balign 256
+/* 11: a table walk must observe a previously buffered descriptor store. */
+str r2, [r1]
+ldr r3, [r4]
+.balign 32

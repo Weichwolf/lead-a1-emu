@@ -17,8 +17,11 @@ ID  State    Evidence / remaining work
              checked. General random/round-robin replacement remains unresolved.
              MMU section/coarse/fine page walks, subpage/domain permissions,
              bounded TLB retention/lockdown, FCSE and translated CPU accesses
-             have independent tests. M=1/C=0 reference only; D-cache, buffered
-             stores, abort delivery/fault-register latching, nonidentity MMU
+             have independent tests. Functional D-cache/write-through/write-back,
+             half-line dirty state, buffered stores, physical table-read coherence
+             and c7 MVA/Set-Way maintenance have owned CPU and literal tests.
+             Hardware buffer packing/bus retirement timing, cache test-and-clean,
+             abort delivery/fault-register latching, nonidentity MMU
              transitions, hardware TLB replacement, TCM, exception return,
              interrupts, board and scheduler remain pending. No Blofeld behavior
              imported; reference inputs do not establish physical entry state.
@@ -30,7 +33,7 @@ ID  State    Evidence / remaining work
              CODE/tail guard and checking the stack frame/flags. Unconfigured
              CP15 stops unchanged at CODE +0x10. Part 1's additional single-way
              cache-lockdown fixture reaches c1=0x5107f at 0xc002e16c after 88530
-             runtime steps and stops on unsupported M=1/C=1 D-cache; eight
+             runtime steps and stops on unresolved initial normal TLB; eight
              original high vectors and every MMU table/pool word match
              independent expectations. Descriptor bit-4 and inherited TLB/V
              constraints remain explicit (arm-reference.txt).
