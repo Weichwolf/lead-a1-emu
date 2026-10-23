@@ -1,0 +1,71 @@
+Complete acceptance objective
+
+Build a standalone Nord Lead A1 emulator that executes unmodified original
+OS 1.36, including its actual startup/loaders and required processors/peripherals,
+receives MIDI and produces the original instrument's audio. This is a firmware
+development and regression target as well as a playable host application.
+A host synthesizer or silently successful hardware stub does not qualify.
+
+1. Keep official firmware, user manual, update instructions and required factory
+   data as hash-pinned local references. Establish code/data encodings, both
+   bundle-part roles, CPU/DSP identities, memory maps, board connections and
+   clocks from evidence. Do not assume Blofeld hardware or that the two parts
+   correspond to two processors or two instrument variants. Identify missing
+   ROM/storage/calibration inputs explicitly; never fill them with guessed data.
+2. Implement faithful instruction execution, flags, addressing, interrupts,
+   timers, storage, panel scanning, processor links and deterministic scheduling.
+   Separate cores, board model, transport and time-critical audio. Unsupported
+   operations fail with address, operation, PC and context. Preserve original
+   behavior, including defects. Qualify Lead A1 keyboard behavior first; derive
+   any A1R profile only from evidence of actual variant differences.
+3. Reach complete cold boot and reset through original firmware, then exercise
+   every manual-documented function: four-slot layering/split/routing, voices,
+   oscillators/configurations, filter, envelopes/LFO, Morph, arpeggiator/master
+   clock, effects/delay/reverb, pedals, pitch/modulation, programs/performances,
+   menus, MIDI and persistence. Maintain a feature-level coverage inventory.
+4. Provide a normal standalone runtime with ordinary host MIDI routing and
+   original bidirectional USB-MIDI behavior/descriptors, including notes,
+   controllers, program/bank changes, clock and SysEx. Qualify external standard
+   MIDI tools and Nord Sound Manager transfers/backup/restore/cancellation/errors
+   where supported by the stock instrument. Do not fabricate USB enumeration or
+   protocol success. A custom diagnostic CLI is not functional MIDI acceptance.
+5. Deliver original firmware audio through the normal session audio host
+   (including PipeWire) as a regular application. Qualify slot output assignment,
+   stereo/four-channel behavior, sample rate, latency, dropouts and sustained
+   load. Derive audio from modeled processors and serial/DMA/peripheral paths;
+   do not infer clocks or analog equivalence from audible output alone.
+6. Provide an independent native UI showing current values in a searchable
+   table with section/parameter rows and slot A-D columns. Include program,
+   performance, slot and global state. Drive it from observed firmware state,
+   including changes via MIDI and program recall; do not treat last-sent MIDI as
+   authoritative readback. Show missing, unknown, stale or unresolved values
+   explicitly. Decouple snapshot publication and GUI refresh from audio; expose
+   a versioned atomic local snapshot contract and qualify restart/reconnection.
+   Controls may be added only through an established firmware/panel/MIDI path.
+7. Execute original update and recovery paths in the emulator. Test damaged
+   input, cancellation, transfer interruption, power loss/restart at erase and
+   programming phases, storage failures and persistence across cold restarts.
+   Establish bootloader/vector/protection invariants with evidence. No emulator
+   result by itself establishes physical-device programming safety.
+8. Provide deterministic instruction/peripheral/boot/MIDI/audio/state/update
+   regressions, independent expectations, reproducible traces and snapshots,
+   bounded offline parser-fuzz harnesses and preserved regression cases. Run
+   fuzzing only when explicitly requested. Add long-run/performance tests and
+   separate TSan checks when concurrency exists. Keep strict LLVM 19/C++23,
+   warning/static-analysis/format/hardening and ASan/UBSan gates, including future
+   native dependencies. Never hide findings by weakening checks.
+9. Coordinate with the separate bit-identical reconstruction in ../lead-a1-src
+   through private Weichwolf/lead-a1-src issues. Record version/hash, addresses,
+   evidence category and reproducible failures. Reuse verified semantics without
+   publishing private reconstruction sources or manufacturer code. Establish
+   source-built/unmodified-original equivalence when that build becomes available.
+10. Validate incrementally against a stock real Lead A1 when available, including
+    MIDI replies, state transitions, audio and timing. Detection is not validation.
+    Do not flash hardware. Any later physical update experiment needs explicit
+    authorization and a separately verified recovery procedure. Keep coverage,
+    deviations, unresolved inputs and uncertainty explicit for every requirement.
+
+Completion requires the whole original instrument runtime, functional coverage,
+MIDI/audio/table UI, original update/recovery regressions and qualified hardware
+comparisons. Parser tests, isolated routines, UI fixtures or exhausted instruction
+budgets do not establish boot, a playable synthesizer or device equivalence.

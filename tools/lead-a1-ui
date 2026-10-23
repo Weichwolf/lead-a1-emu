@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+"""Launch the native GTK4 parameter viewer from a checkout or user installation."""
+
+from pathlib import Path
+import sys
+
+root = Path(__file__).resolve().parent.parent
+modules = root if (root / "gui/table.py").is_file() else root / "share/lead-a1-emu"
+sys.path.insert(0, str(modules))
+
+try:
+    from gui.table import main
+except (ImportError, ValueError) as error:
+    sys.exit(f"GTK4 parameter viewer unavailable: {error}\n"
+             "Debian packages: python3-gi gir1.2-gtk-4.0")
+
+if __name__ == "__main__":
+    sys.exit(main())

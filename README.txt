@@ -1,0 +1,72 @@
+Nord Lead A1 firmware emulator — development bootstrap
+
+Execute unmodified OS 1.36 with an evidence-based board model, original MIDI and
+audio, and reproducible firmware-development tests. The native GTK4 UI presents
+current parameter values in a table for slots A-D. The complete acceptance scope
+is in doc/objective.txt; actual evidence and missing work are in doc/coverage.txt.
+
+Current state: bounded firmware-container inspection, verified local reference
+preparation, strict C++ build gates and a working snapshot viewer. No CPU/DSP
+core, original firmware boot, parameter-state producer, MIDI or audio runtime is
+implemented yet. The UI starts with unknown values and waits for snapshots.
+
+Build and checks (Linux, regular user)
+Requires LLVM 19 (clang++, clang-tidy, clang-format, sanitizer runtimes),
+CMake >= 3.25, Ninja and Python >= 3.11. GTK viewer additionally requires Debian
+packages python3-gi and gir1.2-gtk-4.0. GUI checks use xvfb and dbus-run-session.
+No dependencies are downloaded during configure, build or tests.
+
+  cmake --preset strict
+  cmake --build --preset strict
+  cmake --build build/strict --target quality
+  xvfb-run -a dbus-run-session -- /usr/bin/python3 test/gui_smoke.py
+
+release keeps diagnostics/analysis/hardening but disables sanitizers. thread is
+a separate TSan preset reserved for concurrent integration. No fuzz runs are
+part of routine checks. See doc/development.txt for architecture and next work.
+
+Local official references (never published)
+Reuse the verified bundle already prepared by the reconstruction project:
+
+  python3 tools/references.py --import-bundle ../lead-a1-src/local/reference/firmware.bin
+  python3 tools/references.py --verify
+
+Alternatively extract the pinned official updater ZIP statically (requires 7z):
+
+  python3 tools/references.py --archive '/path/to/Update Nord Lead A1 OS v1.36.zip'
+  python3 tools/references.py --fetch
+
+--fetch explicitly downloads the pinned official archive. The installer is never
+executed. reference/1.36.json records URL, sizes and SHA-256 of the ZIP, updater,
+complete instrument bundle and both parts. No private repo is needed to build.
+
+  build/strict/lead-a1-emu --inspect doc/local/reference/firmware.bin
+
+The C++ inspector checks container structure only; references.py separately
+establishes the pinned 1.36 identity. Executing without --inspect exits visibly
+because original firmware execution is not implemented. This is deliberate.
+
+Native parameter UI
+
+  tools/lead-a1-ui
+
+The searchable table groups parameters by section, shows slots A, B, C and D
+side by side, and includes documented MIDI CC references. It follows atomic
+parameters.json snapshots at $XDG_RUNTIME_DIR/lead-a1-emu/parameters.json,
+including directory recreation. Missing/invalid/expired snapshots clear values.
+No defaults or synthetic live state are shown. See doc/parameter-ui.txt for the
+versioned contract and the current missing firmware-to-UI binding.
+For an isolated UI preview with explicitly marked synthetic values:
+
+  tools/lead-a1-ui --demo
+
+Install without root (optional)
+
+  cmake --install build/strict --prefix "$HOME/.local"
+
+Coordination and license
+Firmware reconstruction is separate in ../lead-a1-src. Cross-project issue
+communication belongs in private Weichwolf/lead-a1-src; see doc/coordination.txt.
+Original code: GPL-3.0-only (LICENSE). Reused build policies and notices are in
+THIRD_PARTY.txt. Manufacturer firmware and documentation retain their rights;
+they are not included or relicensed by this project.

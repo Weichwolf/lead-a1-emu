@@ -1,0 +1,50 @@
+{
+  "product": "Nord Lead A1",
+  "os_version": "1.36",
+  "release_date": "2024-09-12",
+  "retrieved_date": "2026-10-23",
+  "source_page": "https://www.nordkeyboards.com/products/nord-lead-a1/downloads/",
+  "update_history": "https://www.nordkeyboards.com/update-history/nord-lead-a1-update-history/",
+  "archive": {
+    "file": "Update Nord Lead A1 OS v1.36.zip",
+    "url": "https://www.nordkeyboards.com/wt/documents/763/Update%20Nord%20Lead%20A1%20OS%20v1.36.zip",
+    "bytes": 5520913,
+    "sha256": "820f863eb35d24faa7b0b5f006444e553c459b428de65cddc1dd69bb601b5a82"
+  },
+  "updater": {
+    "member": "Update Nord Lead A1 OS v1.36.exe",
+    "bytes": 10825824,
+    "sha256": "f13b015770336aca4c7ce5a7205850ee147420bd38e1d1a4d8c45545dfb7837f"
+  },
+  "firmware": {
+    "resource": ".rsrc/BIN/101",
+    "file": "firmware.bin",
+    "bytes": 2076968,
+    "sha256": "16909837b32768833ceca047a2207f9bf8d9e303037cebc9c95a2cdaed99c9ec",
+    "header_bytes": 32,
+    "header_reserved_words": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "parts": [
+      {
+        "index": 0,
+        "file": "part-00.bin",
+        "offset": 32,
+        "bytes": 1762164,
+        "sha256": "fed15c2bb834657686613d32d8a42e4ed477bde333eff7c0edc9a8d6c50f0c99",
+        "role": "unresolved"
+      },
+      {
+        "index": 1,
+        "file": "part-01.bin",
+        "offset": 1762196,
+        "bytes": 314772,
+        "sha256": "ab0ad90b0fc0ca920a64f131f6c4e670e54ed8bcc45d3b803594b2050680c5aa",
+        "role": "unresolved"
+      }
+    ]
+  }
+}

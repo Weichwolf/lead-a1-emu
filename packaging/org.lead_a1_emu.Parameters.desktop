@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Lead A1 Parameters
+Comment=View current Nord Lead A1 emulator parameter values
+Exec=lead-a1-ui
+Icon=audio-keyboard
+Terminal=false
+Categories=AudioVideo;Audio;Midi;

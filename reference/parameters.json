@@ -1,0 +1,595 @@
+{
+  "version": 1,
+  "source": "Nord Lead A1 User Manual v1.3x, Edition F; MIDI controller list p.34, panel/menu descriptions pp.17-31.",
+  "note": "Names and CC numbers only; no firmware address, value encoding, defaults or physical-unit scaling is inferred. Global/slot display grouping is provisional until firmware binding.",
+  "parameters": [
+    {
+      "id": "arp.run",
+      "section": "Arpeggiator",
+      "label": "Run",
+      "scope": "slot",
+      "cc": 90
+    },
+    {
+      "id": "arp.rate",
+      "section": "Arpeggiator",
+      "label": "Tempo / clock divisions",
+      "scope": "slot",
+      "cc": 9
+    },
+    {
+      "id": "arp.clock",
+      "section": "Arpeggiator",
+      "label": "Master clock",
+      "scope": "slot",
+      "cc": 86
+    },
+    {
+      "id": "arp.range",
+      "section": "Arpeggiator",
+      "label": "Range",
+      "scope": "slot",
+      "cc": 88
+    },
+    {
+      "id": "arp.direction",
+      "section": "Arpeggiator",
+      "label": "Direction",
+      "scope": "slot",
+      "cc": 89
+    },
+    {
+      "id": "voice.glide",
+      "section": "Voice",
+      "label": "Glide rate",
+      "scope": "slot",
+      "cc": 5
+    },
+    {
+      "id": "voice.mode",
+      "section": "Voice",
+      "label": "Mono / legato / poly",
+      "scope": "slot",
+      "cc": 15
+    },
+    {
+      "id": "voice.unison",
+      "section": "Voice",
+      "label": "Unison",
+      "scope": "slot",
+      "cc": 16
+    },
+    {
+      "id": "voice.bend_range",
+      "section": "Voice",
+      "label": "Pitch bend range",
+      "scope": "slot",
+      "cc": 118
+    },
+    {
+      "id": "voice.vibrato",
+      "section": "Voice",
+      "label": "Vibrato selection",
+      "scope": "slot",
+      "cc": 56
+    },
+    {
+      "id": "voice.octave",
+      "section": "Voice",
+      "label": "Octave shift",
+      "scope": "slot",
+      "cc": 17
+    },
+    {
+      "id": "voice.hold",
+      "section": "Voice",
+      "label": "Hold",
+      "scope": "slot",
+      "cc": 58
+    },
+    {
+      "id": "voice.hold_enable",
+      "section": "Voice",
+      "label": "Hold enable",
+      "scope": "slot",
+      "cc": 54
+    },
+    {
+      "id": "lfo.rate",
+      "section": "LFO",
+      "label": "Rate / clock divisions",
+      "scope": "slot",
+      "cc": 19
+    },
+    {
+      "id": "lfo.waveform",
+      "section": "LFO",
+      "label": "Waveform",
+      "scope": "slot",
+      "cc": 20
+    },
+    {
+      "id": "lfo.clock",
+      "section": "LFO",
+      "label": "Master clock",
+      "scope": "slot",
+      "cc": 2
+    },
+    {
+      "id": "lfo.envelope",
+      "section": "LFO",
+      "label": "Envelope mode",
+      "scope": "slot",
+      "cc": 34
+    },
+    {
+      "id": "mod.attack",
+      "section": "Mod envelope",
+      "label": "Attack",
+      "scope": "slot",
+      "cc": 26
+    },
+    {
+      "id": "mod.decay",
+      "section": "Mod envelope",
+      "label": "Decay / sustain",
+      "scope": "slot",
+      "cc": 27
+    },
+    {
+      "id": "mod.release",
+      "section": "Mod envelope",
+      "label": "Release",
+      "scope": "slot",
+      "cc": 28
+    },
+    {
+      "id": "mod.invert",
+      "section": "Mod envelope",
+      "label": "Invert",
+      "scope": "slot",
+      "cc": 38
+    },
+    {
+      "id": "mod.velocity",
+      "section": "Mod envelope",
+      "label": "Velocity",
+      "scope": "slot",
+      "cc": 29
+    },
+    {
+      "id": "osc.lfo",
+      "section": "Oscillator",
+      "label": "LFO amount",
+      "scope": "slot",
+      "cc": 68
+    },
+    {
+      "id": "osc.envelope",
+      "section": "Oscillator",
+      "label": "Envelope amount",
+      "scope": "slot",
+      "cc": 69
+    },
+    {
+      "id": "osc.control",
+      "section": "Oscillator",
+      "label": "Control",
+      "scope": "slot",
+      "cc": 31
+    },
+    {
+      "id": "osc.waveform",
+      "section": "Oscillator",
+      "label": "Waveform",
+      "scope": "slot",
+      "cc": 30
+    },
+    {
+      "id": "osc.configuration",
+      "section": "Oscillator",
+      "label": "Configuration",
+      "scope": "slot",
+      "cc": 33
+    },
+    {
+      "id": "filter.lfo",
+      "section": "Filter",
+      "label": "LFO amount",
+      "scope": "slot",
+      "cc": 48
+    },
+    {
+      "id": "filter.envelope",
+      "section": "Filter",
+      "label": "Envelope amount",
+      "scope": "slot",
+      "cc": 43
+    },
+    {
+      "id": "filter.frequency",
+      "section": "Filter",
+      "label": "Frequency",
+      "scope": "slot",
+      "cc": 74
+    },
+    {
+      "id": "filter.type",
+      "section": "Filter",
+      "label": "Type",
+      "scope": "slot",
+      "cc": 44
+    },
+    {
+      "id": "filter.tracking",
+      "section": "Filter",
+      "label": "Keyboard tracking",
+      "scope": "slot",
+      "cc": 46
+    },
+    {
+      "id": "filter.drive",
+      "section": "Filter",
+      "label": "Drive",
+      "scope": "slot",
+      "cc": 47
+    },
+    {
+      "id": "filter.resonance",
+      "section": "Filter",
+      "label": "Resonance",
+      "scope": "slot",
+      "cc": 42
+    },
+    {
+      "id": "amp.attack",
+      "section": "Amp envelope",
+      "label": "Attack",
+      "scope": "slot",
+      "cc": 73
+    },
+    {
+      "id": "amp.decay",
+      "section": "Amp envelope",
+      "label": "Decay",
+      "scope": "slot",
+      "cc": 36
+    },
+    {
+      "id": "amp.release",
+      "section": "Amp envelope",
+      "label": "Release",
+      "scope": "slot",
+      "cc": 72
+    },
+    {
+      "id": "amp.velocity",
+      "section": "Amp envelope",
+      "label": "Velocity",
+      "scope": "slot",
+      "cc": 35
+    },
+    {
+      "id": "fx.amount",
+      "section": "FX",
+      "label": "Amount",
+      "scope": "slot",
+      "cc": 55
+    },
+    {
+      "id": "fx.type",
+      "section": "FX",
+      "label": "Selection",
+      "scope": "slot",
+      "cc": 53
+    },
+    {
+      "id": "fx.enabled",
+      "section": "FX",
+      "label": "Enabled",
+      "scope": "slot",
+      "cc": 52
+    },
+    {
+      "id": "delay.rate",
+      "section": "Delay",
+      "label": "Tempo / clock divisions",
+      "scope": "slot",
+      "cc": 78
+    },
+    {
+      "id": "delay.clock",
+      "section": "Delay",
+      "label": "Master clock",
+      "scope": "slot",
+      "cc": 51
+    },
+    {
+      "id": "delay.feedback",
+      "section": "Delay",
+      "label": "Feedback",
+      "scope": "slot",
+      "cc": 79
+    },
+    {
+      "id": "delay.ping_pong",
+      "section": "Delay",
+      "label": "Ping pong",
+      "scope": "slot",
+      "cc": 100
+    },
+    {
+      "id": "delay.amount",
+      "section": "Delay",
+      "label": "Amount",
+      "scope": "slot",
+      "cc": 76
+    },
+    {
+      "id": "delay.enabled",
+      "section": "Delay",
+      "label": "Enabled",
+      "scope": "slot",
+      "cc": 99
+    },
+    {
+      "id": "reverb.amount",
+      "section": "Reverb",
+      "label": "Amount",
+      "scope": "slot",
+      "cc": 98
+    },
+    {
+      "id": "reverb.type",
+      "section": "Reverb",
+      "label": "Selection",
+      "scope": "slot",
+      "cc": 96
+    },
+    {
+      "id": "reverb.enabled",
+      "section": "Reverb",
+      "label": "Enabled",
+      "scope": "slot",
+      "cc": 97
+    },
+    {
+      "id": "output.level",
+      "section": "Output",
+      "label": "Level",
+      "scope": "slot",
+      "cc": 71
+    },
+    {
+      "id": "output.pan",
+      "section": "Output",
+      "label": "Pan",
+      "scope": "slot",
+      "cc": 10
+    },
+    {
+      "id": "output.routing",
+      "section": "Output",
+      "label": "Routing",
+      "scope": "slot",
+      "cc": null
+    },
+    {
+      "id": "slot.enabled",
+      "section": "Slot",
+      "label": "Enabled",
+      "scope": "slot",
+      "cc": 115
+    },
+    {
+      "id": "slot.program",
+      "section": "Slot",
+      "label": "Program",
+      "scope": "slot",
+      "cc": null
+    },
+    {
+      "id": "slot.bank",
+      "section": "Slot",
+      "label": "Bank",
+      "scope": "slot",
+      "cc": null
+    },
+    {
+      "id": "slot.midi_channel",
+      "section": "Slot",
+      "label": "MIDI channel",
+      "scope": "slot",
+      "cc": null
+    },
+    {
+      "id": "morph.wheel",
+      "section": "Morph",
+      "label": "Wheel / pedal amount",
+      "scope": "slot",
+      "cc": 11
+    },
+    {
+      "id": "morph.velocity",
+      "section": "Morph",
+      "label": "Velocity amount",
+      "scope": "slot",
+      "cc": null
+    },
+    {
+      "id": "morph.latch",
+      "section": "Morph",
+      "label": "Latch",
+      "scope": "slot",
+      "cc": null
+    },
+    {
+      "id": "performance.program",
+      "section": "Performance",
+      "label": "Performance",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "performance.bank",
+      "section": "Performance",
+      "label": "Bank",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "performance.mode",
+      "section": "Performance",
+      "label": "Program / performance mode",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "slot.focus",
+      "section": "Performance",
+      "label": "Focused slot",
+      "scope": "global",
+      "cc": 119
+    },
+    {
+      "id": "keyboard.split",
+      "section": "Performance",
+      "label": "Keyboard split",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "clock.tempo",
+      "section": "Performance",
+      "label": "Master clock tempo",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "system.transpose",
+      "section": "System",
+      "label": "Transpose",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "system.fine_tune",
+      "section": "System",
+      "label": "Fine tune",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "system.memory_protect",
+      "section": "System",
+      "label": "Memory protect",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "system.sustain_polarity",
+      "section": "System",
+      "label": "Sustain pedal polarity",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "system.wheel_mode",
+      "section": "System",
+      "label": "Wheel mode",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "system.pedal_mode",
+      "section": "System",
+      "label": "Control pedal mode",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "system.pedal_type",
+      "section": "System",
+      "label": "Control pedal type",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "system.mutator_protect",
+      "section": "System",
+      "label": "Mutator protect",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "midi.global_channel",
+      "section": "MIDI",
+      "label": "Global channel",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "midi.soft_thru",
+      "section": "MIDI",
+      "label": "Soft thru channel",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "midi.local",
+      "section": "MIDI",
+      "label": "Local control",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "midi.cc_mode",
+      "section": "MIDI",
+      "label": "CC mode",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "midi.program_mode",
+      "section": "MIDI",
+      "label": "Program change mode",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "midi.bend_mode",
+      "section": "MIDI",
+      "label": "Pitch bend mode",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "sound.clock_sync",
+      "section": "Sound",
+      "label": "Master clock keyboard sync",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "sound.delay_mode",
+      "section": "Sound",
+      "label": "Delay mode",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "sound.vibrato_rate",
+      "section": "Sound",
+      "label": "Vibrato rate",
+      "scope": "global",
+      "cc": null
+    },
+    {
+      "id": "sound.vibrato_amount",
+      "section": "Sound",
+      "label": "Vibrato amount",
+      "scope": "global",
+      "cc": null
+    }
+  ]
+}

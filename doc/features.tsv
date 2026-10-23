@@ -1,0 +1,21 @@
+id	feature	status
+boot	Original cold boot/reset	pending
+panel	Panel scanning, slot enable/focus and indicators	pending
+programs	Programs, performances, store/copy/paste and memory protection	pending
+slots	Four slots, layering, split and output routing	pending
+voice	Poly/mono/legato, glide, unison and voice stealing	pending
+oscillator	Waveforms and all oscillator configurations	pending
+filter	All filter modes, drive, tracking and modulation	pending
+modulation	LFO, envelopes and vibrato	pending
+morph	Velocity/wheel/pedal Morph, latch and mappings	pending
+mutator	Mutate, randomize and protection	pending
+arpeggiator	Directions, range and clock sync	pending
+effects	FX, delay, ping pong and reverb	pending
+controllers	Keyboard, pitch stick, wheel, pedals and hold	pending
+menus	System, MIDI and Sound settings	pending
+midi	DIN/USB, channel routing, CC, bank/program, clock and SysEx	pending
+manager	Nord Sound Manager backup/restore and transfers	pending
+audio	Original audio and four-output routing	pending
+state	Persistence, reset, interruption and failure handling	pending
+update	Original update and recovery loaders	pending
+ui	Current parameter table, MIDI/recall changes and restart	partial: synthetic snapshots only

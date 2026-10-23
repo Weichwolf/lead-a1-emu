@@ -1,0 +1,21 @@
+/build/
+/local/
+/doc/local/
+__pycache__/
+*.py[cod]
+.venv/
+# Manufacturer inputs, derived analysis and runtime state stay local.
+*.bin
+*.exe
+*.zip
+*.dmg
+*.pdf
+*.syx
+*.mid
+*.wav
+*.aiff
+*.o
+*.elf
+*.trace
+*.state
+*.core

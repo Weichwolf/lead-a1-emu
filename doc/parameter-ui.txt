@@ -1,0 +1,48 @@
+Native parameter table contract, version 1
+
+tools/lead-a1-ui is a standalone GTK4 application, not a simulated LCD. It shows
+section/parameter, slots A-D, shared Global state and manual-documented MIDI CC.
+Search matches names/sections/IDs. Values are read-only observations; no control
+path has been established. Manual facts are in reference/parameters.json and its
+source identity is in reference/manual.json. Scopes are provisional UI grouping,
+not evidence of firmware storage. Morph mappings/menus need further inventory.
+
+Default input: $XDG_RUNTIME_DIR/lead-a1-emu/parameters.json.
+--runtime-dir specifies that application directory, not its parent XDG root.
+--demo creates a private temporary directory, publishes synthetic snapshots and
+labels them SYNTHETIC PREVIEW. It does not touch the normal runtime directory.
+
+All top-level fields are required; unknown fields are rejected:
+  version: integer 1
+  session: nonempty bounded runtime-instance identifier, new after restart
+  sequence: nonnegative integer increasing for each publication in a session
+  captured_monotonic_ns: CLOCK_MONOTONIC timestamp on the same host
+  source: "firmware" or "synthetic" (always visibly distinguished)
+  values: parameter ID -> {slot name -> value}, e.g.
+          "filter.frequency": {"A": 64, "B": null}
+          "clock.tempo": {"global": 120}
+
+IDs/scopes must match reference/parameters.json. Values may be null (unknown),
+bool, finite bounded numeric state or a short non-control-character string.
+Omitted parameters/slots are unknown, never carried over from an earlier frame.
+Maximum size is 256 KiB; strings are at most 96 characters. Duplicate JSON keys,
+NaN/infinity, unexpected scope, unsupported versions and malformed data fail
+visibly and clear the displayed values. Sequence regression or same-sequence
+mutation is rejected within a session. New session IDs allow runtime restarts.
+
+Publish a complete coherent snapshot through a same-directory temporary file
+and atomic rename, with user-only permissions; gui.snapshot.publish_snapshot
+implements this outside the future audio callback. Snapshots expire after five
+seconds even if no file-change event occurs. Re-publish fresh state at least
+once per second while running. Values from absent/invalid/expired state show
+an em dash and an explicit status. File/directory replacement and recreation
+are monitored; there is also a one-second freshness check.
+
+Numbers are supplied observed values, with raw/physical interpretation to be
+established at the firmware binding. Never infer a current value from the last
+MIDI message sent, a manual default or an emulator-generated label. The source
+field is a producer declaration, not proof of execution; firmware-readback
+qualification still needs original boot and MIDI/program-driven regression.
+Future firmware producers must include program/performance/slot/global state,
+clock/domain and address provenance in private evidence, keeping the bounded UI
+snapshot free from manufacturer code and real-time processing.

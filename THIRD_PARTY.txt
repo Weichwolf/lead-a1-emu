@@ -1,0 +1,19 @@
+Original emulator implementation: GPL-3.0-only (LICENSE).
+
+The following project infrastructure is adapted from Weichwolf/blofeld-emu,
+revision 057d3411b88b746c8bbf97c69958054e8a77d509, GPL-3.0-only:
+  .clang-format, .clang-tidy, CMakePresets.json,
+  cmake/Quality.cmake, cmake/Hardening.cmake and the GPL license text.
+The GTK directory watcher follows the same public project's directory identity
+and replacement-monitoring approach. The implementation is adapted for this
+project's versioned parameter snapshot contract.
+Source: https://github.com/Weichwolf/blofeld-emu
+No Blofeld firmware, CPU adapter, board model or manufacturer assets are copied.
+
+Python and native GTK4/PyGObject are host runtime prerequisites, not vendored
+source. Preserve their upstream licenses when packaging them. No CPU/DSP/audio
+dependency has been selected: processor identities must first be established.
+
+reference/1.36.json contains factual official download identities also recorded
+by the private lead-a1-src reconstruction project; it contains no program bytes.
+Official manuals, firmware and derived manufacturer assets remain local inputs.

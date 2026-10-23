@@ -1,0 +1,40 @@
+Development baseline
+
+Structure follows public blofeld-emu revision
+057d3411b88b746c8bbf97c69958054e8a77d509; retained original build policies are
+listed in THIRD_PARTY.txt. Do not copy its processor or board assumptions.
+
+include/lead_a1/, src/  Owned C++ container/core/board implementation.
+gui/                   Native GTK4 snapshot consumer, independent of cores/audio.
+tools/                 Explicit reference preparation and UI launcher.
+test/                  Synthetic owned fixtures and optional original checks.
+reference/             URLs, sizes, identities, manual-derived parameter facts.
+doc/local/             Ignored originals, raw analysis and run artifacts.
+doc/objective.txt       Full acceptance scope; coverage.txt records current gaps.
+
+First integration sequence
+1. Obtain the reconstruction project's evidenced format/architecture inventory
+   for both parts; track unresolved regions and exact input identities.
+2. Select appropriate CPU/DSP backends, pin source revisions/licenses and native
+   instrumentation before integration. Require independent instruction vectors.
+3. Build a fail-visible board map and deterministic scheduler from actual guest
+   accesses, implementing one observed startup frontier at a time.
+4. Extract observable parameters from original firmware state and publish the
+   documented snapshot contract outside the time-critical path. Establish table
+   names/ranges/scaling only where supported; retain raw values when unresolved.
+5. Advance original boot, MIDI/USB/audio, storage and update/recovery tests, then
+   qualify complete functions, ordinary host playback and hardware comparisons.
+
+Quality commands
+  cmake --preset strict
+  cmake --build --preset strict
+  cmake --build build/strict --target quality
+  xvfb-run -a dbus-run-session -- /usr/bin/python3 test/gui_smoke.py
+
+Builds are offline and do not need originals or private GitHub access.
+The quality target runs format, CTest and Python bootstrap regressions. Optional
+reference identity checks skip explicitly if local originals are absent.
+GTK integration runs separately and requires GTK4 plus an isolated display.
+release retains strict checks; thread is for future separate concurrency testing.
+No fuzz targets or runtime dependencies have been invented before processor
+identification; future harnesses run only on explicit user request.

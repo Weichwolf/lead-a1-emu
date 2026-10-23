@@ -1,0 +1,22 @@
+Cross-project contract
+
+Public emulator: Weichwolf/lead-a1-emu, remote upstream.
+Private reconstruction: Weichwolf/lead-a1-src, local ../lead-a1-src.
+The user explicitly authorized communication through private reconstruction
+issues. Do not create public emulator issues containing findings or excerpts.
+Never modify the reconstruction worktree to coordinate ongoing work.
+Bootstrap handoff: https://github.com/Weichwolf/lead-a1-src/issues/1 (private).
+
+Ask for format/architecture inventory, part roles, reset entries, address maps,
+clock evidence, peripheral accesses, MIDI/USB/update paths and parameter state
+locations. Each exchange should identify OS/bundle hash, source revision,
+component/offset/address, observed versus inferred semantics and reproducible
+inputs/expected outcomes. Return emulator traces and unsupported-access context
+privately; keep raw disassembly and manufacturer assets local.
+
+Reconstruction owns readable byte-identical C/assembly and the source-only build.
+Emulator owns CPU/peripheral/board execution and functional regression tests.
+Keep original and reconstructed firmware identities distinct until the full
+source-only build passes exact comparison. A source finding is not automatically
+hardware evidence. Private reconstructed code is not a public implementation
+dependency; public builds and synthetic tests remain independent.
