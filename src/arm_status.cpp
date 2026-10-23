@@ -208,6 +208,16 @@ void capture_arm_banks(ArmState &state) {
 }
 
 bool execute_arm_status(std::uint32_t opcode, ArmState &state) {
+  constexpr std::uint32_t instruction_mask = 0x0fffffff;
+  constexpr std::uint32_t nop = 0x01a00000;
+  if ((opcode & instruction_mask) == nop) {
+    static_cast<void>(condition_passes(opcode, state));
+    const auto pc = state.registers[pc_index];
+    if (!pc) { throw std::runtime_error("Unknown ARM NOP PC"); }
+    state.registers[pc_index] = static_cast<std::uint32_t>(
+        (static_cast<std::uint64_t>(*pc) + 4) & std::numeric_limits<std::uint32_t>::max());
+    return true;
+  }
   const auto decoded = decode_status(opcode);
   if (!decoded) {
     check_unimplemented_banked_form(opcode, state);

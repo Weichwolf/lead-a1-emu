@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include "arm_mmu.hpp"
 #include "lead_a1/arm.hpp"
 #include "lead_a1/arm_system.hpp"
 #include "lead_a1/memory.hpp"
@@ -20,11 +21,13 @@ public:
 
   [[nodiscard]] ArmSystemState state() const { return state_; }
 
-  void begin_instruction();
+  void begin_instruction(std::uint32_t cpsr);
   void commit_instruction();
   void abort_instruction();
   [[nodiscard]] std::uint32_t fetch(std::uint32_t pc);
   [[nodiscard]] bool execute(std::uint32_t opcode, ArmState &cpu);
+  [[nodiscard]] std::uint64_t read(MemoryAccess access);
+  void write(MemoryAccess access, std::uint64_t value);
 
 private:
   static constexpr std::size_t line_bytes = 32;
@@ -59,14 +62,17 @@ private:
   void write_lockdown(const Transfer &transfer, std::uint32_t value);
   [[nodiscard]] std::size_t set_index(std::uint32_t address) const;
   [[nodiscard]] std::uint32_t fetch_instruction(std::uint32_t pc);
-  [[nodiscard]] Fill fill(std::uint32_t address);
-  void write_control(std::uint32_t value);
+  [[nodiscard]] Fill fill(const MmuTranslation &translation);
+  [[nodiscard]] MmuRequest request(MemoryAccess access, AccessKind kind) const;
+  void write_control(std::uint32_t value, const ArmState &cpu);
+  void verify_transition(std::uint32_t value, const ArmState &cpu);
   void maintenance(const Transfer &transfer, std::uint32_t value);
   void drain_buffer();
   void read_register(const Transfer &transfer, ArmState &cpu) const;
   void write_register(const Transfer &transfer, const ArmState &cpu);
   [[nodiscard]] static std::string diagnostic(const Transfer &transfer);
   Memory &memory_;
+  ArmMmu mmu_;
   ArmSystemState state_;
   ArmSystemState pending_;
   std::vector<Line> lines_;
@@ -75,6 +81,8 @@ private:
   bool invalidate_instruction_{};
   bool clear_buffer_{};
   bool active_{};
+  bool user_{};
+  bool data_user_{};
 };
 
 }

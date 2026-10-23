@@ -55,7 +55,8 @@ lead_a1::ArmSystemInitial profile() {
           .data_cache_invalid = false,
           .instruction_lockdown = unlocked_cache,
           .data_lockdown = unlocked_cache,
-          .write_buffer = std::vector<lead_a1::ArmBufferedWrite>{}};
+          .write_buffer = std::vector<lead_a1::ArmBufferedWrite>{},
+          .mmu = std::nullopt};
 }
 
 void map_program(lead_a1::Memory &memory, std::span<const std::byte> bytes) {

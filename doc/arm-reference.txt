@@ -66,9 +66,10 @@ comparisons include bank contents on failures; conditional failures do not read
 unknown operands.
 
 Bounded ARM926 system reference
-This flat-memory profile assumes disabled MMU and TCM regions.
+TCM regions remain disabled in this reference.
 An optional explicit system profile adds CP15 control c1, I/D cache-lockdown
-registers c9, whole I/D-cache invalidation and write-buffer drain through c7.
+registers c9, whole I/D-cache invalidation and write-buffer drain through c7,
+plus the bounded MMU reference below.
 The ARM926 TRM is pinned in
 arm-architecture.json. Control SBO bits are 0x00050078; V and B depend on reset
 inputs and the actual software-entry state is not established. No profile means
@@ -87,7 +88,7 @@ ID. Each c9 L bit prevents allocation into its way, preserving hits on existing
 lines. Writes do not invalidate lines. If exactly one way is available, linefills
 and eviction are deterministic; all four L bits set selects way 3 as documented.
 With multiple available ways, replacing a valid line still stops until random/
-round-robin internal replacement state is qualified. MMU, TCM, big endian,
+round-robin internal replacement state is qualified. D-cache with M=1, TCM, big endian,
 legacy PC loads, WFI and other CP15
 operations remain unsupported. Exception delivery and cycle timing are pending.
 
@@ -99,6 +100,46 @@ inputs, SBO/reserved fields, protected stale lines, deterministic eviction and
 the all-locked fallback have independent expectations. Conflicting sets with
 multiple eligible ways fail unchanged. These are bounded reference semantics,
 not hardware cache qualification.
+
+MMU reference
+ArmMmuInitial supplies known or explicitly unknown TTBR, domain access, FCSE PID,
+context ID, TLB-lockdown register and validity of normal/locked TLB contents.
+There are no guessed translation defaults. CP15 c2/c3/c8/c10/c13 support table,
+domain, unified-TLB maintenance/lockdown and FCSE/context registers. Low TTBR,
+PID and lockdown reserved bits are checked. Context ID is a trace value, not an
+ASID. Invalidate-all clears ordinary entries, preserving locked entries;
+single-MVA invalidation includes locked entries and takes an already modified
+address, without adding the current PID again.
+
+With M=1 and C=0, instruction/data accesses walk section, coarse and fine tables
+through physical memory. Large/small/tiny pages, heterogeneous AP subpages,
+domain modes, AP/S/R privilege and FCSE low-address translation have independent
+expectations. TLB entries retain mappings across table edits and TTBR writes
+until explicit invalidation. Eight locked entries use the documented victim
+increment/wrap. Normal entries use a bounded 64-entry retention reference; a full
+reference TLB stops on unqualified replacement. This is not a qualification of
+the silicon's two-way TLB indexing/replacement or speculative table walks.
+
+Instruction-cache tags use modified virtual addresses; fills use translated
+physical addresses. Translation and access permissions are checked even on hits.
+Noncacheable instructions bypass the cache. Data accesses remain uncached; M=1
+with C=1, bufferable stores and MMU accesses with unknown/pending write-buffer
+contents stop explicitly. Software must establish a known-empty buffer before
+using this MMU reference. Control transitions require unchanged physical
+addresses for the two following instruction words and unchanged cache tag/
+cacheability when I-cache is enabled. Combined MMU/I-cache toggles and active
+FCSE PID changes are guarded pending a qualified prefetch model.
+
+Translation/domain/permission/alignment faults are diagnostics with operation,
+VA, MVA, status and domain where defined. CPU/RAM/MMU state rolls back on a
+failed instruction, including partial LDM/STM. Abort exception delivery and
+c5/c6 fault-register latching are pending. Unknown physical table bytes remain
+explicit memory failures; they are not fabricated external-abort responses.
+Owned CPU tests cover guest register setup, identity MMU enabling, translated
+loads/stores, TLB remapping, stale virtual instruction tags, user/LDRT/STRT
+permissions and transactional faults. A canonical ARMv5 NOP preserves unknown
+r0 without reading it. Literal page-address and AP/S/R/domain matrices complement
+CPU integration; no original instruction bytes are embedded in these tests.
 
 Current original checkpoint
 Without a system profile, both originals stop unchanged at CODE +0x10 with a
@@ -134,7 +175,7 @@ private reconstruction sources are not embedded in public tests.
   python3 tools/dependencies.py --fetch --ghidra
   cmake --preset strict
   cmake --build --preset strict
-  ctest --test-dir build/strict -R 'arm_system|arm_status_banks|arm_instructions|reference_memory|original_images|native_build' --output-on-failure
+  ctest --test-dir build/strict -R 'arm_mmu|arm_system|arm_status_banks|arm_instructions|reference_memory|original_images|native_build' --output-on-failure
 
 Original checks skip explicitly without local firmware. Owned instruction/RAM
 tests remain mandatory. Native checks audit actual compile commands, all three
@@ -152,10 +193,26 @@ An additional --single-cache-way argument supplies entry I-lockdown=0xfffe,
 restricting allocation to way 0. This is a documented ARM926 mode selected as a
 separate software-entry experiment; it does not establish the physical loader's
 cache state. It retains the same firmware, RAM sizes, c1 and caller inputs.
-Part 1 reaches the MMU setup after 88521 additional steps: CP15 c2 write at
-0xc002e148, operand r0=0xc00a0000. That operation is unsupported and preserves
-CPU/system state. All eight guest-generated high vectors match the independently
+This fixture also supplies FCSE PID=0, TLB lockdown=0 and known-invalid locked
+TLB entries. Initial TTBR/domain access/context ID and normal TLB contents are
+unknown. Part 1 reaches the c1 write at 0xc002e16c after 88530 additional steps,
+r0=0x5107f. It stops
+unchanged on unsupported D-cache with M=1/C=1, after original TTBR/domain writes,
+cache invalidation and buffer drain. There is no TLB invalidation on this enable
+path, so ordinary TLB contents remain unresolved. The inherited c1.V stays zero
+in this fixture; installing high vectors does not select them.
+All eight guest-generated high vectors match the independently
 reconstructed ARM0 handler targets. Raw disassembly/traces stay ignored locally.
+
+Independent reconstruction also identifies a descriptor discrepancy: the original
+L1 section/coarse/fine words leave bit 4 clear; ARM DDI 0198E requires it set.
+The reference rejects that encoding. Exact silicon/SoC acceptance remains
+unqualified; do not repair guest table words or silently accept them to advance.
+The three original RAM mappings select C/B=3 under domain 0 Manager, whose
+permissions bypass AP; unrelated L1 entries remain identity sections. These
+findings do not supply an initial TLB or qualify D-cache/prefetch behavior.
+At this stop the optional probe checks every directory/coarse-pool/fine-pool
+word against independent reconstruction expressions, preserving these quirks.
 
 The probe stops visibly on an unsupported operation or its instruction budget.
 Its checkpoints do not establish physical reset, complete boot or device equivalence.

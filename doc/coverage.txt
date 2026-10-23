@@ -15,7 +15,11 @@ ID  State    Evidence / remaining work
              uncached path; PC-relative/indirect-call/eviction cases pass.
              All lockdown masks, preserved locked lines and single-way eviction
              checked. General random/round-robin replacement remains unresolved.
-             MMU/TCM, other CP15 operations, exception return,
+             MMU section/coarse/fine page walks, subpage/domain permissions,
+             bounded TLB retention/lockdown, FCSE and translated CPU accesses
+             have independent tests. M=1/C=0 reference only; D-cache, buffered
+             stores, abort delivery/fault-register latching, nonidentity MMU
+             transitions, hardware TLB replacement, TCM, exception return,
              interrupts, board and scheduler remain pending. No Blofeld behavior
              imported; reference inputs do not establish physical entry state.
 3   partial  Both original ARM0 software entries reach CODE in two instructions;
@@ -25,8 +29,11 @@ ID  State    Evidence / remaining work
              original initializers clear BSS and reach CODE +0x298, preserving
              CODE/tail guard and checking the stack frame/flags. Unconfigured
              CP15 stops unchanged at CODE +0x10. Part 1's additional single-way
-             cache-lockdown fixture reaches c2/MMU setup after 88521 runtime
-             steps; eight original high vectors match independent targets.
+             cache-lockdown fixture reaches c1=0x5107f at 0xc002e16c after 88530
+             runtime steps and stops on unsupported M=1/C=1 D-cache; eight
+             original high vectors and every MMU table/pool word match
+             independent expectations. Descriptor bit-4 and inherited TLB/V
+             constraints remain explicit (arm-reference.txt).
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.

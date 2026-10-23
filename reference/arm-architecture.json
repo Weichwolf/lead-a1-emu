@@ -21,7 +21,7 @@
       "url": "https://documentation-service.arm.com/static/5e8e3d1088295d1e18d3a9b2",
       "bytes": 1495050,
       "sha256": "baa4122918a4e54057ccd1e2199ec4b61e8ee28fab73f764b3f4c04662fad55c",
-      "sections": "2.3.2 control c1; 2.3.8 cache operations c7; 2.3.10 cache lockdown c9; chapter 4 cache organization"
+      "sections": "2.3.2 control c1; 2.3.3-2.3.4 translation table/domain access; 2.3.8 cache operations c7; 2.3.9 TLB operations c8; 2.3.10 cache lockdown c9; 2.3.11 TLB lockdown c10; 2.3.13 FCSE/context c13; chapter 3 MMU descriptors/permissions/faults; chapter 4 cache organization"
     }
   ]
 }

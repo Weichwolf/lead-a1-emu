@@ -53,3 +53,7 @@ workers. Preserve guest rounding/saturation/extended precision and causal
 emulated-time ordering; compare accelerated paths with the reference and use
 separate TSan once concurrent native code exists. Do not infer real-time
 performance from a vendor clock rating or a synthetic instruction benchmark.
+The local i5-1135G7 reports SSE4.1/4.2, AVX2 and AVX-512 features through lscpu.
+This provides a comparison host, not a deployment requirement. Any accelerated
+backend needs runtime CPU/OS capability checks and a qualified fallback; select
+vector width from end-to-end workload measurements, not advertised lane count.

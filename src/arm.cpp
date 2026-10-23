@@ -191,7 +191,7 @@ public:
 
 class Executor final : public ghidra::EmulateMemory {
 public:
-  Executor(Memory &bus, ghidra::Sleigh &translator, ghidra::MemoryState &state)
+  Executor(detail::ArmSystem &bus, ghidra::Sleigh &translator, ghidra::MemoryState &state)
       : EmulateMemory(&state), bus_(bus), translator_(translator) {
     ghidra::OpBehavior::registerInstructions(behaviors_, &translator_);
     translator_.getUserOpNames(user_operations_);
@@ -349,13 +349,10 @@ private:
     const auto size =
         store ? operand_size(currentOp->getInput(2)) : operand_size(currentOp->getOutput());
     const auto address = checked_address(read_value(currentOp->getInput(1)));
-    if (address % static_cast<unsigned int>(size) != 0) {
-      throw std::runtime_error("Unsupported unaligned ARM operand access");
-    }
     return {.address = address, .size = static_cast<unsigned int>(size)};
   }
 
-  Memory &bus_;
+  detail::ArmSystem &bus_;
   ghidra::Sleigh &translator_;
   std::vector<ghidra::OpBehavior *> behaviors_;
   std::vector<std::string> user_operations_;
@@ -391,7 +388,7 @@ public:
     temporaries = std::make_unique<SparseBank>(translator.getUniqueSpace());
     memory.setMemoryBank(registers.get());
     memory.setMemoryBank(temporaries.get());
-    executor = std::make_unique<Executor>(bus, translator, memory);
+    executor = std::make_unique<Executor>(system, translator, memory);
     if (!initial.registers[program_counter_index] || (initial.cpsr & thumb_jazelle_mask) != 0) {
       throw std::invalid_argument("ARM-state reference requires a known PC and ARM-state CPSR");
     }
@@ -479,7 +476,7 @@ public:
     }
     auto saved_registers = registers->bytes;
     bus.begin_instruction();
-    system.begin_instruction();
+    system.begin_instruction(before.cpsr);
     try {
       const auto opcode = system.fetch(pc);
       const auto &instruction = decode({.address = pc, .word = opcode});

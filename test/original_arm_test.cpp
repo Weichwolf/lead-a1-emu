@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "lead_a1/arm.hpp"
+#include "lead_a1/arm_mmu.hpp"
 #include "lead_a1/arm_system.hpp"
 #include "lead_a1/memory.hpp"
 
@@ -234,10 +235,67 @@ void check_available_vectors(const lead_a1::Memory &memory) {
   std::cout << "All eight original high vectors match independent branch targets\n";
 }
 
+void check_runtime_tables(const lead_a1::Memory &memory, unsigned int part) {
+  constexpr std::array<std::uint32_t, 2> directories{0xc076c000, 0xc00a0000};
+  constexpr std::uint32_t directory_bytes = 0x4000;
+  constexpr std::uint32_t coarse_bytes = 0x400;
+  constexpr std::uint32_t section_shift = 20;
+  constexpr std::uint32_t section_attributes = 0xc02;
+  constexpr std::uint32_t cached_attributes = 0xc0e;
+  constexpr std::uint32_t shared_index = 0x800;
+  constexpr std::uint32_t local_index = 0xfff;
+  constexpr std::uint32_t ddr_first_index = 0xc00;
+  constexpr std::uint32_t ddr_last_index = 0xc10;
+  constexpr std::uint32_t word_bytes = 4;
+  const auto directory = directories[part];
+  const auto coarse = directory + directory_bytes;
+  for (std::uint32_t index = 0; index < directory_bytes / word_bytes; ++index) {
+    auto expected = (index << section_shift) | section_attributes;
+    if (index >= ddr_first_index && index < ddr_last_index) {
+      expected = (index << section_shift) | cached_attributes;
+    } else if (index == shared_index) {
+      expected = coarse | 1;
+    } else if (index == local_index) {
+      expected = (coarse + coarse_bytes) | 1;
+    }
+    require(memory.read({.address = directory + (index * word_bytes), .size = word_bytes}) ==
+            expected);
+  }
+  constexpr std::uint32_t page_bytes = 0x1000;
+  constexpr std::uint32_t large_mask = 0xffff0000;
+  constexpr std::uint32_t seeded_local_base = 0xfff00000;
+  constexpr std::uint32_t cached_shared_pages = 32;
+  constexpr std::uint32_t local_page_first = 0xf0;
+  constexpr std::uint32_t local_page_end = 0xf2;
+  constexpr std::uint32_t cached_large = 0x3d;
+  constexpr std::uint32_t uncached_large = 0x31;
+  constexpr std::uint32_t cached_small = 0x3e;
+  constexpr std::uint32_t uncached_small = 0x32;
+  for (std::uint32_t index = 0; index < coarse_bytes / word_bytes; ++index) {
+    const auto shared = ((shared_base + (index * page_bytes)) & large_mask) |
+                        (index < cached_shared_pages ? cached_large : uncached_large);
+    const auto local =
+        (seeded_local_base + (index * page_bytes)) |
+        (index >= local_page_first && index < local_page_end ? cached_small : uncached_small);
+    const auto offset = index * word_bytes;
+    require(memory.read({.address = coarse + offset, .size = word_bytes}) == shared);
+    require(memory.read({.address = coarse + coarse_bytes + offset, .size = word_bytes}) == local);
+    require(memory.read({.address = coarse + (2 * coarse_bytes) + offset, .size = word_bytes}) ==
+            0);
+  }
+  constexpr std::uint32_t fine_offset = 0x5000;
+  for (std::uint32_t offset = 0; offset < page_bytes; offset += word_bytes) {
+    require(memory.read({.address = directory + fine_offset + offset, .size = word_bytes}) == 0);
+  }
+  std::cout << "Original MMU directory/coarse/fine tables match independent expressions; "
+               "L1 bit 4 remains clear\n";
+}
+
 void probe_runtime(lead_a1::Arm &cpu,
                    const lead_a1::Memory &memory,
-                   unsigned int instruction_limit) {
-  for (unsigned int index = 0; index < instruction_limit; ++index) {
+                   unsigned int part,
+                   const RuntimeProbe &probe) {
+  for (unsigned int index = 0; index < probe.limit; ++index) {
     const auto before = cpu.state();
     const auto system = cpu.system_state();
     try {
@@ -250,6 +308,13 @@ void probe_runtime(lead_a1::Arm &cpu,
                 << " committed instructions: " << error.what() << '\n';
       print_probe_state(before);
       check_available_vectors(memory);
+      constexpr std::array<std::uint32_t, 2> control_writes{0xc018bb64, 0xc002e16c};
+      if (before.registers[pc_index] == control_writes[part]) {
+        require(system.mmu.domain_access == 3 && system.mmu.fcse_pid == 0);
+        require(system.mmu.tlb_lockdown == 0 && !system.mmu.tlb_known);
+        require(system.mmu.locked_tlb_known && system.mmu.entries == 0);
+        check_runtime_tables(memory, part);
+      }
       return;
     }
   }
@@ -294,7 +359,14 @@ void configured_startup(const std::filesystem::path &spec,
       .data_cache_invalid = false,
       .instruction_lockdown = probe.single_cache_way ? way_zero_available : all_ways_available,
       .data_lockdown = all_ways_available,
-      .write_buffer = std::vector<lead_a1::ArmBufferedWrite>{}};
+      .write_buffer = std::vector<lead_a1::ArmBufferedWrite>{},
+      .mmu = lead_a1::ArmMmuInitial{.translation_table = std::nullopt,
+                                    .domain_access = std::nullopt,
+                                    .fcse_pid = 0,
+                                    .context_id = std::nullopt,
+                                    .tlb_lockdown = 0,
+                                    .tlb_invalid = false,
+                                    .locked_tlb_invalid = true}};
   std::cout << "Explicit reference I-cache lockdown=0x" << std::hex << *system.instruction_lockdown
             << std::dec << '\n';
   lead_a1::Arm cpu(memory, spec, initial, system);
@@ -352,7 +424,7 @@ void configured_startup(const std::filesystem::path &spec,
   std::cout << "Part " << part << ": original BSS clearing preserves CODE and tail guard; " << total
             << " instructions reach CODE+0x298\n"
             << std::flush;
-  if (probe.limit != 0) { probe_runtime(concrete, memory, probe.limit); }
+  if (probe.limit != 0) { probe_runtime(concrete, memory, part, probe); }
 }
 
 }

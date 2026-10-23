@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include "lead_a1/arm_mmu.hpp"
 #include "lead_a1/memory.hpp"
 
 #include <cstddef>
@@ -16,7 +17,7 @@ struct ArmBufferedWrite {
 };
 
 // Explicit software-entry inputs, not a detected board or physical-reset claim.
-// This bounded flat-memory reference assumes disabled MMU and TCM regions.
+// TCM regions and cycle-level pipeline behavior remain outside this reference.
 struct ArmSystemInitial {
   std::optional<std::uint32_t> control;
   std::optional<std::size_t> instruction_cache_bytes;
@@ -25,6 +26,7 @@ struct ArmSystemInitial {
   std::optional<std::uint32_t> instruction_lockdown;
   std::optional<std::uint32_t> data_lockdown;
   std::optional<std::vector<ArmBufferedWrite>> write_buffer;
+  std::optional<ArmMmuInitial> mmu;
 };
 
 struct ArmSystemState {
@@ -43,6 +45,7 @@ struct ArmSystemState {
   std::uint64_t instruction_invalidations{};
   std::uint64_t data_invalidations{};
   std::uint64_t write_buffer_drains{};
+  ArmMmuState mmu;
   bool operator==(const ArmSystemState &) const = default;
 };
 
