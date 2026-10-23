@@ -1,0 +1,59 @@
+SHARC core FLAG signals
+
+This is a functional register/signal reference derived independently from the
+ADI Programming Reference rev2.4, 4-90/91, A-13/14 and A-32/35, and Hardware
+Reference rev1.1, 24-28. It does not identify Nord pin wiring, mux selection,
+electrical resolution, propagation time or an ARM/DSP ready handshake.
+
+The detailed FLAGS table A-5 assigns even bits to FLGx levels and odd bits to
+FLGxO direction (0 input, 1 output). A-18's reset summary reverses that parity.
+HWR24-28 independently confirms that core FLAG0..3 reset as inputs. The candidate
+reset reference therefore knows only those four odd direction bits are zero;
+other directions, all output latches and every input signal stay unknown.
+This is not evidence of the actual Nord post-boot-DMA state.
+
+system[5] holds direction selects and output latches, while effective[5] holds
+their delayed effects. Unlike that stored control, a FLAGS operand reads even
+bits from explicit core-FLAG input samples. flag_inputs takes a packed known-bit
+FLAG0..15 signal sample; it never infers a pull-up or connects an output to an
+input. A missing sample remains unknown even when an output latch is known.
+The board must eventually resolve muxes, routes and drives and deliver samples.
+
+SET/CLR establish selected bits; direction TGL retains unknown-bit knowledge.
+Bit operations preserve unselected latches, including when input samples differ
+from the driven output. TST/XOR use the sampled read view and existing BTF
+known-bit rules. Whole-register writes are supported only with previously known
+output selection for every written level. Level writes to input/unknown
+directions remain unqualified and fail. A direction change and level write for
+the same flag in one instruction fail, as required by A-13. Adjacent separate
+direction/level writes preserve their order.
+
+Writes have the documented one-following-internal-instruction effect latency.
+flag_drives reports disjoint packed high, low, high-impedance and unresolved
+core signals. A known output selection with an unknown latch is unresolved,
+not low or high-impedance. External pin/mux timing is not qualified. In
+particular level TGL remains guarded until the documented same-flag spacing
+and feedback timing are implemented. FLAG-based conditional instructions,
+external-access latency and control-hazard stalls remain open.
+
+All instruction effects are staged with the CPU state and IOP transaction.
+Failed reads/writes preserve pending output changes and device effects. Input
+samples are explicit owner-thread events outside a memory transaction; malformed
+knowledge, nonexistent pins and sampling during an external transaction fail.
+
+sharc_flags uses owned literal instruction fields and independently chosen
+signals. It checks all 16 flags, direction/level separation, ordered effects,
+unknown output latches, high/low/released drives, mismatching explicit samples,
+partial BTF knowledge, full-register writes, rejection/repair and IOP rollback.
+
+The optional original SPI composition retains the clock phase's 8291-instruction
+oracle. It then executes the unchanged FLAG0-input and FLAG1-output operations
+in all four kernel placements, reaching PC 0x8c0b4 after 8293 instructions.
+The next original I0 immediate fails unchanged because DAG execution is still
+unsupported, preserving the pending FLAG1 selection. No FLAG level/sample,
+ARM GPIO connection or readiness is invented. Original RAM-clear loops, remaining
+loader/application execution, cold boot and audio remain open.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^sharc_' --output-on-failure
+  cmake --build build/strict --target quality

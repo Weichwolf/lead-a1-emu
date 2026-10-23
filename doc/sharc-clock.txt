@@ -68,8 +68,9 @@ The six original loops execute 16/4096/16/4096/16/16 NOPs, 8256 total. Literal
 oracles check all five reads and six writes, final PMCTL 0x40012, an empty loop
 pipeline/stack and preserved CALL frame 0x108c008. Ideal logical ratios finish
 at CCLK 18, PCLK 9, external 36/5 relative to CLKIN; no MHz value is inferred.
-The next original FLAGS read/modify operation fails unchanged because its pin
-semantics are not implemented. RAM clearing, remaining loader records,
+The next two original FLAGS direction operations now execute under the separate
+core-FLAG reference, reaching the unsupported I0 immediate at PC 0x8c0b4 after
+8293 instructions (sharc-flags.txt). RAM clearing, remaining loader records,
 application execution, MIDI/audio and complete boot remain open.
 
 sharc_clock independently checks three reset-pin profiles, unknown pins, shadow

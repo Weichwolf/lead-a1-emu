@@ -30,12 +30,22 @@ struct SharcCountLoop {
   bool operator==(const SharcCountLoop &) const = default;
 };
 
+struct SharcFlagDrive {
+  std::uint16_t high{};
+  std::uint16_t low{};
+  std::uint16_t high_impedance{};
+  std::uint16_t unresolved{};
+  bool operator==(const SharcFlagDrive &) const = default;
+};
+
 struct SharcState {
   std::uint32_t pc{};
   // UREG 0x70..0x7f. Read views and effective controls are distinct.
   std::array<SharcKnown32, 16> system{};
   std::array<SharcKnown32, 16> effective{};
   std::array<std::optional<SharcKnown32>, 16> pending{};
+  // Packed FLAG0..15 input samples, independent of the output latches in FLAGS.
+  SharcKnown32 flag_inputs{};
   // Full 26-bit frames, including CALL/loop/interrupt metadata.
   static constexpr unsigned int pc_stack_capacity = 30;
   std::array<std::optional<std::uint32_t>, pc_stack_capacity> pc_stack{};
@@ -64,6 +74,10 @@ public:
   [[nodiscard]] static SharcState reset_reference_214xx(std::uint32_t entry);
 
   [[nodiscard]] const SharcState &state() const { return state_; }
+
+  // Explicit core-FLAG signals, not pin mux/wiring or automatic output feedback.
+  void flag_inputs(SharcKnown32 samples);
+  [[nodiscard]] SharcFlagDrive flag_drives() const;
 
   [[nodiscard]] SharcStep step();
 

@@ -9,7 +9,7 @@
       "local_copy_bytes": 5516505,
       "local_copy_sha256": "0b40637d05c7f33bc8e39235ee8a9d2c734b12c0372aff1eeac56a7554895869",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified. Official document independently consulted; no source reused.",
-      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending); 4-12/24 CALL/return stack and delay slots; 9/10 native instruction forms; A-10 26-bit frame metadata, A-39 interrupt RO bits, A-32/35 effects, A-54/56 reset register reference; 4-61/63 single-instruction counter loops, stack pre-pop and pipeline bubbles"
+      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending); 4-12/24 CALL/return stack and delay slots; 9/10 native instruction forms; A-10 26-bit frame metadata, A-39 interrupt RO bits, A-32/35 effects, A-54/56 reset register reference; 4-61/63 single-instruction counter loops, stack pre-pop and pipeline bubbles; 4-90/91 FLAG direction/level separation and toggle spacing; A-13/14 detailed FLAGS fields, sampled input read view, A-34 effect latency"
     },
     {
       "author": "Analog Devices",
@@ -19,7 +19,7 @@
       "local_copy_bytes": 18156850,
       "local_copy_sha256": "a9534d75e8946af83d5c9e250bb7e212224786b56977d6fec90d88e178f034dc",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified; no source reused.",
-      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings"
+      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals"
     },
     {
       "author": "Analog Devices",
@@ -79,7 +79,7 @@
       "access": "read32",
       "state_on_failure": "unchanged, including pending IRPTL effect and CALL frame0x108c008"
     },
-    "uncertainty": "FLAGS reset summary A-18 parity conflicts with A-5 field table; leave FLAGS unknown; unqualified execution modes and possible interrupt/timer delivery fail explicitly"
+    "uncertainty": "A-18 reset parity conflicts with A-5; HWR24-28 independently confirms core FLAG0..3 input reset. Only their odd direction bits are known zero; other FLAGS reset bits and all samples stay unknown. Unqualified modes and possible timer/interrupt delivery fail."
   },
   "clock_reference": {
     "family": "Explicit 2147x/2148x ideal PMCTL reference, not Nord chip/pin/frequency qualification",
@@ -127,8 +127,22 @@
         "external": "36/5"
       },
       "next_pc_word": "0x8c0b2",
-      "next_operation": "FLAGS read/modify unsupported, state unchanged"
+      "next_operation": "Two FLAGS direction operations execute; then I0 immediate at 0x8c0b4 is unsupported, state unchanged"
     },
     "limits": "Only one-instruction NOP counter-loop bodies; no counter-register readback, general loops, physical clock rate, voltage/range/analog failure, full board timing or complete boot claim"
+  },
+  "flags_reference": {
+    "register_fields": "A-5 even FLGx level, odd FLGxO direction; 0 input, 1 output",
+    "reset_input": "Candidate reference knows FLAG0..3 odd directions zero from HWR24-28; other bits unknown despite A-18 parity conflict",
+    "signals": "Explicit packed FLAG0..15 samples; output latches/directions and delayed core drives separate; no automatic feedback, physical mux or Nord wiring claim",
+    "limits": "Input/unknown-direction level writes, level TGL feedback timing and FLAG conditions guarded; physical latency/board resolution open",
+    "original_fixture": {
+      "committed_instructions": 8293,
+      "pc_word": "0x8c0b4",
+      "direction_instructions": 2,
+      "known_direction_mask": "0xaa",
+      "direction_view": "0x8",
+      "next_operation": "I0 immediate unsupported; pending FLAG1 output selection and unknown levels retained"
+    }
   }
 }

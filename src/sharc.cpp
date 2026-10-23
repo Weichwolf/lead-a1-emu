@@ -33,12 +33,13 @@ constexpr unsigned int system_bit_class = 20;
 constexpr std::uint32_t all_bits = std::numeric_limits<std::uint32_t>::max();
 
 void validate(const SharcState &state) {
+  detail::sharc_validate_flag_inputs(state.flag_inputs);
   if (state.pc > detail::sharc_pc_mask || (state.depth && *state.depth > state.pc_stack.size())) {
     throw std::invalid_argument("Invalid SHARC PC/stack state");
   }
   for (unsigned int index = 0; index < state.system.size(); ++index) {
     if (state.pending[index] && index != detail::sharc_mode1 && index != detail::sharc_irptl &&
-        index != detail::sharc_imask) {
+        index != detail::sharc_imask && index != detail::sharc_flags) {
       throw std::invalid_argument("Unsupported inherited SHARC system effect");
     }
     for (const auto word : {state.system[index],
@@ -212,9 +213,12 @@ SharcState Sharc::reset_reference_214xx(std::uint32_t entry) {
   for (auto &reg : state.system) { reg = {.value = 0, .known = all_bits}; }
   constexpr std::uint32_t mode2_reset = 0x42000000;
   constexpr std::uint32_t stky_reset = 0x05400000;
+  constexpr std::uint32_t core_flag_directions = 0xaa;
   state.system[3].value = detail::sharc_simd; // MMASK reset has PEYEN set.
   state.system[4].value = mode2_reset;
-  state.system[5] = {}; // FLAGS reset summary and bit-field parity disagree; keep unknown.
+  // HWR24-28 confirms core FLAG0..3 reset as inputs; PGR A-5 defines odd bits
+  // as direction. Other directions/latches remain unknown despite A-18's typo.
+  state.system[detail::sharc_flags] = {.known = core_flag_directions};
   state.system[8].value = stky_reset;
   state.system[9].value = stky_reset;
   state.system[detail::sharc_imask].value = 3; // EMUI/RSTI are nonmaskable/read-only.

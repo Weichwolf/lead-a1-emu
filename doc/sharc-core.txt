@@ -44,15 +44,18 @@ and IMASK writes have one following internal instruction of effect latency
 are immediate. IMASK/IRPTL bits 0/1 are read-only; bit 7 is reserved. In the
 documented reset reference IMASK=3, so writing IMASK=0 preserves 3. Reserved
 MODE1 fields are preserved; family-specific CSEL writes are unqualified.
-Other system-register write semantics and inherited pending effects fail.
+FLAGS uses a separate sampled read view and output latches, with the same
+internal-instruction effect delay (sharc-flags.txt). Other system-register
+write semantics and inherited pending effects fail.
 
 reset_reference_214xx takes an explicit execution address and initializes only
 the represented reset registers from A-54..56. This is a candidate register
-reference, not a physical Nord post-DMA state. FLAGS stays unknown: A-18's
-reset-summary parity disagrees with A-5's per-bit FLAG/FLAG-output fields;
-pin semantics require further qualification. Active/unknown loops and timers,
-possible enabled interrupts, nonmaskable interrupts and IOP access monitoring
-are guarded. No event is silently delivered or discarded.
+reference, not a physical Nord post-DMA state. HWR24-28 confirms FLAG0..3 reset
+inputs; their odd direction bits are known zero per detailed A-5. Other FLAGS
+bits stay unknown despite A-18's conflicting parity (sharc-flags.txt).
+Active/unknown loops and timers, possible enabled interrupts, nonmaskable
+interrupts and IOP access monitoring are guarded. No event is silently delivered
+or discarded.
 
 step stages the complete CPU state and joins IOP transactions. Failed fetches,
 unsupported operands after an IOP read and any later failure restore the
@@ -91,6 +94,7 @@ Clock and counter-loop extension
 sharc-clock.txt documents PMCTL, explicit clock-reference inputs and native
 one-instruction NOP counter loops. With that device mapped, all four original
 kernels now execute 8291 instructions through their entire clock setup and stop
-unchanged at the unresolved FLAGS operation at PC 0x8c0b2. The unconfigured-clock
-prefix case above remains a separate regression. General loops, counter-register
+at FLAGS PC 0x8c0b2. The two following direction operations now execute, reaching
+the unsupported I0 immediate at PC 0x8c0b4 after 8293 instructions. The
+unconfigured-clock prefix case above remains a separate regression. General loops, counter-register
 readback, other bodies and full pipeline/board timing remain pending.

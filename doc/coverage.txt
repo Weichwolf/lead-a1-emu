@@ -60,6 +60,11 @@ ID  State    Evidence / remaining work
              single-NOP counter loops preserve frames/pre-pop and report cycle
              lower bounds. Source frequency/physical timing remain unqualified
              (sharc-clock.txt). General loops and counter readback remain open.
+             Core FLAGS direction/latches, explicit unknown/known signal samples,
+             delayed output effects and partial-bit operations have owned tests.
+             HWR24-28 qualifies four reset-input directions against A-5 fields;
+             other reset bits stay unknown. Pin mux/wiring, level-toggle feedback
+             timing and FLAG conditional instructions remain open (sharc-flags.txt).
              Computation/DAG/VISA, runtime SPI/DMA/interrupts and timing remain
              open. No automatic ready signal or programmable-port stub.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
@@ -119,8 +124,10 @@ ID  State    Evidence / remaining work
              With an explicit CLK_CFG=0/stable/settled clock reference, all four
              kernels additionally execute 8291 instructions and 8256 NOP iterations,
              checking five PMCTL reads/six writes, final logical ratios and parent
-             CALL frame. They stop unchanged at FLAGS word PC 0x8c0b2. This does
-             not qualify physical MHz, bridge/mux timing or board reset; general
+             CALL frame. Two further FLAGS direction instructions reach word PC
+             0x8c0b4 after 8293 instructions; unsupported I0 loading preserves the
+             pending output select and unknown levels/samples (sharc-flags.txt).
+             This does not qualify physical MHz, bridge/mux timing or board reset; general
              loader/application boot and audio remain open (sharc-clock.txt).
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).

@@ -493,6 +493,28 @@ void check_clock_transactions(const Fixture &fixture) {
   require(written == writes.size() && read == reads.size());
 }
 
+void flag_setup(Fixture &fixture, lead_a1::Sharc &cpu) {
+  constexpr std::uint32_t dag_entry = 0x8c0b4;
+  constexpr unsigned int instruction_count = 8293;
+  constexpr std::uint32_t flag1_output_select = 8;
+  constexpr std::uint32_t core_directions = 0xaa;
+  constexpr unsigned int flags = 5;
+  for (unsigned int index = 0; index < 2; ++index) {
+    static_cast<void>(cpu.step());
+    ++fixture.dsp_steps;
+  }
+  require(cpu.state().pc == dag_entry && fixture.dsp_steps == instruction_count);
+  require(cpu.state().system[flags].known == core_directions &&
+          cpu.state().system[flags].value == flag1_output_select);
+  require(cpu.state().pending[flags] == cpu.state().system[flags]);
+  require(cpu.state().effective[flags].known == core_directions &&
+          cpu.state().effective[flags].value == 0);
+  constexpr std::uint16_t other_flags = 0xfff0;
+  require((cpu.flag_drives() ==
+           lead_a1::SharcFlagDrive{.high_impedance = 15, .unresolved = other_flags}));
+  require(cpu.state().flag_inputs.known == 0); // No ARM connection/pull-up invented.
+}
+
 void clock_setup(Fixture &fixture) {
   constexpr std::uint32_t pmctl = 0x2000;
   constexpr std::uint32_t entry = 0x8c000;
@@ -530,14 +552,15 @@ void clock_setup(Fixture &fixture) {
   constexpr std::uint32_t ep_numerator = 36;
   require(
       (rates.external == lead_a1::SharcClockRatio{.numerator = ep_numerator, .denominator = 5}));
+  flag_setup(fixture, cpu);
   const auto before = cpu.state();
   bool stopped{};
   try {
     static_cast<void>(cpu.step());
   } catch (const std::exception &error) {
     const std::string message(error.what());
-    require(message.find("native48 pc=0x8c0b2") != std::string::npos);
-    require(message.find("pin/mask-pointer/link-register read not implemented") !=
+    require(message.find("native48 pc=0x8c0b4") != std::string::npos);
+    require(message.find("data/DAG/PX or sequencer register write not implemented") !=
             std::string::npos);
     stopped = true;
   }
@@ -600,8 +623,8 @@ void kernel_transfer(std::span<const std::byte> image,
     kernel_prefix(fixture.dsp_memory, reset_word);
     clock_setup(fixture);
     std::cout << "Part " << part << " transport " << channel
-              << ": original ARM/SPI loading and 8291 SHARC instructions complete clock setup; "
-                 "FLAGS remains unresolved\n";
+              << ": original ARM/SPI loading and 8293 SHARC instructions through clock setup "
+                 "and FLAGS directions; DAG loading remains unsupported\n";
   }
 }
 

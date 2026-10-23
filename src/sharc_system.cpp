@@ -43,6 +43,10 @@ void require_sisd(const SharcState &state) {
 }
 
 void system_write(SharcState &state, unsigned int index, SharcKnown32 value) {
+  if (index == sharc_flags) {
+    sharc_flags_write(state, value, all_bits);
+    return;
+  }
   if (user_status(index)) {
     require_sisd(state);
     state.system[index] = value;
@@ -109,8 +113,9 @@ SharcKnown32 sharc_ureg(const SharcState &state, unsigned int ureg) {
   if (ureg >= sreg_base && ureg < sreg_base + state.system.size()) {
     const auto index = ureg - sreg_base;
     if (user_status(index) || (index >= sharc_astat_x && index <= 9)) { require_sisd(state); }
-    if (index == 5 || index == 12 || index == 13) {
-      throw std::runtime_error("SHARC pin/mask-pointer/link-register read not implemented");
+    if (index == sharc_flags) { return sharc_flags_read(state); }
+    if (index == 12 || index == 13) {
+      throw std::runtime_error("SHARC mask-pointer/link-register read not implemented");
     }
     return state.system[index];
   }
@@ -148,6 +153,10 @@ void sharc_bit_operation(SharcState &state, std::uint64_t opcode) {
   const auto index = static_cast<unsigned int>((opcode >> 32) & 15);
   const auto operation = static_cast<unsigned int>((opcode >> 37) & 7);
   const auto mask = static_cast<std::uint32_t>(opcode);
+  constexpr std::uint32_t flag_levels = 0x55555555;
+  if (index == sharc_flags && operation == 2 && (mask & flag_levels) != 0) {
+    throw std::runtime_error("SHARC FLAGS level toggle timing not qualified");
+  }
   auto value = sharc_ureg(state, sreg_base + index);
   switch (operation) {
     case 0:
@@ -166,7 +175,11 @@ void sharc_bit_operation(SharcState &state, std::uint64_t opcode) {
       return;
     default: throw std::runtime_error("Reserved SHARC system bit operation");
   }
-  sharc_ureg(state, sreg_base + index, value);
+  if (index == sharc_flags) {
+    sharc_flags_write(state, value, mask);
+  } else {
+    sharc_ureg(state, sreg_base + index, value);
+  }
 }
 
 bool sharc_condition(const SharcState &state, unsigned int code) {
