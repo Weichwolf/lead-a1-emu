@@ -3,8 +3,9 @@ ARM-state exception reference
 Arm::set_interrupts supplies IRQ/FIQ level inputs between steps on the owning
 emulation thread. Arm::interrupts reads those levels. They are not acknowledged,
 deasserted, queued, synchronized across host threads or driven by host wall time.
-The future interrupt controller/board owns those actions. This is functional
-instruction-boundary delivery, without cycle or pin-synchronizer qualification.
+The interrupt controller/board owns those actions (see aintc.txt). This is
+functional instruction-boundary delivery, without cycle or pin-synchronizer
+qualification.
 
 Routing and entry
 Each step checks eligible FIQ before IRQ, honoring CPSR.F/I independently.
@@ -24,8 +25,9 @@ base zero or 0xffff0000. Unknown inactive registers remain unknown.
 The independently tested entry-transition helper also covers Undefined, Prefetch
 Abort and Data Abort modes/vectors/links. Automatic undefined/MMU/bus-abort
 classification and delivery, c5/c6 fault registers, reset, Thumb/Jazelle, interrupt
-controller, timers and scheduler remain pending. Unsupported guest operations and
-unknown memory still fail explicitly; they do not become successful abort handlers.
+sources, automatic controller nesting, timers and scheduler remain pending.
+Unsupported guest operations and unknown memory still fail explicitly; they do
+not become successful abort handlers.
 
 Return
 ARM data-processing S=1/Rd=PC result operations restore the current mode's complete

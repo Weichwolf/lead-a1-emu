@@ -1,0 +1,82 @@
+Functional TI-family interrupt-controller reference
+
+Evidence and scope
+Original ARM0 operands identify base 0xfffee000, SICR +0x24, HIPIR +0x900/904,
+HINLR +0x1104 and HIPVR +0x1600/1604. These match pinned SPRUH82C chapter 11.
+The implementation uses zero-based host indices: 0=FIQ, 1=IRQ. The manual calls
+the corresponding host registers 1/2. This correspondence does not identify the
+exact Nord SoC/revision, reset state, clocks, peripheral event wiring or board.
+
+Aintc requires explicit input state. reset_reference() supplies the documented
+AM18xx-family register-reset reference, including revision 0x4e82a900; it does
+not assert physical Nord reset or inherited loader inputs. Revision can remain
+unknown and then fails on read. VSR starts unprogrammed even though its readable
+reset value is zero: the manual explicitly requires programming it before use.
+
+Implemented register behavior
+101 pulse-latched source status/enables map through 32 channels onto two hosts.
+Raw status survives masking. Enabled status is raw AND source enable. Channels
+0/1 feed FIQ and 2..31 IRQ. Lowest channel wins, then lowest source index.
+GER and HIER gate the host outputs separately from pending-index selection.
+No input, interrupt acknowledgment, source clear or host sampling is implicit.
+
+SISR/SICR and EISR/EICR set/clear indexed source status/enables. The four SRSR,
+SECR, ESR and ECR words implement write-one set/clear behavior and readback;
+only bits 0..4 exist in the last word. HIEISR/HIEICR and HIER control hosts.
+CMR supports aligned byte, halfword and word accesses, including partial updates;
+last-word unused lanes read zero. Other registers require aligned 32-bit access.
+
+VBR/VSR calculate vector = base + source * (4 << size), explicitly wrapping
+32 bits; no pending source returns VNR. GPIR/GPVR select across both hosts.
+PRHOLDMODE freezes both host index and calculated vector when either is first
+read, independently per host. Host index/vector writes, the documented indexed
+host enable/disable operations and HIER written-one bits release that host's
+hold. Disabling hold mode resumes dynamic readback. Pending sources are not
+cleared by these release operations. Host outputs use live pending status.
+
+CR NESTMODE 0 and 3 are supported; software manual nesting uses source/host
+enables. GNLR/HINLR retain their writable nine-bit fields and read bit 31 as zero
+in those modes. Automatic individual/global nesting (modes 1/2) is explicitly
+rejected: its exact update/override timing is not yet qualified. VSR >29,
+out-of-range source/channel indices, reserved writes, missing registers and
+unsupported widths stop with diagnostics. These guards do not claim hardware
+would fault identically. No cycle timing, source synchronizer, debugger, reset
+sequencer or physical peripheral event generation is modeled.
+
+Memory integration
+Memory::map_device binds one externally owned MemoryDevice to an explicit,
+non-executable region. The device must outlive that Memory and be accessed only
+on its owning emulation thread. RAM/device overlaps and repeated device mapping
+in the same bus are rejected. read/write receive region-relative addresses;
+faults include the original physical address, operation, width, PC and device.
+peek observes RAM only and never triggers MMIO reads. Unknown holes are not RAM.
+
+An instruction lazily joins each touched device's transaction before its first
+read or write. Staged register read effects and writes are visible to subsequent
+accesses in that instruction. Commit is non-throwing for devices; failure aborts
+all joined devices and staged RAM writes. Memory destruction also aborts pending
+effects; Memory cannot be copied/moved. Cache/MMU/buffer accesses still reach the
+same physical bus, without an invented MMIO bypass or different CPU fetch path.
+This is instruction rollback, not a qualified peripheral bus-cycle model.
+
+Validation
+Owned tests enumerate all 101 sources x 32 channels, check literal register/bit
+expectations, priority ties, enable gates, masking retention, null/wrapping vectors,
+independent holds/releases, channel lanes, malformed state/accesses and mixed
+multi-device/RAM transactions. CPU LDM/STM tests fail on a second MMIO access
+and check complete CPU/system/device rollback of the first read/write effect.
+
+Optional original-image tests execute unchanged ARM0 FIQ/IRQ wrappers at
+0xffff0060/0xffff008c in both images. Owned vector branches, source 40/41 pulses,
+pointer table, four-instruction callback, counter, stacks and c1=0x52078 are
+explicit fixtures; they are not source-wiring/reset claims. VSR is programmed.
+CR=0x10 enables priority holding with automatic nesting disabled. Each wrapper
+acknowledges its actual selected source via SICR, invokes the owned callback and
+restores the original caller. Checks cover all caller registers/flags, IRQ/FIQ
+stack frames, IRQ's System-mode callback frame, HINLR restoration, no held/raw
+source left behind, unchanged ARM0 and normal caller resumption. The tests do
+not qualify preemption, automatic nesting, peripheral sources, boot or audio.
+FIQ takes 11 original plus four owned callback instructions; IRQ takes 39 plus
+four, excluding the exception-entry event and owned vector branch. Reproduce:
+
+  build/strict/lead-a1-original-interrupt-test build/strict/share/ARM5_le.sla doc/local/images build/strict/generated/aintc-cases.bin

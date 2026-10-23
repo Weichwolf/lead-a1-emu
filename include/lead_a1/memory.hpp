@@ -31,12 +31,36 @@ public:
   MemoryFault(AccessKind kind, MemoryAccess access, std::uint32_t pc, const std::string &reason);
 };
 
-// Explicit RAM regions only. No automatic peripheral mapping or zero-filled readback.
+// Device addresses are offsets within their explicitly mapped region. A device
+// stages all read/write effects until commit; commit and rollback cannot fail.
+class MemoryDevice {
+public:
+  MemoryDevice() = default;
+  virtual ~MemoryDevice() = default;
+  MemoryDevice(const MemoryDevice &) = delete;
+  MemoryDevice &operator=(const MemoryDevice &) = delete;
+  MemoryDevice(MemoryDevice &&) = delete;
+  MemoryDevice &operator=(MemoryDevice &&) = delete;
+  [[nodiscard]] virtual std::uint64_t read(MemoryAccess access) = 0;
+  virtual void write(MemoryAccess access, std::uint64_t value) = 0;
+  virtual void begin_instruction() = 0;
+  virtual void commit_instruction() noexcept = 0;
+  virtual void abort_instruction() noexcept = 0;
+};
+
+// No automatic mappings or zero-filled readback. Device lifetime exceeds Memory.
 class Memory {
 public:
+  Memory() = default;
+  ~Memory();
+  Memory(const Memory &) = delete;
+  Memory &operator=(const Memory &) = delete;
+  Memory(Memory &&) = delete;
+  Memory &operator=(Memory &&) = delete;
   void map(MemoryMapping mapping,
            std::span<const std::byte> initial = {},
            std::size_t initial_offset = 0);
+  void map_device(MemoryMapping mapping, MemoryDevice &device);
 
   void set_pc(std::uint32_t pc) { pc_ = pc; }
 
@@ -59,11 +83,22 @@ private:
     std::uint64_t value{};
   };
 
+  struct DeviceRegion {
+    MemoryMapping mapping;
+    MemoryDevice *device{};
+    mutable bool joined{};
+  };
+
+  void validate_mapping(const MemoryMapping &mapping) const;
+  void validate_access(MemoryAccess access, AccessKind kind) const;
+  [[nodiscard]] const DeviceRegion *device_region(MemoryAccess access) const;
+  void join(const DeviceRegion &entry) const;
   [[nodiscard]] const Region &region(MemoryAccess access, AccessKind kind) const;
   [[nodiscard]] std::uint8_t
   read_byte(const Region &entry, std::uint32_t address, MemoryAccess access, AccessKind kind) const;
   void apply_write(MemoryAccess access, std::uint64_t value);
   std::vector<Region> regions_;
+  std::vector<DeviceRegion> devices_;
   std::vector<PendingWrite> writes_;
   std::uint32_t pc_{};
   bool active_{};

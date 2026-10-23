@@ -14,9 +14,10 @@ written. Caller-supplied CPSR flags synchronize individual flag storage. Explici
 RAM mappings distinguish unknown from loaded/written bytes. Access errors give
 operation, address, width and PC. Failed instructions roll back register and
 staged RAM writes. Images can initialize an offset within a larger RAM region;
-surrounding bytes remain unknown. Peripheral side effects/interrupt delivery are
-not implemented by the memory model. Functional ARM-state exception delivery and
-return are described in arm-exceptions.txt; board IRQ sources remain pending.
+surrounding bytes remain unknown. Explicit MMIO mappings stage device read/write
+effects in the same instruction transaction (aintc.txt). Functional ARM-state
+exception delivery and return are described in arm-exceptions.txt; board IRQ
+sources remain pending.
 
 Host decode cache
 At most 128 translations are retained, keyed by ARM PC and the fetched word.

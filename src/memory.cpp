@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <ios>
 #include <limits>
 #include <optional>
@@ -46,20 +47,16 @@ MemoryFault::MemoryFault(AccessKind kind,
                          const std::string &reason)
     : std::runtime_error(fault_message(kind, access, pc, reason)) {}
 
+Memory::~Memory() {
+  abort_instruction();
+}
+
 void Memory::map(MemoryMapping mapping,
                  std::span<const std::byte> initial,
                  std::size_t initial_offset) {
-  if (active_ || mapping.size == 0 || mapping.size > maximum_ram_region ||
-      initial_offset > mapping.size || initial.size() > mapping.size - initial_offset ||
-      mapping.size > address_space_bytes - mapping.address) {
+  validate_mapping(mapping);
+  if (initial_offset > mapping.size || initial.size() > mapping.size - initial_offset) {
     throw std::invalid_argument("Invalid RAM mapping or active instruction");
-  }
-  const auto end = static_cast<std::uint64_t>(mapping.address) + mapping.size;
-  for (const auto &entry : regions_) {
-    const auto entry_end = static_cast<std::uint64_t>(entry.mapping.address) + entry.mapping.size;
-    if (mapping.address < entry_end && entry.mapping.address < end) {
-      throw std::invalid_argument("Overlapping RAM mappings");
-    }
   }
   Region result{.mapping = std::move(mapping), .bytes = {}, .known = {}};
   result.bytes.resize(result.mapping.size);
@@ -70,11 +67,59 @@ void Memory::map(MemoryMapping mapping,
   regions_.push_back(std::move(result));
 }
 
-const Memory::Region &Memory::region(MemoryAccess access, AccessKind kind) const {
+void Memory::validate_mapping(const MemoryMapping &mapping) const {
+  if (active_ || mapping.size == 0 || mapping.size > maximum_ram_region ||
+      mapping.size > address_space_bytes - mapping.address) {
+    throw std::invalid_argument("Invalid RAM mapping or active instruction");
+  }
+  const auto end = static_cast<std::uint64_t>(mapping.address) + mapping.size;
+  for (const auto &entry : regions_) {
+    const auto entry_end = static_cast<std::uint64_t>(entry.mapping.address) + entry.mapping.size;
+    if (mapping.address < entry_end && entry.mapping.address < end) {
+      throw std::invalid_argument("Overlapping RAM mappings");
+    }
+  }
+  for (const auto &entry : devices_) {
+    const auto entry_end = static_cast<std::uint64_t>(entry.mapping.address) + entry.mapping.size;
+    if (mapping.address < entry_end && entry.mapping.address < end) {
+      throw std::invalid_argument("Overlapping device mappings");
+    }
+  }
+}
+
+void Memory::map_device(MemoryMapping mapping, MemoryDevice &device) {
+  validate_mapping(mapping);
+  if (mapping.executable) { throw std::invalid_argument("Executable device mapping"); }
+  for (const auto &entry : devices_) {
+    if (entry.device == &device) { throw std::invalid_argument("Device already mapped"); }
+  }
+  devices_.push_back({.mapping = std::move(mapping), .device = &device, .joined = false});
+}
+
+void Memory::validate_access(MemoryAccess access, AccessKind kind) const {
   if (access.size == 0 || access.size > sizeof(std::uint64_t) ||
       access.size > address_space_bytes - access.address) {
     throw MemoryFault(kind, access, pc_, "invalid width or address wrap");
   }
+}
+
+const Memory::DeviceRegion *Memory::device_region(MemoryAccess access) const {
+  const auto end = static_cast<std::uint64_t>(access.address) + access.size;
+  for (const auto &entry : devices_) {
+    const auto region_end = static_cast<std::uint64_t>(entry.mapping.address) + entry.mapping.size;
+    if (access.address >= entry.mapping.address && end <= region_end) { return &entry; }
+  }
+  return nullptr;
+}
+
+void Memory::join(const DeviceRegion &entry) const {
+  if (active_ && !entry.joined) {
+    entry.device->begin_instruction();
+    entry.joined = true;
+  }
+}
+
+const Memory::Region &Memory::region(MemoryAccess access, AccessKind kind) const {
   const auto end = static_cast<std::uint64_t>(access.address) + access.size;
   for (const auto &entry : regions_) {
     const auto region_end = static_cast<std::uint64_t>(entry.mapping.address) + entry.mapping.size;
@@ -111,6 +156,19 @@ std::uint64_t Memory::read(MemoryAccess access, AccessKind kind) const {
   if (kind != AccessKind::read && kind != AccessKind::fetch) {
     throw std::invalid_argument("Invalid read access kind");
   }
+  validate_access(access, kind);
+  if (const auto *entry = device_region(access)) {
+    if (kind == AccessKind::fetch) {
+      throw MemoryFault(kind, access, pc_, "Device fetch denied: " + entry->mapping.name);
+    }
+    try {
+      join(*entry);
+      return entry->device->read(
+          {.address = access.address - entry->mapping.address, .size = access.size});
+    } catch (const std::exception &error) {
+      throw MemoryFault(kind, access, pc_, entry->mapping.name + ": " + error.what());
+    }
+  }
   const auto &entry = region(access, kind);
   std::uint64_t value{};
   for (unsigned int index = 0; index < access.size; ++index) {
@@ -137,6 +195,20 @@ void Memory::apply_write(MemoryAccess access, std::uint64_t value) {
 }
 
 void Memory::write(MemoryAccess access, std::uint64_t value) {
+  validate_access(access, AccessKind::write);
+  if (const auto *entry = device_region(access)) {
+    if (!entry->mapping.writable) {
+      throw MemoryFault(AccessKind::write, access, pc_, "Device write permission denied");
+    }
+    try {
+      join(*entry);
+      entry->device->write(
+          {.address = access.address - entry->mapping.address, .size = access.size}, value);
+      return;
+    } catch (const std::exception &error) {
+      throw MemoryFault(AccessKind::write, access, pc_, entry->mapping.name + ": " + error.what());
+    }
+  }
   static_cast<void>(region(access, AccessKind::write));
   if (active_) {
     writes_.push_back({.access = access, .value = value});
@@ -163,11 +235,23 @@ void Memory::begin_instruction() {
 void Memory::commit_instruction() {
   if (!active_) { throw std::logic_error("No active memory instruction transaction"); }
   for (const auto &write : writes_) { apply_write(write.access, write.value); }
+  for (auto &entry : devices_) {
+    if (entry.joined) {
+      entry.device->commit_instruction();
+      entry.joined = false;
+    }
+  }
   writes_.clear();
   active_ = false;
 }
 
 void Memory::abort_instruction() {
+  for (auto &entry : devices_) {
+    if (entry.joined) {
+      entry.device->abort_instruction();
+      entry.joined = false;
+    }
+  }
   writes_.clear();
   active_ = false;
 }
