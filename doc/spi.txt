@@ -102,3 +102,10 @@ not a public source/build dependency. No manufacturer/private instructions are
 embedded. Complete cold boot, inherited MMU/TLB state, exact SoC/DSP roles and
 clocks, external SHARC execution, audio, MIDI/USB and hardware validation remain
 separate pending acceptance work.
+
+Initial DSP boot connection
+The optional original SPI regression also runs the unchanged block writer for
+both transport arguments of both images against the explicit SHARC SPI-slave
+bootstrap reference. See sharc.txt for kernel identities, word aliases, owned
+wiring/clock/pull-up inputs and the missing programmable SPI/core handoff. This
+loads kernel memory; it does not establish DSP readiness or complete boot.

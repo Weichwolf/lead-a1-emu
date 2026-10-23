@@ -9,6 +9,9 @@ ID  State    Evidence / remaining work
              required factory/storage inputs remain unresolved (firmware-format.txt).
              Candidate TI AM18xx primary documentation is pinned and corroborates
              observed RAM/peripheral bases; exact SoC/loader state is unproven.
+             reference/sharc.json pins the shared kernel identities and analysis
+             manuals; explicit 5-Mbit SHARC geometry and initial SPI-slave boot
+             are documented references, not physical package/pin qualification.
 2   partial  Native SLEIGH ARM-state reference, explicit known/unknown RAM and
              instruction rollback. Independent arithmetic/condition/load/store/
              BX/mutation/status/bank tests pass, including all ARM conditions and
@@ -45,6 +48,12 @@ ID  State    Evidence / remaining work
              register lanes, status/data acknowledgments and IRQ priorities have
              independent serial/bus/ARM tests (spi.txt). Explicit clock events
              and unknown pad samples do not invent DSP readiness or data.
+             SHARC word-addressed RAM shares 16-bit cells across 16/32/40/48/64
+             views, with unknown-bit tracking and transactional IOP/RAM tests.
+             Explicit initial SPI-slave bootstrap loads 384 NW32 words through
+             serial edges, exposes 256 NW48 instructions and a reset handoff;
+             SHARC execution, runtime SPI/DMA/interrupts and timing remain open
+             (sharc.txt). No automatic ready signal or programmable-port stub.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
              external/debug/undefined exception delivery, nonidentity MMU
              transitions, hardware TLB replacement, TCM, Thumb/Jazelle,
@@ -90,10 +99,16 @@ ID  State    Evidence / remaining work
              Both original SPI controller/format/factory/heap/GPIO paths and
              block transport execute against explicit clocked internal loopback
              and buffer backpressure (spi.txt); no external DSP/clock claim.
+             Under explicit candidate boot/wiring/clock inputs, both original ARM
+             block writers additionally load all 256 SHARC kernel words from
+             each of the four original placements over 768 real 16-bit transfers.
+             All transmitted halfwords, physical aliases, DMA completion and
+             select/release are checked. The SHARC core does not execute yet;
+             remaining stream/application boot is unproven (sharc.txt).
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
-5   pending  No firmware audio, serial/DMA model, host audio or timing evidence.
+5   pending  No firmware audio, audio serial/DMA model, host audio or timing evidence.
 6   partial  Native searchable GTK table for slots A-D, documented CC references,
              strict snapshot parser, expiry, atomic publisher and directory
              replacement monitoring. Synthetic GUI integration only. Firmware

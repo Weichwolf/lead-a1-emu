@@ -3,6 +3,8 @@
 #include "lead_a1/arm_system.hpp"
 #include "lead_a1/gpio.hpp"
 #include "lead_a1/memory.hpp"
+#include "lead_a1/sharc_boot.hpp"
+#include "lead_a1/sharc_memory.hpp"
 #include "lead_a1/spi.hpp"
 
 #include <array>
@@ -161,6 +163,9 @@ struct Fixture {
   lead_a1::Memory memory;
   std::optional<std::uint64_t> due;
   std::vector<std::uint16_t> transmitted;
+  std::optional<lead_a1::SharcSpiBoot> dsp;
+  lead_a1::SharcMemory dsp_memory;
+  unsigned int dsp_channel{};
 
   Fixture(std::span<const std::byte> image, Placement placement) {
     constexpr std::uint32_t bin_bytes = 1040;
@@ -207,8 +212,24 @@ struct Fixture {
     memory.write({.address = placement.clock, .size = 4}, clock_input);
   }
 
+  void observe_dsp() {
+    if (!dsp) { return; }
+    const auto select = 1U << (11 + dsp_channel);
+    const auto bank = gpio.device.drives()[2];
+    const auto serial = spi0.device.pins();
+    constexpr std::uint16_t clock_pin = 0x200;
+    constexpr std::uint16_t data_pin = 0x400;
+    require((bank.enabled & select) != 0);
+    require((serial.enabled & (clock_pin | data_pin)) == (clock_pin | data_pin));
+    dsp->observe(dsp_memory,
+                 {.selected = (bank.high & select) == 0,
+                  .clock = (serial.high & clock_pin) != 0,
+                  .mosi = (serial.high & data_pin) != 0});
+  }
+
   void progress() {
     ++ticks;
+    observe_dsp();
     const auto interval = spi0.device.next_event();
     if (!interval) {
       due.reset();
@@ -217,7 +238,15 @@ struct Fixture {
     if (!due) { due = ticks + *interval; }
     while (due && *due <= ticks) {
       const auto before = spi0.device.state().active;
-      spi0.device.advance();
+      if (dsp) {
+        constexpr std::uint16_t data_pin = 0x400;
+        const bool outgoing = (spi0.device.pins().high & data_pin) != 0;
+        // Owned external pull-up at the disabled DSP MISO output.
+        spi0.device.advance({.received = true, .observed_output = outgoing});
+        observe_dsp();
+      } else {
+        spi0.device.advance();
+      }
       const auto after = spi0.device.state().active;
       if (before && after && !before->receive_committed && after->receive_committed) {
         transmitted.push_back(before->word.data);
@@ -249,7 +278,8 @@ lead_a1::ArmSystemInitial profile() {
 lead_a1::ArmState call(Fixture &fixture,
                        const std::filesystem::path &spec,
                        std::uint32_t entry,
-                       std::array<std::uint32_t, 4> args) {
+                       std::array<std::uint32_t, 4> args,
+                       unsigned int limit = 20000) {
   lead_a1::ArmState initial;
   constexpr std::uint32_t status = 0xb80000df;
   constexpr std::uint32_t marker = 0x11223300;
@@ -260,7 +290,6 @@ lead_a1::ArmState call(Fixture &fixture,
   initial.registers[14] = sentinel;
   initial.registers[15] = entry;
   lead_a1::Arm cpu(fixture.memory, spec, initial, profile());
-  constexpr unsigned int limit = 20000;
   unsigned int count{};
   while (cpu.state().registers[15] != sentinel && count < limit) {
     require(!cpu.step().exception);
@@ -411,6 +440,64 @@ void transport(Fixture &fixture,
   require(!fixture.spi0.device.state().visible_full && !fixture.spi0.device.state().receive);
 }
 
+void kernel_transfer(std::span<const std::byte> image,
+                     const std::filesystem::path &spec,
+                     unsigned int part) {
+  constexpr std::array<std::array<std::uint32_t, 2>, 2> offsets{
+      {{0x2c6d78, 0x2ab0f8}, {0x71bc8, 0x701d8}}};
+  constexpr unsigned int kernel_bytes = 1536;
+  constexpr unsigned int kernel_words = 384;
+  constexpr unsigned int instruction_bytes = 6;
+  constexpr std::uint32_t reset_word = 0x8c000;
+  constexpr std::uint32_t destination = 0x92000;
+  for (unsigned int channel = 0; channel < 2; ++channel) {
+    Fixture fixture(image, placements[part]);
+    const auto endpoint = factory(fixture, spec, placements[part], false);
+    fixture.dsp.emplace(lead_a1::SharcSpiBoot::slave_reference_214xx());
+    fixture.dsp_memory.map_2148x_5mbit_ram();
+    fixture.dsp_channel = channel;
+    fixture.spi0.events.clear();
+    fixture.gpio.events.clear();
+    fixture.transmitted.clear();
+    constexpr unsigned int limit = 200000;
+    static_cast<void>(call(fixture,
+                           spec,
+                           placements[part].endpoint + write_block_entry,
+                           {endpoint, channel, code + offsets[part][channel], kernel_words},
+                           limit));
+    require(fixture.dsp->entry() == reset_word && fixture.dsp->state().remaining == 0);
+    require(!fixture.dsp->state().selected && fixture.dsp->state().bits == 0);
+    require(fixture.transmitted.size() == kernel_bytes / 2);
+    const auto kernel = image.subspan(offsets[part][channel], kernel_bytes);
+    for (unsigned int offset = 0; offset < kernel_bytes; offset += 2) {
+      const auto expected = std::to_integer<std::uint32_t>(kernel[offset]) |
+                            (std::to_integer<std::uint32_t>(kernel[offset + 1]) << 8);
+      require(fixture.transmitted[offset / 2] == expected);
+    }
+    for (unsigned int offset = 0; offset < kernel_bytes; offset += instruction_bytes) {
+      std::uint64_t expected{};
+      for (unsigned int index = 0; index < instruction_bytes; ++index) {
+        expected |= std::to_integer<std::uint64_t>(kernel[offset + index]) << (index * 8);
+      }
+      require(fixture.dsp_memory.read({.address = reset_word + (offset / instruction_bytes),
+                                       .width = lead_a1::SharcWidth::wide48},
+                                      lead_a1::AccessKind::fetch) == expected);
+    }
+    require(fixture.dsp->state().next_word == destination + kernel_words);
+    const auto select = 1U << (11 + channel);
+    require(fixture.gpio.events.size() == 2 && fixture.gpio.events[0].value == select &&
+            fixture.gpio.events[1].value == select);
+    require(fixture.gpio.events.front().offset == gpio_clear &&
+            fixture.gpio.events.back().offset == 0x40);
+    constexpr std::uint16_t pullup_halfword = 0xffff;
+    require(fixture.memory.read({.address = placements[part].scratch, .size = 2}) ==
+            pullup_halfword);
+    std::cout
+        << "Part " << part << " transport " << channel
+        << ": unchanged ARM block writer loads all 256 SHARC kernel words over serial edges\n";
+  }
+}
+
 }
 
 int main(int argc, char **argv) {
@@ -425,6 +512,7 @@ int main(int argc, char **argv) {
       static_cast<void>(factory(fixture, argv[1], placement, false));
       const auto endpoint = factory(fixture, argv[1], placement, true);
       transport(fixture, argv[1], placement, endpoint);
+      kernel_transfer(image, argv[1], part);
       std::cout << "Part " << part
                 << ": original SPI controllers/format/factory/heap/GPIO and transport"
                    " execute against clocked serial loopback and real buffer backpressure\n";

@@ -1,0 +1,72 @@
+{
+  "status": "Explicit ADSP-214xx SPI-slave boot and 5-Mbit RAM reference; physical Nord chip, boot pins, wiring and timing remain unqualified",
+  "documents": [
+    {
+      "author": "Analog Devices",
+      "title": "SHARC Processor Programming Reference, Revision 2.4, April 2013, 82-000500-01",
+      "official_url": "https://www.analog.com/media/en/dsp-documentation/processor-manuals/ADSP-2136x_2137x_214xx_pgr_rev2.4.pdf",
+      "local_copy_url": "https://docs.ampnuts.ru/analog.com.datasheet/adsp-21363/related_data/ADSP-2136x_2137x_214xx_pgr_rev2.4.pdf",
+      "local_copy_bytes": 5516505,
+      "local_copy_sha256": "0b40637d05c7f33bc8e39235ee8a9d2c734b12c0372aff1eeac56a7554895869",
+      "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified. Official document independently consulted; no source reused.",
+      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending)"
+    },
+    {
+      "author": "Analog Devices",
+      "title": "ADSP-214xx SHARC Processor Hardware Reference, Revision 1.1, April 2013, 82-000469-01",
+      "official_url": "https://www.analog.com/media/en/dsp-documentation/processor-manuals/adsp-214xx_hwr_rev1.1.pdf",
+      "local_copy_url": "https://docs.ampnuts.ru/analog.com.datasheet/adsp-21489/related_data/ADSP-214xx_hwr_rev1.1.pdf",
+      "local_copy_bytes": 18156850,
+      "local_copy_sha256": "a9534d75e8946af83d5c9e250bb7e212224786b56977d6fec90d88e178f034dc",
+      "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified; no source reused.",
+      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4"
+    },
+    {
+      "author": "Analog Devices",
+      "title": "ADSP-21483/21486/21487/21488/21489 Data Sheet, Revision I, February 2024",
+      "official_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADSP-21483_21486_21487_21488_21489.pdf",
+      "provenance": "Official document consulted directly; local byte identity not yet pinned.",
+      "sections": "Table5 5-Mbit RAM geometry for ADSP-21486/21487/21489; not exact Nord part identification"
+    }
+  ],
+  "spi_slave_reference": {
+    "control": "0x4d22",
+    "dma_control": "0x7",
+    "dma_first_word": "0x92000",
+    "dma_modifier": 1,
+    "dma_words": 384,
+    "kernel_bytes": 1536,
+    "kernel_instruction_words": 256,
+    "reset_word": "0x8c000",
+    "serial": "32-bit, LSB first, idle-high, output falling/sample rising, MISO disabled",
+    "limits": "Word completion is a functional DMA boundary; FIFO/arbitration/interrupt and reset electrical latency remain pending. A midword select release and further selected edges after load fail explicitly."
+  },
+  "original_kernel": {
+    "bundle_sha256": "16909837b32768833ceca047a2207f9bf8d9e303037cebc9c95a2cdaed99c9ec",
+    "bytes": 1536,
+    "sha256": "35b5914d5da795249147d8592f2dd3b44474a579cdf09de02d5b62855597c193",
+    "evidence": "All four unchanged decoded CODE placements, private reconstruction factual inventory; no instructions/source imported",
+    "placements": [
+      {
+        "part": 0,
+        "transport": 0,
+        "code_offset": "0x2c6d78"
+      },
+      {
+        "part": 0,
+        "transport": 1,
+        "code_offset": "0x2ab0f8"
+      },
+      {
+        "part": 1,
+        "transport": 0,
+        "code_offset": "0x71bc8"
+      },
+      {
+        "part": 1,
+        "transport": 1,
+        "code_offset": "0x701d8"
+      }
+    ]
+  }
+}

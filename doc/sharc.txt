@@ -1,0 +1,86 @@
+SHARC memory and initial SPI-slave bootstrap reference
+
+reference/sharc.json records primary documentation, analysis-copy hashes and the
+four unchanged kernel placements. Manufacturer files remain ignored. The
+5-Mbit RAM geometry is an explicitly selected ADSP-21486/21487/21489 candidate,
+not identification of the physical Nord package, boot pins or clock rates.
+
+Memory contract
+SharcMemory uses word addresses, separate from the ARM byte-addressed bus. Its
+five views share physical 16-bit cells, including per-bit known/unknown state.
+The programming reference 7-12..20 and datasheet Rev.I Table 5 define the views:
+SW16: 0x100000 + bank*0x40000, one cell per word.
+NW32: 0x080000 + bank*0x20000, two cells per word.
+NW40/48: same bank bases, three cells per word; 40-bit data occupies bits47:8.
+LW64: 0x040000 + bank*0x10000, four cells per word.
+Forced LW at a NW address discards bit0 (6-8/9); the future core must separately
+implement MODE2.U64MAE indication. A 40-bit write preserves the low eight bits
+and their knowledge. A read fails if any required bit is unknown. Physical
+reserved/ROM locations are absent until explicitly mapped; SRAM starts unknown.
+No cache/buffer or register packing, sign extension, SIMD/broadcast addressing,
+VISA assembly, bus arbitration or silicon access latency is implied by this API.
+
+map_2148x_5mbit_ram selects physical halfword ranges [0x24000,0x3c000) in
+banks 0/1 and [0,0x10000) in banks 2/3. Reads/writes through another width see
+the same cells. Permissions apply to physical regions. Word writes validate
+every cell before changing any. Instruction transactions stage at most 32 cell
+writes, with read-after-write visibility and rollback. IOP mappings below
+0x40000 require 32-bit accesses and translate each word to a four-byte device
+offset; joined MemoryDevice transactions commit/abort with RAM. Devices must
+outlive the memory. All methods run on one owning emulation thread.
+
+Initial boot contract
+Hardware reference 24-8 describes hardcoded DMA loading while the core is idle;
+there is no on-chip boot ROM controlling that scenario. This does not exclude
+unrelated mask-ROM contents or establish the Nord's boot-configuration pins.
+SharcSpiBoot::slave_reference_214xx explicitly selects Tables 24-9/10:
+SPICTL=0x4d22, SPIDMAC=7, destination 0x92000, modifier 1, count 384 NW32 words.
+The receiver uses actual selected clock transitions: idle high, falling output,
+rising sample, LSB first, 32-bit words. DMISO disables driven MISO. Missing MOSI
+is rejected only at a sampling edge; repeated clock levels do not shift data.
+The caller supplies resolved clock, selection and MOSI; no GPIO wiring is
+implicit. A complete word writes RAM transactionally, advances the DMA cursor
+and decreases the count. Failed writes preserve both receiver and memory state.
+The first 1536 bytes become 256 NW48 instructions at 0x8c000 through aliases.
+
+entry() becomes available only after all 384 words have committed. This is a
+functional scheduler handoff to reset location 0x8c000; it does not execute any
+SHARC instruction, assert a ready GPIO, or qualify interrupt/boot timing.
+This limited initial loader is not a programmable SPI register facade. Further
+selected clock edges require the missing runtime SPI/core handoff and fail
+explicitly. Midword deselection remains unqualified and fails; aligned gaps
+preserve the DMA cursor. FIFO occupancy, arbitration, DMA/core interrupt and
+electrical reset delays remain pending. Core-instruction transactions and
+external loader events cannot overlap. No ROM data or default RAM is invented.
+
+Verification
+sharc_memory checks literal datasheet endpoints in all banks/views, four
+48-bit column rotations, unknown-bit preservation, ROM/execution permissions,
+IOP transactions and atomic write failures. HWR Figure 24-4's independent
+three 32-bit to two 48-bit packing example checks byte order. sharc_boot_serial clocks
+owned data through the TI master model to this receiver, checks every halfword,
+DMA count and final instruction, and rejects unknown input/invalid handoffs.
+
+With the optional original bundle, original_images freshly extracts and verifies
+all six section hashes and all four identical 1536-byte kernel hashes. The
+original SPI regression additionally executes the actual factory/heap/GPIO and
+ARM block writer for both images and both transport arguments. Each sends the
+unchanged kernel from its read-only CODE placement through 768 16-bit transfers,
+actual serial edges and the selected boot reference. GPIO bank 2 pins 11/12
+provide selection in this explicit fixture. Every transmitted halfword, all 256
+48-bit RAM words, DMA completion, original select/release and scratch readback
+are checked. MISO receives an owned external pull-up, not fake DSP data.
+The existing owned 200MHz runtime-clock input and one half-module-clock per
+committed ARM instruction are fixture inputs, not measured Nord frequencies.
+Transport arguments are not proven physical DSP package assignments.
+
+Reproduce after preparing optional local references:
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^sharc_' --output-on-failure
+  cmake --build build/strict --target quality
+
+SHARC instruction execution, programmable SPI/DMA, clock-control registers,
+remaining stream records, causal board scheduling and complete cold boot remain
+open. In particular, zero-tag stream records must retain the original dispatch
+semantics; do not replace skipped records with host zero-fills. No audio or
+instrument functionality is established by loading a kernel.

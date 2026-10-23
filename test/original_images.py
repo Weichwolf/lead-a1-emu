@@ -29,6 +29,16 @@ def main():
                 if (len(data) != section["decoded_bytes"]
                         or hashlib.sha256(data).hexdigest() != section["decoded_sha256"]):
                     raise ValueError(f"Decoded section identity mismatch: {name}")
+        sharc = json.loads((ROOT / "reference/sharc.json").read_text())["original_kernel"]
+        if sharc["bundle_sha256"] != specs["bundle_sha256"]:
+            raise ValueError("SHARC kernel reference bundle mismatch")
+        for placement in sharc["placements"]:
+            data = (Path(directory) / f"{placement['part']}-CODE.bin").read_bytes()
+            offset = int(placement["code_offset"], 16)
+            kernel = data[offset:offset + sharc["bytes"]]
+            if (len(kernel) != sharc["bytes"]
+                    or hashlib.sha256(kernel).hexdigest() != sharc["sha256"]):
+                raise ValueError("Original SHARC kernel identity mismatch")
         if len(sys.argv) >= 4:
             for part in specs["parts"]:
                 subprocess.run([sys.argv[2], sys.argv[3], directory, str(part["index"])],
@@ -45,8 +55,10 @@ def main():
             subprocess.run([sys.argv[11], sys.argv[3], directory, sys.argv[12]], check=True)
         if len(sys.argv) >= 14:
             subprocess.run([sys.argv[13], sys.argv[3], directory], check=True)
-        if len(sys.argv) == 15:
+        if len(sys.argv) >= 15:
             subprocess.run([sys.argv[14], sys.argv[3], directory], check=True)
+        if len(sys.argv) >= 16:
+            subprocess.run([sys.argv[15], directory], check=True)
     print("All six native decoded sections match independent pinned hashes")
     return 0
 
