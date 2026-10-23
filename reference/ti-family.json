@@ -7,7 +7,15 @@
       "url": "https://www.ti.com/lit/ug/spruh82c/spruh82c.pdf",
       "bytes": 10393534,
       "sha256": "296965370f924932f03213f32ade3ca2b1026a8dac0dab9a22c8e153194709ec",
-      "sections": "Chapter 2 ARM subsystem/caches/vectors; chapter 11 AINTC methodology/registers; EDMA3CC and McASP register semantics"
+      "sections": "Chapter 2 ARM subsystem/caches/vectors; chapter 11 AINTC methodology/registers; chapter 20 GPIO; chapter 29 SPI; EDMA3CC and McASP register semantics"
+    },
+    {
+      "author": "Linux GPIO maintainers",
+      "title": "Linux v6.12 drivers/gpio/gpio-davinci.c",
+      "url": "https://github.com/torvalds/linux/blob/v6.12/drivers/gpio/gpio-davinci.c",
+      "bytes": 18679,
+      "sha256": "d42eb32dfa830d66a8b25da2099ce61269545744619397d59e0a44f2e9a19268",
+      "sections": "__davinci_direction writes SET/CLR before clearing DIR; software corroboration of latch preload, not Nord pinmux/clock/timing evidence; no source reused"
     },
     {
       "author": "Texas Instruments",
@@ -36,7 +44,10 @@
     "aintc_irq_nesting_level": "0xfffef104",
     "aintc_host_vectors": ["0xfffef600", "0xfffef604"],
     "edma3cc_base": "0x01c00000",
-    "mcasp_instance_zero_base": "0x01d00000"
+    "mcasp_instance_zero_base": "0x01d00000",
+    "gpio_base": "0x01e26000",
+    "spi_bases": ["0x01c41000", "0x01e12000"],
+    "gpio_spi_provenance": "Private reconstruction 3e3fcf2/c5a3a46 reports MCU operands and bank/channel mapping; no electrical DSP assignment, pinmux or clock claim"
   },
   "candidate_facts": {
     "core": "ARM926EJ-S",

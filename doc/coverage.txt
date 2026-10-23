@@ -30,7 +30,7 @@ ID  State    Evidence / remaining work
              Explicit transactional MMIO routes device reads/writes through the
              physical bus. TI-family AINTC source status/enables, channel/host
              priorities, vectors and priority holding have owned tests;
-             CPU LDM/STM faults roll back device effects (aintc.txt).
+             Diagnostic CPU LDM/STM failures roll back device effects (aintc.txt).
              Per-host/global override nesting, automatic priority read views and
              threshold/hold rollback have independent tests. Both original IRQ
              wrappers exercise nested FIQ/higher IRQ and defer equal priorities.
@@ -38,6 +38,9 @@ ID  State    Evidence / remaining work
              register rules, partial effects and guest repair/retry tests. FCSE
              alignment FAR and descriptor-buffer coherence are checked
              (arm-aborts.txt); diagnostic rollback remains explicitly selectable.
+             Transactional GPIO latch/direction/known pad samples, edge status,
+             bank requests and byte/halfword/word register lanes have independent
+             bus/ARM tests (gpio.txt). Physical wiring and timing remain open.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
              external/debug/undefined exception delivery, nonidentity MMU
              transitions, hardware TLB replacement, TCM, Thumb/Jazelle,
@@ -74,6 +77,12 @@ ID  State    Evidence / remaining work
              Both original data/prefetch vectors and ARM0 fatal trampolines reach
              their CODE fatal entries under owned conforming-table inputs;
              this does not resolve original table/TLB constraints (arm-aborts.txt).
+             Both original GPIO bank/direction and board setter/getter helpers
+             exercise real GPIO halfword accesses and original busy delay.
+             Complete original GPIO initializers execute actual new/malloc/break
+             paths under owned zero-BSS/heap inputs, checking ordered accesses,
+             object layouts and the two images' different bank4 pin14 latch.
+             The unresolved external byte access remains fail-visible (gpio.txt).
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.

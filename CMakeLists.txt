@@ -29,13 +29,30 @@ set(CMAKE_CXX_CLANG_TIDY "${LEAD_A1_CLANG_TIDY};--warnings-as-errors=*")
 add_library(lead_a1_core STATIC src/firmware.cpp src/image.cpp)
 target_include_directories(lead_a1_core PUBLIC include)
 target_link_libraries(lead_a1_core PUBLIC lead_a1_quality PRIVATE lead_a1_lzo)
-add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp src/arm_status.cpp src/arm_system.cpp src/arm_mmu.cpp src/arm_data.cpp src/arm_exception.cpp src/arm_fault.cpp src/aintc.cpp)
+add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp src/arm_status.cpp src/arm_system.cpp src/arm_mmu.cpp src/arm_data.cpp src/arm_exception.cpp src/arm_fault.cpp src/aintc.cpp src/gpio.cpp)
 target_include_directories(lead_a1_arm PUBLIC include)
 target_link_libraries(lead_a1_arm PUBLIC lead_a1_quality PRIVATE lead_a1_sleigh)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/gpio-cases.bin"
+    COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
+      --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/gpio_cases.S"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/generated/gpio-cases.o"
+    COMMAND "${LEAD_A1_LLVM_OBJCOPY}" -O binary -j .text
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/gpio-cases.o"
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/gpio-cases.bin"
+    DEPENDS test/gpio_cases.S VERBATIM)
+  add_custom_target(lead-a1-gpio-cases DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/gpio-cases.bin")
+  add_executable(lead-a1-gpio-test test/gpio_test.cpp)
+  target_link_libraries(lead-a1-gpio-test PRIVATE lead_a1_arm)
+  add_dependencies(lead-a1-gpio-test lead-a1-gpio-cases)
+  add_executable(lead-a1-original-gpio-test test/original_gpio_test.cpp)
+  target_link_libraries(lead-a1-original-gpio-test PRIVATE lead_a1_arm)
+  add_test(NAME gpio_mmio_cpu COMMAND lead-a1-gpio-test
+    "${CMAKE_CURRENT_BINARY_DIR}/share/ARM5_le.sla"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/gpio-cases.bin")
   add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-abort-cases.bin"
     COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
       --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/arm_abort_cases.S"
@@ -197,7 +214,8 @@ if(BUILD_TESTING)
     $<TARGET_FILE:lead-a1-original-exception-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-exception-cases.bin"
     $<TARGET_FILE:lead-a1-original-interrupt-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/aintc-cases.bin"
     $<TARGET_FILE:lead-a1-original-aintc-test>
-    $<TARGET_FILE:lead-a1-original-abort-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-abort-cases.bin")
+    $<TARGET_FILE:lead-a1-original-abort-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-abort-cases.bin"
+    $<TARGET_FILE:lead-a1-original-gpio-test>)
   set_tests_properties(original_images PROPERTIES SKIP_RETURN_CODE 77)
   add_test(NAME native_build COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/test/native_build.py"
@@ -230,7 +248,8 @@ if(BUILD_TESTING)
       lead-a1-mmu-cpu-test lead-a1-arm-data-test lead-a1-original-cache-test
       lead-a1-arm-exception-test lead-a1-original-exception-test lead-a1-aintc-test
       lead-a1-aintc-cpu-test lead-a1-original-interrupt-test lead-a1-aintc-nesting-test
-      lead-a1-original-aintc-test lead-a1-arm-abort-test lead-a1-original-abort-test VERBATIM)
+      lead-a1-original-aintc-test lead-a1-arm-abort-test lead-a1-original-abort-test
+      lead-a1-gpio-test lead-a1-original-gpio-test VERBATIM)
 endif()
 
 install(TARGETS lead-a1-emu RUNTIME DESTINATION bin)

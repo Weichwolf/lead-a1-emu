@@ -1,0 +1,85 @@
+TI-family GPIO reference and board interface
+
+Gpio is an independent transactional MemoryDevice. Its constructor requires an
+explicit register/pin-geometry input; reset_reference(pins) supplies a named
+candidate-family fixture, not a detected Nord reset. The reference supports up
+to nine 16-pin banks. The configured pin count determines reserved fields; no
+144-pin physical-package claim follows. The observed base is 0x01e26000.
+
+Registers and signals
+Each paired-bank register group starts at 0x10 with stride 0x28. DIR uses one
+for input and zero for output. OUT_DATA and SET/CLR aliases share an output
+latch; set/clear writes affect only asserted bits. Read aliases return the
+latch rather than pad state. Aligned byte/halfword/word accesses preserve the
+other lanes. Optional REVID and BINTEN occupy 0/8. Missing registers, writes to
+read-only registers, oversized accesses and nonzero reserved fields diagnose.
+
+The output latch can be preloaded while a pin is an input. drives() reports
+the current enabled/high masks separately. Only an explicit synchronized pad
+sample changes IN_DATA and edge detection. Output feedback is a board input,
+not an immediate fabricated loopback: pinmux, external contention, open-drain
+resolution, synchronizer latency and GPIO/PSC clocks remain board work. Unknown
+sample bits remain unknown; a read requiring them diagnoses instead of returning
+invented pulls or readiness. A newly sampled value cannot arrive during a CPU
+instruction transaction.
+
+SET/CLR rising/falling trigger aliases preserve the other bits. Explicit known
+sample transitions latch INTSTAT; W1C acknowledges it. BINTEN gates the reported
+per-bank request. Direction does not gate edge detection. Armed transitions
+with unknown prior/new levels diagnose before changing state. The functional
+reference exposes pending bank requests; it does not claim physical pulse
+widths, unbanked routing, EDMA events, AINTC wiring or clock/reset integration.
+
+Transactions stage latch/direction/trigger/acknowledgment changes. A diagnostic
+CPU failure rolls them back with registers and RAM. There are no callbacks
+publishing partially committed pin changes. The board should consume drives
+and requests only after commit, resolve connectivity and supply synchronized
+samples at its established emulated-time boundaries.
+All methods run on one owning emulation thread; host input delivery needs an
+external queue and does not call sample concurrently with guest execution.
+
+Evidence
+TI SPRUH82C chapter 20 defines the register layout, latch/pad distinction,
+direction, edge controls, bank requests and reset fields. Its input-mode wording
+does not fully distinguish output-latch programming from external drive.
+Upstream Linux v6.12 gpio-davinci.c __davinci_direction explicitly writes SET/CLR
+before clearing DIR, corroborating latch preload. Original Nord GPIO endpoint
+and board constructors use the same data-before-direction order. This supports
+the reference interpretation; no physical Nord pin timing was measured. The
+manual/driver identities are pinned in reference/ti-family.json; neither is
+copied into or linked by the public implementation.
+
+Owned tests check all five register groups, halfword lanes/byte preservation,
+alias readback, preload/drive separation, partial input knowledge, synchronized
+edge/bank/ack behavior, invalid geometry/accesses and transactional rollback.
+Executed ARM halfword operations and partial LDM/STM diagnostics exercise the
+normal physical bus, not a separate test-only MMIO route.
+
+Optional original tests execute both unchanged bank constructors, direction
+helpers and board getter/setters against the device. Inputs include wrapped
+bank arithmetic, low-eight-bit shift counts, halfword truncation and nonzero
+direction/setter arguments. Actual original busy-delay instructions execute;
+no wall-time unit or physical control-line role is inferred. The helper that
+first writes an unresolved byte at 0x62004000 still stops there with width/PC
+context and no GPIO effect. It has no invented backing peripheral.
+
+Both original complete board GPIO initializers also run through their actual
+C++ new, malloc, morecore and byte-break instructions. Original initialized heap
+bins are writable data; the remaining CODE image is read-only. Zeroed BSS and
+bounded heap backing are explicit owned inputs, not an executed cold start.
+Checks cover three allocated 20-byte objects, 24-byte chunk spacing/headers,
+program-break growth, all 25 ordered GPIO reads/writes and final drive masks.
+The original bank4 pin14 output latch is low in part 0 and high in part 1;
+other data-before-direction operations and unknown pad state are preserved.
+No allocator or delay calls are intercepted or replaced.
+Bank-helper entries are 0xc0172460 / 0xc002e1b4; complete board GPIO entries
+are 0xc00065f4 / 0xc00018c4. The heap input addresses and routine boundaries
+were cross-checked with private reconstruction 5d076e2. They are factual test
+metadata, not a dependency on reconstructed sources or a whole-image identity
+claim. Optional checks still decode and execute the unchanged original bundle.
+
+  build/strict/lead-a1-original-gpio-test build/strict/share/ARM5_le.sla doc/local/images
+
+This is peripheral/isolated original-routine evidence. It does not resolve the
+unknown inherited TLB/descriptor constraints, exact SoC/board/pinmux/clocks,
+complete boot, SHARC instruction execution or audio.
