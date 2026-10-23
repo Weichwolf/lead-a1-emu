@@ -39,7 +39,8 @@ events are delivered on the owning emulation thread outside instructions.
 
 Short-loop contract
 The native core implements Type 12a immediate/UREG-count loops whose body is a
-single NOP or a reviewed SISD RAM move (sharc-data.txt). It executes every
+single NOP, reviewed SISD RAM move (sharc-data.txt), or reviewed compute-only
+logical operation (sharc-compute.txt). It executes every
 fetched body instruction; the loop is not a host wait or a
 successful initialization callback. Count 0 means 2^32 iterations. Remaining
 iteration state is logical bookkeeping, not fabricated LCNTR/CURLCNTR readback.

@@ -69,8 +69,13 @@ ID  State    Evidence / remaining work
              boot-mode/width controls and signed Type4a NW32/40 RAM moves have
              owned literal tests. Short counter loops execute every load/store;
              failed accesses preserve index/count/columns/control effects
-             (sharc-data.txt). General DAG/circular/broadcast/SIMD transfers,
-             computation/VISA, runtime SPI/DMA/interrupts and timing remain
+             (sharc-data.txt). Direct Rx/Sx NW32/40 RAM moves share that packing.
+             Compute-only fixed PASS/AND/OR/XOR/NOT have known-bit SISD/SIMD
+             reference tests, per-element conditions/banks, immediate ALU flags
+             and one-instruction loop support. AC/AV tests use A-6's actual bits,
+             with raw AN/AC/AV distractors (sharc-compute.txt).
+             General DAG/circular/broadcast/SIMD transfers, arithmetic/float/
+             other computation/VISA, runtime SPI/DMA/interrupts and timing remain
              open. No automatic ready signal or programmable-port stub.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
              external/debug/undefined exception delivery, nonidentity MMU
@@ -135,8 +140,10 @@ ID  State    Evidence / remaining work
              actual RAM-clear stores, preserving kernel words and the three
              original uncleared tails. Original FLAG1 level write/RTS and loader
              L/M/SYSCTL setup reach PC0x8c013 after 171769 instructions. The next
-             PASS computation fails unchanged; no pin samples/ARM wiring are
-             invented (sharc-data.txt).
+             PASS and loader CALL/setup now execute too, reaching the first
+             runtime SPI/DMA write at PC0x8c034/IOP0x1081 after171774 instructions.
+             The unmapped device fails unchanged; no pin samples/ARM wiring or
+             successful DMA are invented (sharc-data.txt, sharc-compute.txt).
              This does not qualify physical MHz, bridge/mux timing or board reset; general
              loader/application boot and audio remain open (sharc-clock.txt).
              All-way fixture stops on unknown random replacement. No cold boot or

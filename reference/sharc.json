@@ -9,7 +9,7 @@
       "local_copy_bytes": 5516505,
       "local_copy_sha256": "0b40637d05c7f33bc8e39235ee8a9d2c734b12c0372aff1eeac56a7554895869",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified. Official document independently consulted; no source reused.",
-      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending); 4-12/24 CALL/return stack and delay slots; 9/10 native instruction forms; A-10 26-bit frame metadata, A-39 interrupt RO bits, A-32/35 effects, A-54/56 reset register reference; 4-61/63 single-instruction counter loops, stack pre-pop and pipeline bubbles; 4-90/91 FLAG direction/level separation and toggle spacing; A-13/14 detailed FLAGS fields, sampled input read view, A-34 effect latency; 2-5 40-bit registers/32-bit left justification; 6-18 extended stores zero low8, 6-23 B/I relationship; 9-17/18 and 10-8 Type4a; A-4 register banks, A-45/47 boot-dependent SYSCTL/IMDW"
+      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending); 4-12/24 CALL/return stack and delay slots; 9/10 native instruction forms; A-10 26-bit frame metadata, A-39 interrupt RO bits, A-32/35 effects, A-54/56 reset register reference; 4-61/63 single-instruction counter loops, stack pre-pop and pipeline bubbles; 4-90/91 FLAG direction/level separation and toggle spacing; A-13/14 detailed FLAGS fields, sampled input read view, A-34 effect latency; 2-5 40-bit registers/32-bit left justification; 6-18 extended stores zero low8, 6-23 B/I relationship; 9-17/18 and 10-8 Type4a; A-4 register banks, A-45/47 boot-dependent SYSCTL/IMDW; 9-10/11 per-PE compute conditions; 10-6 Type2a, 12-2/3 CU/ALU fields; 11-15/19 fixed logical results/status; A-17/20 ASTAT bit positions, 10-33 conditions; 9-53/54 Type14a direct RAM"
     },
     {
       "author": "Analog Devices",
@@ -70,7 +70,7 @@
     ]
   },
   "native_reference": {
-    "supported": "NOP; Type8a direct/relative branches; plain Type11a RTS; reviewed SREG Type17a immediate and Type18a bit operations; reviewed Type14a 32-bit IOP moves; primary/secondary data/DAG UREGs; compute-free SISD Type4a indexed NW32/40 RAM moves with explicit SYSCTL binding",
+    "supported": "NOP; Type8a direct/relative branches; plain Type11a RTS; reviewed SREG Type17a immediate and Type18a bit operations; reviewed Type14a 32-bit IOP moves; primary/secondary data/DAG UREGs; compute-free SISD Type4a indexed NW32/40 RAM moves with explicit SYSCTL binding; compute-only logical PASS/AND/OR/XOR/NOT in SISD/SIMD; direct SISD Rx/Sx NW32/40 RAM moves",
     "state": "Known-bit system registers, delayed effects, full 26-bit PC frames; explicit reset-register candidate input, not physical post-DMA qualification",
     "original_frontier": {
       "committed_instructions": 8,
@@ -181,9 +181,41 @@
       "return_instruction_count": 171758,
       "committed_instructions": 171769,
       "pc_word": "0x8c013",
-      "next_operation": "PASS computation unsupported; unchanged CPU/control/clock/RAM",
+      "next_operation": "Logical PASS and loader setup extend to first runtime SPI/DMA write at 0x8c034/171774 instructions; sharc-compute.txt",
       "flag1_core_output": "high only after original level write; no physical pin/sample/ARM-ready inference"
     },
-    "limits": "General/circular/reversed/broadcast/SIMD DAG, direct RAM moves, SW/LW/external/indexed-IOP transfers, computation, VISA, runtime peripherals and physical timing remain open"
+    "limits": "General/circular/reversed/broadcast/SIMD DAG, non-data RAM UREGs, forced LW/SW/external/indexed-IOP transfers, arithmetic/float/other computations, VISA, runtime peripherals and physical timing remain open"
+  },
+  "compute_reference": {
+    "primary": "PGRrev2.4 9-10/11,10-6,11-15/19,12-2/3,A-17/20",
+    "supported": [
+      "PASS",
+      "AND",
+      "OR",
+      "XOR",
+      "NOT"
+    ],
+    "execution": "Native Type2a, independent PEx/PEy conditions and effective MODE1 bank/SIMD selection; 32-bit fixed result, extension cleared; no host vector backend claim",
+    "knowledge": "Bitwise known-bit propagation, same-source XOR zero, partial AZ/AN knowledge; unused operands unread",
+    "status": {
+      "AZ": "0x1",
+      "AV": "0x2",
+      "AN": "0x4",
+      "AC": "0x8",
+      "fixed_update_mask": "0x43f",
+      "unaffected": "Other ASTAT and all STKY; no arithmetic exception claim"
+    },
+    "condition_regression": "COND3 AC uses bit3, COND4 AV uses bit1, independently of AN bit2; literal distractor tests",
+    "direct_memory": "SISD Rx/Sx DM/PM normal RAM uses shared SYSCTL NW32/40 packing; other RAM UREGs/modes remain guarded",
+    "original_fixture": {
+      "committed_instructions": 171774,
+      "pc_word": "0x8c034",
+      "access_word": "0x1081",
+      "access": "write32",
+      "operation": "IMSPI modifier write",
+      "frame": "0x108c016",
+      "state_on_failure": "unchanged CPU/control/clock/RAM/transactions; no runtime DMA success"
+    },
+    "limits": "Arithmetic, float, compare, multiplier/shifter/multifunction, empty/VISA forms, general/observed loop resources, runtime peripherals and full board/timing/audio remain open"
   }
 }

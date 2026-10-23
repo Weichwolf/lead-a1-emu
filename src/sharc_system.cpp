@@ -94,7 +94,7 @@ void test_flag(SharcState &state, std::optional<bool> result) {
 
 bool element_condition(SharcKnown32 flags, unsigned int code) {
   constexpr std::array<std::uint32_t, 15> masks{
-      1, 0, 0, 4, 8, 0x80, 0x40, 0x800, 0x1000, 0, 0, 0, 0, sharc_btf, 0x4000};
+      1, 0, 0, 8, 2, 0x80, 0x40, 0x800, 0x1000, 0, 0, 0, 0, sharc_btf, 0x4000};
   const auto base = code & 15;
   if (base >= masks.size() || masks[base] == 0) {
     throw std::runtime_error("SHARC relational/pad/loop condition not implemented");
@@ -194,6 +194,11 @@ bool sharc_condition(const SharcState &state, unsigned int code) {
   if (!first) { return false; }
   if (!known_bit(state.effective[sharc_mode1], sharc_simd)) { return true; }
   return element_condition(state.effective[sharc_astat_y], code);
+}
+
+bool sharc_pe_condition(const SharcState &state, unsigned int code, unsigned int element) {
+  constexpr unsigned int always = 31;
+  return code == always || element_condition(state.effective[sharc_astat_x + element], code);
 }
 
 void sharc_interrupt_guard(const SharcState &state) {

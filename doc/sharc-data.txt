@@ -12,13 +12,14 @@ State retains 40 known bits for every primary/secondary PEx/PEy data register,
 plus all primary/secondary I/M/L/B registers. Reset data/DAG contents are unknown.
 32-bit UREG writes left-justify into 40 bits and establish eight low zero bits;
 32-bit reads ignore those eight bits. R/F are bit aliases, not host float
-conversions. This does not implement computational instructions.
+conversions. sharc-compute.txt documents the separate logical computation scope.
 
 MODE1 selects primary/secondary data low/high halves and four DAG groups using
 its effective, delayed view. Bx writes update the corresponding Ix in the same
 bank even with circular mode disabled; Ix writes leave Bx unchanged. Reviewed
 Type17 immediate and Type14 32-bit IOP forms access these registers. SIMD data
-transfers, PX and additional register/compute instruction forms remain guarded.
+transfers, PX and additional register/compute instruction forms remain guarded
+(sharc-compute.txt adds compute-only logical and direct data-register RAM forms).
 
 SYSCTL
 SharcControl maps device offset0/read-write32 to word0x30024. The owning core
@@ -56,7 +57,8 @@ write the 40 data bits into physical48 with low8 zero, as required by 6-18.
 Loads discard physical low8. This native-store behavior differs from the raw
 SharcMemory extended40 bit-view API, which preserves unselected cell bits.
 
-One-instruction counter loops can execute these RAM moves as well as NOPs.
+One-instruction counter loops can execute these RAM moves, reviewed logical
+compute-only operations (sharc-compute.txt) and NOPs.
 Every iteration fetches, addresses and transfers separately. Loop frame/pop,
 count-zero and bubble/drain behavior remain as in sharc-clock.txt. Unsupported
 loop-resource observations, general/nested/arithmetic loops and full pipeline,
@@ -82,8 +84,9 @@ is supplied. The routine returns normally after 171758 instructions.
 
 Eleven further original instructions set IRQ-enable and L/M registers, then
 read the real SYSCTL mapping. PC0x8c013 is reached after 171769 instructions;
-the following PASS computation is still unsupported and leaves CPU/control/
-clock/memory state unchanged. All four kernel placements exercise this path.
+sharc-compute.txt extends this with actual PASS/CALL/setup to the first runtime
+SPI/DMA write at PC0x8c034/171774 instructions, where the unmapped device leaves
+CPU/control/clock/memory unchanged. All four kernel placements exercise this path.
 This is a local original-code composition, not full cold boot or audio.
 
   cmake --build --preset strict

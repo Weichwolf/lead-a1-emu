@@ -42,37 +42,42 @@ std::uint32_t modified(SharcAccess access, std::uint64_t opcode) {
   return static_cast<std::uint32_t>(std::uint64_t{access.address} + displacement);
 }
 
-void transfer(SharcMemory &memory,
-              SharcState &state,
-              SharcAccess access,
-              std::uint64_t opcode,
-              const SharcControl *control) try {
+}
+
+void sharc_ram_transfer(SharcMemory &memory,
+                        SharcState &state,
+                        SharcDataTransfer transfer,
+                        const SharcControl *control) try {
   if (control == nullptr) {
     throw std::runtime_error("SHARC RAM data-width access requires a bound SYSCTL reference");
   }
-  const auto width = control->data_width(access.address);
-  const auto reg = static_cast<unsigned int>((opcode >> 23) & 15);
+  const auto width = control->data_width(transfer.access.address);
+  constexpr unsigned int complement_begin = 0x50;
+  constexpr unsigned int complement_end = 0x60;
+  const auto reg = transfer.ureg;
+  if (reg >= 16 && (reg < complement_begin || reg >= complement_end)) {
+    throw std::runtime_error("SHARC RAM non-data UREG transfer not implemented");
+  }
   auto &data = sharc_data_register(state, reg);
-  if ((opcode & write_bit) != 0) {
+  if (transfer.write) {
     const auto required =
         width == SharcWidth::normal32 ? sharc_data_mask & ~low_byte : sharc_data_mask;
     if ((data.known & required) != required) {
       throw std::runtime_error("Unknown SHARC data register store bits");
     }
     const auto stored_width = width == SharcWidth::normal32 ? width : SharcWidth::wide48;
-    memory.write({.address = access.address, .width = stored_width},
+    memory.write({.address = transfer.access.address, .width = stored_width},
                  width == SharcWidth::normal32 ? data.value >> 8 : data.value << 8);
   } else {
-    const auto value = memory.read({.address = access.address, .width = width});
+    const auto value = memory.read({.address = transfer.access.address, .width = width});
     data = {.value = width == SharcWidth::normal32 ? value << 8 : value, .known = sharc_data_mask};
   }
 } catch (const std::exception &error) {
 
   std::ostringstream message;
-  message << "SHARC RAM word-address=0x" << std::hex << access.address << ": " << error.what();
+  message << "SHARC RAM word-address=0x" << std::hex << transfer.access.address << ": "
+          << error.what();
   throw std::runtime_error(message.str());
-}
-
 }
 
 void sharc_data_move(SharcMemory &memory,
@@ -97,7 +102,12 @@ void sharc_data_move(SharcMemory &memory,
   const auto current = sharc_value(sharc_register_read(state, 16 + index));
   const auto next = modified({.address = current}, opcode);
   const auto address = (opcode & update_bit) != 0 ? current : next;
-  transfer(memory, state, {.address = address}, opcode, control);
+  const auto reg = static_cast<unsigned int>((opcode >> 23) & 15);
+  sharc_ram_transfer(
+      memory,
+      state,
+      {.access = {.address = address}, .ureg = reg, .write = (opcode & write_bit) != 0},
+      control);
   if ((opcode & update_bit) != 0) {
     constexpr std::uint32_t all_bits = 0xffffffff;
     sharc_register_write(state, 16 + index, {.value = next, .known = all_bits});

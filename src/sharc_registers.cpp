@@ -69,7 +69,13 @@ void sharc_register_write(SharcState &state, unsigned int ureg, SharcKnown32 val
 }
 
 SharcKnown40 &sharc_data_register(SharcState &state, unsigned int reg) {
-  return state.data[data_bank(state, reg)][reg];
+  return state.data[data_bank(state, reg)][reg & 15];
+}
+
+SharcKnown40 &sharc_compute_register(SharcState &state, unsigned int reg, unsigned int element) {
+  constexpr unsigned int low_select = 10;
+  const auto bank = selection(state, reg < 8 ? low_select : 7U) + (element * 2);
+  return state.data[bank][reg];
 }
 
 void sharc_validate_registers(const SharcState &state) {

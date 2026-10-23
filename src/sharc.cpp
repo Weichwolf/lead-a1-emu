@@ -125,18 +125,25 @@ std::optional<std::uint32_t> return_branch(SharcState &state, std::uint64_t opco
   return schedule(state, *frame & detail::sharc_pc_mask, (opcode & delayed) != 0);
 }
 
-void direct_move(SharcMemory &memory, SharcState &state, std::uint64_t opcode) try {
+void direct_move(SharcMemory &memory,
+                 SharcState &state,
+                 std::uint64_t opcode,
+                 const SharcControl *control) try {
   constexpr std::uint64_t long_word = 0x8000000000;
   if ((opcode & long_word) != 0) {
     throw std::runtime_error("SHARC forced-LW register transfer not implemented");
   }
   const auto ureg = static_cast<unsigned int>((opcode >> ureg_shift) & ureg_mask);
   const auto address = static_cast<std::uint32_t>(opcode);
-  // IOP words have an unambiguous 32-bit width. Internal data width requires
-  // SYSCTL/IMDWx and data-register packing; do not guess either of those here.
   constexpr std::uint32_t iop_end = 0x40000;
   if (address >= iop_end) {
-    throw std::runtime_error("SHARC data-memory width/SYSCTL selection not implemented");
+    detail::sharc_ram_transfer(memory,
+                               state,
+                               {.access = {.address = address},
+                                .ureg = ureg,
+                                .write = (opcode & (std::uint64_t{1} << class_shift)) != 0},
+                               control);
+    return;
   }
   const auto mode1 = state.effective[detail::sharc_mode1];
   if ((mode1.known & detail::sharc_simd) == 0 || (mode1.value & detail::sharc_simd) != 0) {
@@ -177,6 +184,7 @@ execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const Shar
         throw std::runtime_error("SHARC idle/VISA/reserved instruction not implemented");
       }
       return {};
+    case 1: detail::sharc_compute(state, opcode); return {};
     case 6:
     case 7: return direct_branch(state, opcode);
     case 10: return return_branch(state, opcode);
@@ -195,7 +203,7 @@ execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const Shar
     case dm_read_class:
     case dm_write_class:
     case pm_read_class:
-    case pm_write_class: direct_move(memory, state, opcode); return {};
+    case pm_write_class: direct_move(memory, state, opcode, control); return {};
     case system_bit_class: {
       constexpr std::uint64_t reserved_sreg_bit = 0x1000000000;
       if ((opcode & reserved_sreg_bit) != 0) {
@@ -213,12 +221,14 @@ unsigned int execute_loop(SharcMemory &memory,
                           std::uint64_t opcode,
                           const SharcControl *control) {
   if (opcode != 0) {
-    constexpr std::uint64_t indexed_mask = 0xf00000000000;
-    constexpr std::uint64_t indexed_move = 0x600000000000;
-    if ((opcode & indexed_mask) != indexed_move) {
+    if (!detail::sharc_loop_body_supported(opcode)) {
       throw std::runtime_error("SHARC count-loop body instruction/pipeline not implemented");
     }
-    detail::sharc_data_move(memory, state, opcode, control);
+    if ((opcode >> class_shift) == 1) {
+      detail::sharc_compute(state, opcode);
+    } else {
+      detail::sharc_data_move(memory, state, opcode, control);
+    }
   }
   return detail::sharc_count_loop_step(state, opcode);
 }

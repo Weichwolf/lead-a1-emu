@@ -30,6 +30,20 @@ void sharc_ureg(SharcState &state, unsigned int ureg, SharcKnown32 value);
 void sharc_register_write(SharcState &state, unsigned int ureg, SharcKnown32 value);
 void sharc_validate_registers(const SharcState &state);
 [[nodiscard]] SharcKnown40 &sharc_data_register(SharcState &state, unsigned int reg);
+
+struct SharcDataTransfer {
+  SharcAccess access;
+  unsigned int ureg{};
+  bool write{};
+};
+
+void sharc_ram_transfer(SharcMemory &memory,
+                        SharcState &state,
+                        SharcDataTransfer transfer,
+                        const SharcControl *control);
+[[nodiscard]] SharcKnown40 &
+sharc_compute_register(SharcState &state, unsigned int reg, unsigned int element);
+void sharc_compute(SharcState &state, std::uint64_t opcode);
 void sharc_data_move(SharcMemory &memory,
                      SharcState &state,
                      std::uint64_t opcode,
@@ -39,10 +53,13 @@ void sharc_bit_operation(SharcState &state, std::uint64_t opcode);
 void sharc_flags_write(SharcState &state, SharcKnown32 value, std::uint32_t mask);
 void sharc_validate_flag_inputs(SharcKnown32 samples);
 [[nodiscard]] bool sharc_condition(const SharcState &state, unsigned int code);
+[[nodiscard]] bool
+sharc_pe_condition(const SharcState &state, unsigned int code, unsigned int element);
 void sharc_interrupt_guard(const SharcState &state);
 void sharc_stack_status(SharcState &state);
 void sharc_validate_count_loop(const SharcState &state);
 void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode);
+[[nodiscard]] bool sharc_loop_body_supported(std::uint64_t opcode);
 [[nodiscard]] unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode);
 
 }

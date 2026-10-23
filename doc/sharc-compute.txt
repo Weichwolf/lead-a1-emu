@@ -1,0 +1,76 @@
+SHARC logical ALU reference and direct RAM transfers
+
+The native core implements compute-only Type2a PASS, AND, OR, XOR and NOT,
+derived independently from ADI Programming Reference rev2.4, 9-10/11,
+10-6, 11-15/19 and 12-2/3. A-17/20 defines the status bits; 3-5 defines
+compute-status availability. Manufacturer/private sources are not build inputs.
+
+COMPUTE23 retains the three CU bits, eight operation bits and three four-bit
+register selectors. Full native Type2a reserved fields and other execution
+forms remain guarded. Floating point, comparisons, arithmetic, multiplier,
+shifter, multifunction and empty compute-only forms remain unqualified and
+fail visibly when selected. No arithmetic exception/timing implementation is
+claimed by these non-exception-generating logical operations.
+
+The ALU operates on upper32 bits of a 40-bit register, clears the result's low8
+extension and updates AZ/AV/AN/AC/AS/AI/AF. Logical operations clear AV, AC, AS,
+AI and AF; AZ tests zero and AN follows the result sign. Other ASTAT bits and
+all STKY bits are preserved. Flags are available to the following instruction.
+Explicit ASTAT writes, parallel compute/write precedence and arithmetic
+exception/interrupt timing remain open.
+
+ASTAT masks are AZ=1, AV=2, AN=4 and AC=8 (A-6). Condition opcode3 selects AC;
+opcode4 selects AV (10-33). The bit positions do not follow condition-opcode
+order. Literal tests distinguish AN from AC and AC from AV, separately from
+the general condition matrix, and check status produced by actual ALU words.
+
+SISD executes PEx only. SIMD evaluates the condition independently on PEx and
+PEy, and may execute either, both or neither. A branch uses AND of the two
+conditions instead. Effective MODE1 controls SIMD and low/high alternate banks.
+Operands are captured before destination writes; in-place forms retain old
+sources. Unary operations never read the unused Ry operand. These are scalar
+host reference semantics for the two guest elements, not an SSE/AVX backend
+or a mapping of instrument slots to lanes.
+
+Known-bit propagation preserves unknown operands. AND with a known zero and OR
+with a known one establish those bits; XOR requires both operands known except
+that the same source XOR itself is known zero. NOT preserves bit knowledge.
+AZ is known false if any result bit is known one, known true for a fully known
+zero and otherwise unknown. AN follows sign-bit knowledge. Unknown conditions
+fail before committing lane effects, and failed steps preserve CPU, memory,
+pending controls and loop state. Missing data must not become guessed zero.
+
+Single-instruction counter loops also accept reviewed compute-only operations.
+Every iteration executes and updates flags separately. The existing loop-frame,
+pre-pop and lower-bound cycle contracts apply; general/nested/arithmetic loops,
+counter readback and full pipeline/cache timing remain open.
+
+Type14a direct SISD DM/PM RAM transfers now use the same SYSCTL-selected NW32/
+extended40 packing as Type4a (sharc-data.txt). Explicit Rx/Sx are supported;
+other RAM UREGs, forced LW, SW/external and SIMD transfers remain guarded.
+There is no DAG update or extra guest IOP read for width selection. Extended
+stores zero physical low8; normal loads clear register low8. Existing direct
+IOP32 register moves and access-monitor guards remain separate.
+
+sharc_logical_compute uses owned literal opcodes with independent result/status
+oracles, all four SIMD condition outcomes, separate bank-half choices, in-place
+operands, ignored Ry, unknown bits/conditions, alias cancellation, loop iteration
+results and raw carry/overflow/sign distractors. sharc_data adds direct Rx/Sx
+NW32/40 physical packing and rejection/rollback checks. No fuzzing is performed.
+
+The optional original SPI test retains its clock/FLAGS/RAM-clear and register
+setup oracles, then executes the real PASS, I4 assignment, CALL, USTAT4 assignment
+and JUMP in all four kernel placements. Each reaches PC0x8c034 after171774
+instructions, with return frame0x108c016, R12 equal to R11's left-justified
+SYSCTL value4 and USTAT4=3. The next actual instruction writes modifier1 to
+IOP0x1081 (IMSPI); the unmapped device fails without consuming state or pending
+effects. Runtime SPI/DMA must receive real serial bits and complete its count;
+reading a busy status cannot substitute for that transfer.
+
+This is an explicit candidate clock/reset/boot/RAM reference composition.
+Physical pin/slot/chip roles, timing, complete loader/application boot, MIDI/
+audio/current parameter state and hardware comparison remain open.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^sharc_' --output-on-failure
+  cmake --build build/strict --target quality

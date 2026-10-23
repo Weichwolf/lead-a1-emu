@@ -315,6 +315,51 @@ void signed_modifier_fields() {
   }
 }
 
+void direct_ram_transfers() {
+  constexpr std::uint64_t store = 0x110600080008; // DM(0x80008)=R6.
+  constexpr std::uint64_t load = 0x125900080008;  // S9=PM(0x80008).
+  constexpr std::uint32_t address = data_base + 8;
+  constexpr std::uint64_t source = 0x123456789a;
+  constexpr std::uint64_t normal = 0x1234567800;
+  constexpr std::uint64_t physical40 = 0x123456789a00;
+  for (const bool extended : {false, true}) {
+    lead_a1::SharcControl control(true);
+    if (extended) {
+      constexpr std::uint32_t bank0 = 0x204;
+      control.write({.size = 4}, bank0);
+      control.begin_core_instruction();
+      control.commit_core_instruction();
+    }
+    lead_a1::SharcMemory memory;
+    map(memory);
+    code(memory, base, store);
+    code(memory, base + 1, load);
+    auto initial = lead_a1::Sharc::reset_reference_214xx(base);
+    initial.data[0][6] = {.value = source, .known = all40};
+    lead_a1::Sharc cpu(memory, initial, &control);
+    static_cast<void>(cpu.step());
+    if (extended) {
+      require(memory.read({.address = address, .width = lead_a1::SharcWidth::wide48}) ==
+              physical40);
+    } else {
+      constexpr std::uint32_t expected = 0x12345678;
+      require(memory.read({.address = address}) == expected);
+    }
+    static_cast<void>(cpu.step());
+    require(cpu.state().data[2][9].value == (extended ? source : normal));
+    require(cpu.state().data[2][9].known == all40 && cpu.state().dag == initial.dag);
+    constexpr std::uint64_t forced_lw = 0x118600080008;
+    code(memory, base + 2, forced_lw);
+    const auto before = cpu.state();
+    rejected([&] { static_cast<void>(cpu.step()); }, "forced-LW");
+    require(cpu.state() == before && !memory.active());
+    constexpr std::uint64_t ustat_from_ram = 0x107000080008;
+    code(memory, base + 2, ustat_from_ram);
+    rejected([&] { static_cast<void>(cpu.step()); }, "non-data UREG");
+    require(cpu.state() == before);
+  }
+}
+
 }
 
 int main() {
@@ -328,6 +373,7 @@ int main() {
     guards_and_conditions();
     partial_word_store_rollback();
     signed_modifier_fields();
+    direct_ram_transfers();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

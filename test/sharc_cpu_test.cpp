@@ -220,8 +220,8 @@ void condition_case(Condition condition, unsigned int pattern) {
 
 void condition_matrix() {
   constexpr std::array<Condition, 9> conditions{{{.code = 0, .bit = 1},
-                                                 {.code = 3, .bit = 4},
-                                                 {.code = 4, .bit = 8},
+                                                 {.code = 3, .bit = 8},
+                                                 {.code = 4, .bit = 2},
                                                  {.code = 5, .bit = 0x80},
                                                  {.code = 6, .bit = 0x40},
                                                  {.code = 7, .bit = 0x800},

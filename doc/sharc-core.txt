@@ -11,7 +11,8 @@ to reviewed system registers, Type18a SET/CLR/TGL/TST/XOR and Type14a 32-bit IOP
 transfers for reviewed system/sequencer registers. Execution is native-48 only.
 Primary/secondary data/DAG registers, SYSCTL width selection and compute-free
 SISD Type4a indexed NW32/40 RAM transfers are documented in sharc-data.txt.
-PX, computation fields, general DO loops/DAG modes, direct RAM moves,
+Compute-only PASS/AND/OR/XOR/NOT and direct Rx/Sx RAM transfers are documented in
+sharc-compute.txt. PX, other computation fields, general DO loops/DAG modes,
 forced LW, VISA, IDLE, interrupt entry/return and caches remain
 pending. Unsupported forms fail with PC, fetched opcode and access context.
 
@@ -99,6 +100,8 @@ kernels now execute 8291 instructions through their entire clock setup and stop
 at FLAGS PC 0x8c0b2. The two following direction operations now execute, reaching
 I0 setup at PC 0x8c0b4 after 8293 instructions. sharc-data.txt extends this
 composition through actual RAM clearing and loader register setup to PC0x8c013
-after 171769 instructions. The unconfigured-clock prefix above remains separate.
+after 171769 instructions. Logical compute/loader setup now additionally reaches
+runtime SPI/DMA write PC0x8c034 after171774 instructions (sharc-compute.txt).
+The unconfigured-clock prefix above remains separate.
 General loops, counter-register
 readback, other bodies and full pipeline/board timing remain pending.

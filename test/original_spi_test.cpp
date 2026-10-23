@@ -595,6 +595,21 @@ void loader_frontier(Fixture &fixture, lead_a1::Sharc &cpu) {
   const auto &read = fixture.control.events.front();
   require(!read.write && read.offset == 0 && read.width == 4 && read.value == 4 &&
           read.instruction == instructions - 1);
+  constexpr unsigned int setup_instructions = 5;
+  for (unsigned int index = 0; index < setup_instructions; ++index) {
+    static_cast<void>(cpu.step());
+    ++fixture.dsp_steps;
+  }
+  constexpr std::uint32_t spi_pc = 0x8c034;
+  constexpr unsigned int spi_instructions = 171774;
+  require(cpu.state().pc == spi_pc && fixture.dsp_steps == spi_instructions);
+  constexpr std::uint32_t saved_caller = 0x108c016;
+  require(cpu.state().depth == 1 && cpu.state().pc_stack[0] == saved_caller);
+  require(cpu.state().data[0][12] == cpu.state().data[0][11]);
+  constexpr std::uint32_t alu_status_mask = 0x43f;
+  require((cpu.state().system[6].value & alu_status_mask) == 0);
+  constexpr std::uint32_t sysctl_word = 0x30024;
+  require(cpu.state().dag[0][0][4].value == sysctl_word && cpu.state().system[15].value == 3);
   const auto before = cpu.state();
   const auto control = fixture.control.device.state();
   bool stopped{};
@@ -602,8 +617,8 @@ void loader_frontier(Fixture &fixture, lead_a1::Sharc &cpu) {
     static_cast<void>(cpu.step());
   } catch (const std::exception &error) {
     const std::string message(error.what());
-    require(message.find("native48 pc=0x8c013") != std::string::npos);
-    require(message.find("instruction class not implemented") != std::string::npos);
+    require(message.find("native48 pc=0x8c034") != std::string::npos);
+    require(message.find("write pc=0x8c034 word-address=0x1081 bits=32") != std::string::npos);
     stopped = true;
   }
   require(stopped && cpu.state() == before && fixture.control.device.state() == control &&
@@ -711,8 +726,8 @@ void kernel_transfer(std::span<const std::byte> image,
     kernel_prefix(fixture.dsp_memory, reset_word);
     clock_setup(fixture);
     std::cout << "Part " << part << " transport " << channel
-              << ": original ARM/SPI loading and 171769 SHARC instructions through clock/FLAGS, "
-                 "RAM clearing and loader setup; computation remains unsupported\n";
+              << ": original ARM/SPI loading and 171774 SHARC instructions through clock/FLAGS, "
+                 "RAM clearing and logical compute; runtime SPI/DMA remains unmapped\n";
   }
 }
 
