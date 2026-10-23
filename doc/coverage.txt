@@ -41,6 +41,10 @@ ID  State    Evidence / remaining work
              Transactional GPIO latch/direction/known pad samples, edge status,
              bank requests and byte/halfword/word register lanes have independent
              bus/ARM tests (gpio.txt). Physical wiring and timing remain open.
+             SPI master serial edges, formats/parity, TX/RX pipeline occupancy,
+             register lanes, status/data acknowledgments and IRQ priorities have
+             independent serial/bus/ARM tests (spi.txt). Explicit clock events
+             and unknown pad samples do not invent DSP readiness or data.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
              external/debug/undefined exception delivery, nonidentity MMU
              transitions, hardware TLB replacement, TCM, Thumb/Jazelle,
@@ -83,6 +87,9 @@ ID  State    Evidence / remaining work
              paths under owned zero-BSS/heap inputs, checking ordered accesses,
              object layouts and the two images' different bank4 pin14 latch.
              The unresolved external byte access remains fail-visible (gpio.txt).
+             Both original SPI controller/format/factory/heap/GPIO paths and
+             block transport execute against explicit clocked internal loopback
+             and buffer backpressure (spi.txt); no external DSP/clock claim.
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.

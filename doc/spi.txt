@@ -1,0 +1,104 @@
+TI-family SPI master reference
+
+Spi is a transactional MemoryDevice, separate from ARM, GPIO and any DSP peer.
+Construction requires a named SpiResetReference with explicit available chip
+select bits and optional previous CSHOLD knowledge. This is not a detected Nord
+reset/profile. Observed instance bases are 0x01c41000 and 0x01e12000. Register
+semantics follow pinned TI SPRUH82C chapter 29 (reference/ti-family.json).
+
+Register and pipeline contract
+The reference implements reset/enable/master control, interrupt enables/levels/
+flags/vector, pin function/direction/input/output/set/clear, SPIDAT0/1, SPIBUF,
+SPIEMU, delay/default-select and all four format registers. Aligned byte,
+halfword and word accesses preserve untouched lanes. Documented reserved bits
+read zero/ignore writes, except SPIFLG's documented fixed high field. Unmapped
+registers and read-only writes diagnose through the normal physical bus.
+
+Disabled configuration can pass through reserved CLKMOD/MASTER combinations:
+the original constructor programs these fields separately. A data write requires
+an enabled, released, non-powerdown master with serial pin functions and a valid
+2..16-bit character/PRESCALE>=2. Control-only SPIDAT1 byte writes do not transmit;
+they can preselect format/polarity. SPIDAT0 uses that selected format. Format,
+pin and active control changes are guarded during a transfer. Disable clears
+the documented data path but retains control/format configuration; full module
+reset clears configuration while preserving prior CSHOLD knowledge.
+
+The TRM says previous CSHOLD is not initialized by reset and recommends two
+explicit writes. Without an explicit prior input, the reference requires that
+control-write history before starting serial work. The original endpoint's
+format-byte write followed by its first full SPIDAT1 write supplies it. No
+unknown previous state is silently replaced with zero.
+
+A shift register plus one TXBUF retain actual occupancy. A third write while
+both are occupied diagnoses unqualified overfill behavior. SPIBUF plus RXBUF
+hold two complete received characters. A further completion replaces the back
+buffer and latches overrun; the visible front buffer is retained. SPIBUF data
+reads consume/promote; its high-halfword polling does not. SPIEMU never consumes.
+RXINT W1C discards/promotes, while INTVEC RX acknowledgment clears the flag
+without reading the data. Overrun remains until its flag/vector acknowledgment.
+Error/overrun/RX/TX priority, level-1 routing and persistent TX vectors are
+explicit. Level-zero interrupt routing and DMA requests are guarded.
+
+Serial and time contract
+next_event() reports a relative interval in half SPI-module-clock periods.
+The owning board advances emulated time to that event, then calls advance()
+with the external received-bit and observed-transmit-pad samples. Missing
+required samples diagnose without advancing state. No MMIO read advances the
+serial engine or manufactures peer data. All access runs on one owning thread;
+clock/sample events cannot occur inside a CPU instruction transaction.
+
+Each character executes both edges of every bit, with selected bit length,
+MSB/LSB order, TI PHASE/POLARITY and optional even/odd parity. PHASE=0 outputs
+on the leading edge and samples on the trailing edge; PHASE=1 samples on the
+leading edge after the first bit has been driven. Data is right-justified and
+zero-padded. Transmit monitoring and receive parity can latch distinct errors.
+Internal master loopback uses the real shift path with inactive external clock
+and high-impedance data pins, not a scripted SPIBUF response.
+
+The event reference uses symmetric half-periods of PRESCALE+1 half module
+clocks, C2T/T2C counters, CSHOLD continuity and WDEL/idle gaps. It preserves
+functional serial order, buffering and documented programmed delay counts.
+Initial bus-to-shifter latency, odd-divider duty cycle and simultaneous bus/
+serial-edge arbitration are not hardware-qualified. Absolute clock inputs,
+pinmux/PSC, physical peers and full board scheduling remain unresolved. This
+is not cycle-accurate Nord timing. Held chip-select changes, enable-pin
+handshaking and slave transfers diagnose rather than inventing behavior.
+
+All register/FIFO/read-ack/transmit effects stage with the CPU instruction.
+Diagnostic partial LDM/STM failures restore the full peripheral state. Valid
+serial events use fixed state without callbacks allocating log/trace storage;
+the surrounding ARM reference and future audio path are not thereby qualified
+as realtime. pins() exposes only enabled/high drivers; sample_pins() supplies
+explicit pad levels/knowledge for general-purpose pin reads.
+
+Checks
+Owned tests independently check all eight phase/polarity/order combinations,
+short/max characters and prescale, parity/monitor errors, FIFO overrun/order,
+status versus data read effects, interrupt/vector acknowledgment, CSHOLD and
+reset/disable, unknown/reserved/unsupported paths and transaction rollback.
+Executed owned ARM STR/LDM/STM/LDRH programs check the ordinary MMIO route,
+including rollback after receive consumption and high-halfword polling.
+
+Optional original checks execute both controller constructors, actual busy
+delay/integer helpers, ten separate format RMWs and complete factory paths with
+actual C++ new/malloc/morecore/break and GPIO endpoint constructors. They use
+unchanged original CODE, with only identified clock/heap-bin data writable and
+owned zero-BSS/heap/caller inputs. A 200000000 runtime clock global is an owned
+input, not a measurement; request 44444000 produces divisor 2 and helper return
+33333333. Complete first/reused-backend factory objects are independently checked.
+
+Original block write/read and the writer's count-0/1 behavior run against the
+real bit-serial/buffer model in explicit internal loopback. Each committed ARM
+instruction advances one half module-clock period in this fixture; this ratio
+is not a physical clock claim. GPIO selection and format-byte ordering, actual
+TXFULL/RXEMPTY backpressure, serialized words, receive-drain counts and buffer
+guards are checked. No allocator, delay, divide, MMIO-ready or receive-data
+helper is intercepted. Loopback exercises transport, not a DSP boot kernel.
+
+  build/strict/lead-a1-original-spi-test build/strict/share/ARM5_le.sla doc/local/images
+
+Private reconstruction 3e3fcf2/5d076e2 supplies factual ABI/address corroboration,
+not a public source/build dependency. No manufacturer/private instructions are
+embedded. Complete cold boot, inherited MMU/TLB state, exact SoC/DSP roles and
+clocks, external SHARC execution, audio, MIDI/USB and hardware validation remain
+separate pending acceptance work.

@@ -29,13 +29,33 @@ set(CMAKE_CXX_CLANG_TIDY "${LEAD_A1_CLANG_TIDY};--warnings-as-errors=*")
 add_library(lead_a1_core STATIC src/firmware.cpp src/image.cpp)
 target_include_directories(lead_a1_core PUBLIC include)
 target_link_libraries(lead_a1_core PUBLIC lead_a1_quality PRIVATE lead_a1_lzo)
-add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp src/arm_status.cpp src/arm_system.cpp src/arm_mmu.cpp src/arm_data.cpp src/arm_exception.cpp src/arm_fault.cpp src/aintc.cpp src/gpio.cpp)
+add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp src/arm_status.cpp src/arm_system.cpp src/arm_mmu.cpp src/arm_data.cpp src/arm_exception.cpp src/arm_fault.cpp src/aintc.cpp src/gpio.cpp src/spi.cpp src/spi_shift.cpp)
 target_include_directories(lead_a1_arm PUBLIC include)
 target_link_libraries(lead_a1_arm PUBLIC lead_a1_quality PRIVATE lead_a1_sleigh)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-spi-test test/spi_test.cpp)
+  target_link_libraries(lead-a1-spi-test PRIVATE lead_a1_arm)
+  add_executable(lead-a1-original-spi-test test/original_spi_test.cpp)
+  target_link_libraries(lead-a1-original-spi-test PRIVATE lead_a1_arm)
+  add_test(NAME spi_serial COMMAND lead-a1-spi-test)
+  add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/spi-cpu-cases.bin"
+    COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
+      --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/spi_cpu_cases.S"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/generated/spi-cpu-cases.o"
+    COMMAND "${LEAD_A1_LLVM_OBJCOPY}" -O binary -j .text
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/spi-cpu-cases.o"
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/spi-cpu-cases.bin"
+    DEPENDS test/spi_cpu_cases.S VERBATIM)
+  add_custom_target(lead-a1-spi-cpu-cases DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/spi-cpu-cases.bin")
+  add_executable(lead-a1-spi-cpu-test test/spi_cpu_test.cpp)
+  target_link_libraries(lead-a1-spi-cpu-test PRIVATE lead_a1_arm)
+  add_dependencies(lead-a1-spi-cpu-test lead-a1-spi-cpu-cases)
+  add_test(NAME spi_cpu COMMAND lead-a1-spi-cpu-test
+    "${CMAKE_CURRENT_BINARY_DIR}/share/ARM5_le.sla"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/spi-cpu-cases.bin")
   add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/gpio-cases.bin"
     COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
       --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/gpio_cases.S"
@@ -215,7 +235,7 @@ if(BUILD_TESTING)
     $<TARGET_FILE:lead-a1-original-interrupt-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/aintc-cases.bin"
     $<TARGET_FILE:lead-a1-original-aintc-test>
     $<TARGET_FILE:lead-a1-original-abort-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-abort-cases.bin"
-    $<TARGET_FILE:lead-a1-original-gpio-test>)
+    $<TARGET_FILE:lead-a1-original-gpio-test> $<TARGET_FILE:lead-a1-original-spi-test>)
   set_tests_properties(original_images PROPERTIES SKIP_RETURN_CODE 77)
   add_test(NAME native_build COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/test/native_build.py"
@@ -249,7 +269,8 @@ if(BUILD_TESTING)
       lead-a1-arm-exception-test lead-a1-original-exception-test lead-a1-aintc-test
       lead-a1-aintc-cpu-test lead-a1-original-interrupt-test lead-a1-aintc-nesting-test
       lead-a1-original-aintc-test lead-a1-arm-abort-test lead-a1-original-abort-test
-      lead-a1-gpio-test lead-a1-original-gpio-test VERBATIM)
+      lead-a1-gpio-test lead-a1-original-gpio-test lead-a1-spi-test lead-a1-original-spi-test
+      lead-a1-spi-cpu-test VERBATIM)
 endif()
 
 install(TARGETS lead-a1-emu RUNTIME DESTINATION bin)
