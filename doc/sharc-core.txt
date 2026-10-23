@@ -1,0 +1,88 @@
+SHARC native-48 instruction reference
+
+The public implementation is independent emulator code derived from ADI's
+Programming Reference rev2.4. No private assembler, disassembler, reconstruction
+source or manufacturer program bytes are build inputs. reference/sharc.json
+records provenance; optional original program data stays ignored.
+
+Sharc operates on SharcMemory word addresses. It currently implements NOP,
+Type8a absolute/relative JUMP/CALL, plain Type11a RTS, Type17a immediate moves
+to reviewed system registers, Type18a SET/CLR/TGL/TST/XOR and Type14a 32-bit IOP
+transfers for reviewed system/sequencer registers. Execution is native-48 only.
+Data/PX/DAG registers, computation fields, DO loops, general RAM data-width
+selection/SYSCTL, forced LW, VISA, IDLE, interrupt entry/return and caches remain
+pending. Unsupported forms fail with PC, fetched opcode and access context.
+
+State and control
+Each system word tracks value and known bits. Unknown bits cannot become zero
+operands accidentally. SET/CLR establish only selected bits; TGL retains their
+knowledge. TST tests all masked bits, XOR compares the entire word; a known
+mismatch determines false even if other bits are unknown. Otherwise BTF remains
+unknown until sufficient information exists. BTF is available to the next TF
+branch. This does not implement arithmetic computation or SIMD data movement.
+
+Direct branches implement TRUE and the EQ, AC, AV, MV, MS, SV, SZ, TF and SF
+conditions and complements. SISD uses PEx; SIMD branches AND the two element
+conditions, as specified in 4-106 and 9-33. Relational, external FLAG and loop
+conditions remain explicit unsupported cases. Register moves/bit operations
+requiring PEy data movement fail when SIMD is enabled or unresolved.
+
+The execution address is 24-bit; relative displacement wraps modulo 2^24.
+PC-stack frames retain all 26 bits (A-10): bit 24 marks CALL, bit 25 carries
+loop/interrupt metadata. Calls save PC+1 or PC+3 for delayed branches. The two
+delay slots execute before transferring control; stack pushes/pops are already
+visible in those slots. A false conditional branch can occupy a delay slot;
+taken nested branches are unqualified and fail. Empty, unknown and special
+return frames fail before effects. The stack has 30 physical entries; the
+reference guards before pushing entry 29, where the unimplemented SOVFI event
+would occur. PCSTK reads empty as 0x3ffffff, ignores empty writes and retains
+physical storage after a pop. STKYx PCFL/PCEM are derived from known stack depth.
+
+System register read views and effective controls are separate. MODE1, IRPTL
+and IMASK writes have one following internal instruction of effect latency
+(A-32..35). Repeated writes retain their ordered effects. USTAT1..4 updates
+are immediate. IMASK/IRPTL bits 0/1 are read-only; bit 7 is reserved. In the
+documented reset reference IMASK=3, so writing IMASK=0 preserves 3. Reserved
+MODE1 fields are preserved; family-specific CSEL writes are unqualified.
+Other system-register write semantics and inherited pending effects fail.
+
+reset_reference_214xx takes an explicit execution address and initializes only
+the represented reset registers from A-54..56. This is a candidate register
+reference, not a physical Nord post-DMA state. FLAGS stays unknown: A-18's
+reset-summary parity disagrees with A-5's per-bit FLAG/FLAG-output fields;
+pin semantics require further qualification. Active/unknown loops and timers,
+possible enabled interrupts, nonmaskable interrupts and IOP access monitoring
+are guarded. No event is silently delivered or discarded.
+
+step stages the complete CPU state and joins IOP transactions. Failed fetches,
+unsupported operands after an IOP read and any later failure restore the
+instruction's CPU/device effects, including pending control writes and delay
+slots. An existing external memory transaction is preserved and rejected.
+This functional reference does not claim pipeline cycles, cache behavior,
+posted IOP bridge latency or peripheral-clock scheduling. Only the explicitly
+reviewed instruction-order effects are modeled.
+
+Verification and original frontier
+sharc_native_instructions uses owned literal words and independent register/
+PC/frame oracles. It checks native calls, nested relative calls, returns and
+two delay slots; partial bit knowledge; all 19 supported condition encodings
+(144 PEx/PEy/polarity/mode cases plus TRUE in call/return tests); rejected
+remaining conditions; control latency, read-only masks, PC/PCSTK views,
+transactional IOP failure and repair/retry. ASan/UBSan and strict LLVM 19 apply.
+
+The optional original SPI regression executes the existing unchanged ARM
+factory/block writer and loads all four original kernel placements over actual
+serial edges. Each loaded kernel now executes its first eight instructions:
+five NOPs, delayed CALL and both original mask/latch writes. Under the explicit
+candidate reset-register input, execution reaches word PC 0x8c091 with a single
+CALL frame 0x108c008 and no pending branch. The next original instruction reads
+IOP 0x2000 (clock control); it fails visibly because that device is not mapped,
+preserving CPU state, pending IRPTL effect, kernel memory and IOP transactions.
+No opcode is patched, replaced or treated as a successful initialization hook.
+The fixture starts this prefix after the ARM block writer returns; concurrent
+reset/interrupt/clock-boundary timing is unqualified. This is a prefix composition,
+not complete boot or processor identity.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^sharc_' --output-on-failure
+  cmake --build build/strict --target quality

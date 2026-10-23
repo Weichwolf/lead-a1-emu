@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#pragma once
+
+#include "lead_a1/sharc_memory.hpp"
+
+#include <array>
+#include <cstdint>
+#include <optional>
+
+namespace lead_a1 {
+
+struct SharcKnown32 {
+  std::uint32_t value{};
+  std::uint32_t known{};
+  bool operator==(const SharcKnown32 &) const = default;
+};
+
+struct SharcBranch {
+  std::uint32_t target{};
+  unsigned int slots{};
+  bool operator==(const SharcBranch &) const = default;
+};
+
+struct SharcState {
+  std::uint32_t pc{};
+  // UREG 0x70..0x7f. Read views and effective controls are distinct.
+  std::array<SharcKnown32, 16> system{};
+  std::array<SharcKnown32, 16> effective{};
+  std::array<std::optional<SharcKnown32>, 16> pending{};
+  // Full 26-bit frames, including CALL/loop/interrupt metadata.
+  static constexpr unsigned int pc_stack_capacity = 30;
+  std::array<std::optional<std::uint32_t>, pc_stack_capacity> pc_stack{};
+  std::optional<unsigned int> depth;
+  std::optional<bool> loops_empty;
+  std::optional<SharcBranch> branch;
+  bool operator==(const SharcState &) const = default;
+};
+
+struct SharcStep {
+  std::uint32_t pc{};
+  std::uint64_t opcode{};
+  std::uint32_t next_pc{};
+};
+
+// Functional native-48 instruction reference; unsupported execution fails.
+// No autonomous peripheral clocks, interrupt delivery or cycle timing yet.
+class Sharc {
+public:
+  Sharc(SharcMemory &memory, SharcState initial);
+  // Documented reset registers with an explicitly supplied execution address.
+  // This does not qualify the physical post-boot-DMA processor state.
+  [[nodiscard]] static SharcState reset_reference_214xx(std::uint32_t entry);
+
+  [[nodiscard]] const SharcState &state() const { return state_; }
+
+  [[nodiscard]] SharcStep step();
+
+private:
+  SharcMemory &memory_;
+  SharcState state_;
+};
+
+}

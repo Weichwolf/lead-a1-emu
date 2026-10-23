@@ -79,8 +79,15 @@ Reproduce after preparing optional local references:
   ctest --test-dir build/strict -R '^sharc_' --output-on-failure
   cmake --build build/strict --target quality
 
-SHARC instruction execution, programmable SPI/DMA, clock-control registers,
+Remaining SHARC instruction classes, programmable SPI/DMA, clock-control registers,
 remaining stream records, causal board scheduling and complete cold boot remain
 open. In particular, zero-tag stream records must retain the original dispatch
 semantics; do not replace skipped records with host zero-fills. No audio or
 instrument functionality is established by loading a kernel.
+
+Native execution handoff
+sharc-core.txt documents the new native-48 reference and its explicit limits.
+All four serially loaded original kernels execute their first eight instructions
+and stop unchanged on the original IOP0x2000 read at word PC0x8c091 under the
+candidate reset-register reference. The initial loader itself remains separate
+from instruction execution and does not fabricate subsequent SPI success.

@@ -3,6 +3,7 @@
 #include "lead_a1/arm_system.hpp"
 #include "lead_a1/gpio.hpp"
 #include "lead_a1/memory.hpp"
+#include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_boot.hpp"
 #include "lead_a1/sharc_memory.hpp"
 #include "lead_a1/spi.hpp"
@@ -440,6 +441,35 @@ void transport(Fixture &fixture,
   require(!fixture.spi0.device.state().visible_full && !fixture.spi0.device.state().receive);
 }
 
+void kernel_prefix(lead_a1::SharcMemory &memory, std::uint32_t entry) {
+  lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(entry));
+  constexpr unsigned int prefix_instructions = 8;
+  for (unsigned int step = 0; step < prefix_instructions; ++step) {
+    require(cpu.state().pc == entry + step);
+    static_cast<void>(cpu.step());
+  }
+  constexpr std::uint32_t clock_setup = 0x8c091;
+  constexpr std::uint32_t return_frame = 0x108c008;
+  constexpr unsigned int imask = 11;
+  constexpr unsigned int irptl = 10;
+  require(cpu.state().pc == clock_setup && cpu.state().depth == 1);
+  require(cpu.state().pc_stack[0] == return_frame && !cpu.state().branch);
+  // EMUI/RSTI remain unmaskable (RO bits0/1) despite the original IMASK=0.
+  require(cpu.state().system[imask].value == 3 && cpu.state().system[irptl].value == 0);
+  const auto before = cpu.state();
+  bool stopped{};
+  try {
+    static_cast<void>(cpu.step());
+  } catch (const std::exception &error) {
+    const std::string message(error.what());
+    require(message.find("native48 pc=0x8c091") != std::string::npos);
+    require(message.find("read pc=0x8c091 word-address=0x2000 bits=32") != std::string::npos);
+    require(message.find("Unmapped SHARC IOP register") != std::string::npos);
+    stopped = true;
+  }
+  require(stopped && cpu.state() == before && !memory.active());
+}
+
 void kernel_transfer(std::span<const std::byte> image,
                      const std::filesystem::path &spec,
                      unsigned int part) {
@@ -492,9 +522,10 @@ void kernel_transfer(std::span<const std::byte> image,
     constexpr std::uint16_t pullup_halfword = 0xffff;
     require(fixture.memory.read({.address = placements[part].scratch, .size = 2}) ==
             pullup_halfword);
-    std::cout
-        << "Part " << part << " transport " << channel
-        << ": unchanged ARM block writer loads all 256 SHARC kernel words over serial edges\n";
+    kernel_prefix(fixture.dsp_memory, reset_word);
+    std::cout << "Part " << part << " transport " << channel
+              << ": original ARM serial loading and native SHARC prefix reach unresolved clock "
+                 "IOP0x2000\n";
   }
 }
 
