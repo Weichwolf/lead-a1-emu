@@ -74,9 +74,16 @@ ID  State    Evidence / remaining work
              reference tests, per-element conditions/banks, immediate ALU flags
              and one-instruction loop support. AC/AV tests use A-6's actual bits,
              with raw AN/AC/AV distractors (sharc-compute.txt).
+             Runtime SPI RX DMA has a completed-bootstrap handoff, finite
+             four-word FIFO plus receive buffer, explicit grouped memory grants,
+             signed cursor steps, zero-count65536 semantics and transactional
+             rollback tests. Busy reads never progress DMA; receive-ahead data
+             survives count rearming. Maskable IRPTL requests latch even when
+             delivery is masked (sharc-spi.txt). Other SPI modes/registers,
+             raw IISPI readback, chaining/flush and interrupt entry remain open.
              General DAG/circular/broadcast/SIMD transfers, arithmetic/float/
-             other computation/VISA, runtime SPI/DMA/interrupts and timing remain
-             open. No automatic ready signal or programmable-port stub.
+             other computation/VISA and timing remain open. No automatic ready
+             signal or silently successful programmable-port stub.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
              external/debug/undefined exception delivery, nonidentity MMU
              transitions, hardware TLB replacement, TCM, Thumb/Jazelle,
@@ -142,8 +149,14 @@ ID  State    Evidence / remaining work
              L/M/SYSCTL setup reach PC0x8c013 after 171769 instructions. The next
              PASS and loader CALL/setup now execute too, reaching the first
              runtime SPI/DMA write at PC0x8c034/IOP0x1081 after171774 instructions.
-             The unmapped device fails unchanged; no pin samples/ARM wiring or
-             successful DMA are invented (sharc-data.txt, sharc-compute.txt).
+             The unmapped-device rollback remains a separate regression. With
+             runtime RX DMA mapped, the original ARM block writer serially sends
+             the actual next three stream words; one explicit memory grant writes
+             the header. The original poll, RAM reads, return and tag dispatch
+             reach PC0x8c01b after171791 instructions in all four placements.
+             P1I remains latched with IMASK3. The following integer decrement
+             fails unchanged. This deliberately paced composition supplies no
+             physical ready wiring or full-uploader schedule (sharc-spi.txt).
              This does not qualify physical MHz, bridge/mux timing or board reset; general
              loader/application boot and audio remain open (sharc-clock.txt).
              All-way fixture stops on unknown random replacement. No cold boot or

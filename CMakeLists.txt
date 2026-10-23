@@ -32,13 +32,16 @@ target_link_libraries(lead_a1_core PUBLIC lead_a1_quality PRIVATE lead_a1_lzo)
 add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp src/arm_status.cpp src/arm_system.cpp src/arm_mmu.cpp src/arm_data.cpp src/arm_exception.cpp src/arm_fault.cpp src/aintc.cpp src/gpio.cpp src/spi.cpp src/spi_shift.cpp)
 target_include_directories(lead_a1_arm PUBLIC include)
 target_link_libraries(lead_a1_arm PUBLIC lead_a1_quality PRIVATE lead_a1_sleigh)
-add_library(lead_a1_sharc STATIC src/sharc_memory.cpp src/sharc_boot.cpp src/sharc.cpp src/sharc_system.cpp src/sharc_clock.cpp src/sharc_loop.cpp src/sharc_flags.cpp src/sharc_control.cpp src/sharc_registers.cpp src/sharc_move.cpp src/sharc_compute.cpp)
+add_library(lead_a1_sharc STATIC src/sharc_memory.cpp src/sharc_boot.cpp src/sharc_spi.cpp src/sharc.cpp src/sharc_system.cpp src/sharc_clock.cpp src/sharc_loop.cpp src/sharc_flags.cpp src/sharc_control.cpp src/sharc_registers.cpp src/sharc_move.cpp src/sharc_compute.cpp)
 target_include_directories(lead_a1_sharc PUBLIC include)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-spi-test test/sharc_spi_test.cpp)
+  target_link_libraries(lead-a1-sharc-spi-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_runtime_spi COMMAND lead-a1-sharc-spi-test)
   add_executable(lead-a1-sharc-compute-test test/sharc_compute_test.cpp)
   target_link_libraries(lead-a1-sharc-compute-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_logical_compute COMMAND lead-a1-sharc-compute-test)
@@ -300,7 +303,7 @@ if(BUILD_TESTING)
       lead-a1-aintc-cpu-test lead-a1-original-interrupt-test lead-a1-aintc-nesting-test
       lead-a1-original-aintc-test lead-a1-arm-abort-test lead-a1-original-abort-test
       lead-a1-gpio-test lead-a1-original-gpio-test lead-a1-spi-test lead-a1-original-spi-test
-      lead-a1-spi-cpu-test lead-a1-sharc-memory-test lead-a1-sharc-boot-test lead-a1-sharc-cpu-test lead-a1-sharc-clock-test lead-a1-sharc-loop-test lead-a1-sharc-flags-test lead-a1-sharc-control-test lead-a1-sharc-data-test lead-a1-sharc-compute-test VERBATIM)
+      lead-a1-spi-cpu-test lead-a1-sharc-memory-test lead-a1-sharc-boot-test lead-a1-sharc-cpu-test lead-a1-sharc-clock-test lead-a1-sharc-loop-test lead-a1-sharc-flags-test lead-a1-sharc-control-test lead-a1-sharc-data-test lead-a1-sharc-compute-test lead-a1-sharc-spi-test VERBATIM)
 endif()
 
 install(TARGETS lead-a1-emu RUNTIME DESTINATION bin)

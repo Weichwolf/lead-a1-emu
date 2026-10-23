@@ -87,6 +87,10 @@ read the real SYSCTL mapping. PC0x8c013 is reached after 171769 instructions;
 sharc-compute.txt extends this with actual PASS/CALL/setup to the first runtime
 SPI/DMA write at PC0x8c034/171774 instructions, where the unmapped device leaves
 CPU/control/clock/memory unchanged. All four kernel placements exercise this path.
+With runtime RX DMA mapped, the subsequent real ARM serial header transfer
+overwrites its original buffer and the kernel reaches the arithmetic frontier
+at PC0x8c01b after171791 instructions (sharc-spi.txt). The kernel-preservation
+oracle above applies before those legitimate runtime alias writes.
 This is a local original-code composition, not full cold boot or audio.
 
   cmake --build --preset strict

@@ -91,6 +91,10 @@ public:
   void flag_inputs(SharcKnown32 samples);
   [[nodiscard]] SharcFlagDrive flag_drives() const;
 
+  // Explicit externally routed IRPTL maskable request. Latches even if masked;
+  // enabled delivery still fails until interrupt entry/return is implemented.
+  void latch_interrupt(std::uint32_t mask);
+
   [[nodiscard]] SharcStep step();
 
 private:

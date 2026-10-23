@@ -47,8 +47,9 @@ entry() becomes available only after all 384 words have committed. This is a
 functional scheduler handoff to reset location 0x8c000; it does not execute any
 SHARC instruction, assert a ready GPIO, or qualify interrupt/boot timing.
 This limited initial loader is not a programmable SPI register facade. Further
-selected clock edges require the missing runtime SPI/core handoff and fail
-explicitly. Midword deselection remains unqualified and fails; aligned gaps
+selected clock edges require an explicit runtime SPI/core handoff and fail
+on this bootstrap object. SharcSpi supplies that separate programmable RX DMA
+continuation (sharc-spi.txt). Midword deselection remains unqualified and fails; aligned gaps
 preserve the DMA cursor. FIFO occupancy, arbitration, DMA/core interrupt and
 electrical reset delays remain pending. Core-instruction transactions and
 external loader events cannot overlap. No ROM data or default RAM is invented.
@@ -79,7 +80,7 @@ Reproduce after preparing optional local references:
   ctest --test-dir build/strict -R '^sharc_' --output-on-failure
   cmake --build build/strict --target quality
 
-Remaining SHARC instruction classes, programmable SPI/DMA, clock-control registers,
+Remaining SHARC instruction classes, SPI modes/registers/chaining, clock controls,
 remaining stream records, causal board scheduling and complete cold boot remain
 open. In particular, zero-tag stream records must retain the original dispatch
 semantics; do not replace skipped records with host zero-fills. No audio or

@@ -8,6 +8,28 @@
 #include <optional>
 #include <stdexcept>
 
+namespace lead_a1 {
+
+void Sharc::latch_interrupt(std::uint32_t mask) {
+  constexpr std::uint32_t maskable = 0xffffff7c;
+  constexpr unsigned int irptl = 10;
+  if (memory_.active() || (mask & ~maskable) != 0) {
+    throw std::runtime_error(
+        "SHARC interrupt event requires idle transaction and maskable IRPTL bits");
+  }
+  for (auto *latch : {&state_.system[irptl], &state_.effective[irptl]}) {
+    latch->value |= mask;
+    latch->known |= mask;
+  }
+  auto &pending = state_.pending[irptl];
+  if (pending) {
+    pending->value |= mask;
+    pending->known |= mask;
+  }
+}
+
+}
+
 namespace lead_a1::detail {
 namespace {
 

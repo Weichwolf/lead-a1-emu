@@ -8,6 +8,7 @@
 #include "lead_a1/sharc_clock.hpp"
 #include "lead_a1/sharc_control.hpp"
 #include "lead_a1/sharc_memory.hpp"
+#include "lead_a1/sharc_spi.hpp"
 #include "lead_a1/spi.hpp"
 
 #include <array>
@@ -172,6 +173,8 @@ struct Fixture {
       lead_a1::SharcClockReference{.configuration = 0, .input_stable = true, .reset_settled = true},
       dsp_steps};
   Recorded<lead_a1::SharcControl> control{std::optional<bool>{true}, dsp_steps};
+  std::optional<Recorded<lead_a1::SharcSpi>> runtime;
+  std::vector<unsigned int> dma_grants;
   lead_a1::SharcMemory dsp_memory;
   unsigned int dsp_channel{};
 
@@ -229,10 +232,18 @@ struct Fixture {
     constexpr std::uint16_t data_pin = 0x400;
     require((bank.enabled & select) != 0);
     require((serial.enabled & (clock_pin | data_pin)) == (clock_pin | data_pin));
-    dsp->observe(dsp_memory,
-                 {.selected = (bank.high & select) == 0,
-                  .clock = (serial.high & clock_pin) != 0,
-                  .mosi = (serial.high & data_pin) != 0});
+    const lead_a1::SharcBootLines lines{.selected = (bank.high & select) == 0,
+                                        .clock = (serial.high & clock_pin) != 0,
+                                        .mosi = (serial.high & data_pin) != 0};
+    if (runtime) {
+      runtime->device.observe(dsp_memory, lines);
+      // Explicit functional owner grant between ARM instructions/serial edges.
+      // No physical IOP bus timing or concurrent DSP execution is asserted.
+      const auto count = runtime->device.service_dma(dsp_memory);
+      if (count != 0) { dma_grants.push_back(count); }
+    } else {
+      dsp->observe(dsp_memory, lines);
+    }
   }
 
   void progress() {
@@ -625,7 +636,97 @@ void loader_frontier(Fixture &fixture, lead_a1::Sharc &cpu) {
           !fixture.dsp_memory.active());
 }
 
-void clock_setup(Fixture &fixture) {
+struct HeaderInput {
+  std::uint32_t routine;
+  std::uint32_t endpoint;
+  std::uint32_t source;
+};
+
+void runtime_header(Fixture &fixture,
+                    lead_a1::Sharc &cpu,
+                    const std::filesystem::path &spec,
+                    HeaderInput input) {
+  const auto &boot = fixture.dsp;
+  if (!boot) { throw std::logic_error("Missing completed SHARC boot fixture"); }
+  fixture.runtime.emplace(boot->state(), fixture.dsp_steps);
+  constexpr std::uint32_t dma_index = 0x1080;
+  constexpr std::uint32_t header_address = 0x92003;
+  constexpr std::uint32_t receiving = 0x8007;
+  fixture.dsp_memory.map_io({.first_word = dma_index, .words = 5}, *fixture.runtime);
+  constexpr std::uint32_t poll = 0x8c038;
+  constexpr unsigned int poll_instructions = 171781;
+  for (unsigned int index = 0; index < 7; ++index) {
+    static_cast<void>(cpu.step());
+    ++fixture.dsp_steps;
+  }
+  require(cpu.state().pc == poll && fixture.dsp_steps == poll_instructions);
+  auto &runtime = fixture.runtime->device;
+  require(runtime.state().serial.next_word == header_address &&
+          runtime.state().serial.remaining == 3);
+  require(runtime.state().modifier == 1 && runtime.dma_request() == 0);
+  const auto &events = fixture.runtime->events;
+  require(events.size() == 4 && events[0].write && events[0].offset == 4 && events[0].value == 1);
+  require(events[1].write && events[1].offset == 0 && events[1].value == header_address);
+  require(events[2].write && events[2].offset == 8 && events[2].value == 3);
+  require(!events[3].write && events[3].offset == 16 && events[3].value == receiving);
+  const auto transmitted = fixture.transmitted.size();
+  constexpr unsigned int call_limit = 20000;
+  static_cast<void>(call(fixture,
+                         spec,
+                         input.routine,
+                         {input.endpoint, fixture.dsp_channel, input.source, 3},
+                         call_limit));
+  require(fixture.transmitted.size() == transmitted + 6);
+  require(fixture.dma_grants.size() == 1 && fixture.dma_grants.front() == 3);
+  require(runtime.state().serial.remaining == 0 &&
+          runtime.state().serial.next_word == header_address + 3);
+  require(runtime.state().occupied == 0 && !runtime.state().receive && !runtime.state().overflow);
+  require(runtime.state().interrupt_pending && !runtime.state().serial.selected);
+  constexpr std::uint32_t primary_spi = 0x1000;
+  cpu.latch_interrupt(primary_spi); // Explicit HWR default P1I route; IMASK still3.
+  runtime.acknowledge_interrupt();
+  std::array<std::uint32_t, 3> expected{};
+  constexpr std::uint32_t halfword_mask = 0xffff;
+  for (unsigned int index = 0; index < expected.size(); ++index) {
+    expected[index] = static_cast<std::uint32_t>(
+        fixture.memory.read({.address = input.source + (index * 4), .size = 4}));
+    require(fixture.dsp_memory.read({.address = header_address + index}) == expected[index]);
+    const auto halfword = transmitted + (std::size_t{index} * 2);
+    require(fixture.transmitted[halfword] == (expected[index] & halfword_mask));
+    require(fixture.transmitted[halfword + 1] == (expected[index] >> 16));
+  }
+  // Genuine polling, header reads, return and tag dispatch. The first tag is
+  // nonzero; the following integer decrement remains an explicit ISA frontier.
+  require(expected[0] != 0);
+  constexpr unsigned int dispatch_instructions = 10;
+  for (unsigned int index = 0; index < dispatch_instructions; ++index) {
+    static_cast<void>(cpu.step());
+    ++fixture.dsp_steps;
+  }
+  constexpr std::uint32_t arithmetic_pc = 0x8c01b;
+  constexpr unsigned int total = 171791;
+  require(cpu.state().pc == arithmetic_pc && fixture.dsp_steps == total);
+  require(cpu.state().data[0][8].value == (std::uint64_t{expected[0]} << 8));
+  require(cpu.state().data[0][2].value == (std::uint64_t{expected[1]} << 8));
+  require(cpu.state().data[0][3].value == (std::uint64_t{expected[2]} << 8));
+  require(cpu.state().data[0][0].value == (std::uint64_t{expected[0]} << 8));
+  require(cpu.state().depth == 0 && cpu.state().system[10].value == primary_spi);
+  require(cpu.state().effective[11].value == 3 && events.size() == 5);
+  require(!events[4].write && events[4].value == 7 && events[4].offset == 16);
+  const auto before = cpu.state();
+  bool stopped{};
+  try {
+    static_cast<void>(cpu.step());
+  } catch (const std::exception &error) {
+    const std::string message(error.what());
+    require(message.find("native48 pc=0x8c01b") != std::string::npos);
+    require(message.find("arithmetic/float/compare ALU") != std::string::npos);
+    stopped = true;
+  }
+  require(stopped && cpu.state() == before && !fixture.dsp_memory.active());
+}
+
+void clock_setup(Fixture &fixture, const std::filesystem::path &spec, HeaderInput input) {
   constexpr std::uint32_t pmctl = 0x2000;
   constexpr std::uint32_t entry = 0x8c000;
   constexpr std::uint32_t flags_entry = 0x8c0b2;
@@ -668,6 +769,7 @@ void clock_setup(Fixture &fixture) {
   flag_setup(fixture, cpu);
   clear_ram(fixture, cpu);
   loader_frontier(fixture, cpu);
+  runtime_header(fixture, cpu, spec, input);
   require(fixture.clock.device.state() == clock);
 }
 
@@ -724,10 +826,15 @@ void kernel_transfer(std::span<const std::byte> image,
     require(fixture.memory.read({.address = placements[part].scratch, .size = 2}) ==
             pullup_halfword);
     kernel_prefix(fixture.dsp_memory, reset_word);
-    clock_setup(fixture);
+    clock_setup(fixture,
+                spec,
+                {.routine = placements[part].endpoint + write_block_entry,
+                 .endpoint = endpoint,
+                 .source = code + offsets[part][channel] + kernel_bytes});
     std::cout << "Part " << part << " transport " << channel
-              << ": original ARM/SPI loading and 171774 SHARC instructions through clock/FLAGS, "
-                 "RAM clearing and logical compute; runtime SPI/DMA remains unmapped\n";
+              << ": original ARM/SPI kernel+header loading and 171791 SHARC instructions through "
+                 "clock/FLAGS, RAM clearing, logical compute and runtime RX DMA; tag arithmetic "
+                 "remains unsupported\n";
   }
 }
 
