@@ -1,0 +1,109 @@
+{
+  "bundle_sha256": "16909837b32768833ceca047a2207f9bf8d9e303037cebc9c95a2cdaed99c9ec",
+  "parts": [
+    {
+      "index": 0,
+      "header": {
+        "version_number": 136,
+        "image_type": 256,
+        "word04_unresolved": 23914319,
+        "word08_unresolved": 6553600,
+        "word0c_unresolved": 0,
+        "section_count": 3
+      },
+      "sections": [
+        {
+          "tag": "SRAM",
+          "offset": 724,
+          "load_address": 2147483648,
+          "decoded_bytes": 6916,
+          "stored_bytes": 6916,
+          "checksum": 4294299074,
+          "compression": "none",
+          "compressed_checksum": 0,
+          "padding_bytes": 0,
+          "stored_sha256": "1fb141d3241293b80abd3e16b7a29c781ea105be0129c764184ccba8e9cb50aa",
+          "decoded_sha256": "1fb141d3241293b80abd3e16b7a29c781ea105be0129c764184ccba8e9cb50aa"
+        },
+        {
+          "tag": "CODE",
+          "offset": 7640,
+          "load_address": 3221225472,
+          "decoded_bytes": 3147088,
+          "stored_bytes": 1753907,
+          "checksum": 3949522606,
+          "compression": "lzo1x",
+          "compressed_checksum": 4106584040,
+          "padding_bytes": 1,
+          "stored_sha256": "b7ef7a70afbfc8aafe8c81b40a7313dccd31c20ce4d59c770b0247127c4ec2a0",
+          "decoded_sha256": "5740ec1456ac1c8006f2b9cc4c87f733c998f7ddc230b089958d71e29e873ac8"
+        },
+        {
+          "tag": "ARM0",
+          "offset": 1761548,
+          "load_address": 4294901792,
+          "decoded_bytes": 616,
+          "stored_bytes": 616,
+          "checksum": 4294887749,
+          "compression": "none",
+          "compressed_checksum": 0,
+          "padding_bytes": 0,
+          "stored_sha256": "ef70a9bc3b2d4aaa4be2a79c05e357376a359aa00105d00f091a6f87dadb3d58",
+          "decoded_sha256": "ef70a9bc3b2d4aaa4be2a79c05e357376a359aa00105d00f091a6f87dadb3d58"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "header": {
+        "version_number": 114,
+        "image_type": 256,
+        "word04_unresolved": 5433649,
+        "word08_unresolved": 6553600,
+        "word0c_unresolved": 0,
+        "section_count": 3
+      },
+      "sections": [
+        {
+          "tag": "SRAM",
+          "offset": 724,
+          "load_address": 2147483648,
+          "decoded_bytes": 8132,
+          "stored_bytes": 8132,
+          "checksum": 4294125306,
+          "compression": "none",
+          "compressed_checksum": 0,
+          "padding_bytes": 0,
+          "stored_sha256": "6d5d0ebccbc83ee4b7879aa961e0d50af022412bd4cc39f83d8f09ff63232e14",
+          "decoded_sha256": "6d5d0ebccbc83ee4b7879aa961e0d50af022412bd4cc39f83d8f09ff63232e14"
+        },
+        {
+          "tag": "CODE",
+          "offset": 8856,
+          "load_address": 3221225472,
+          "decoded_bytes": 566328,
+          "stored_bytes": 305299,
+          "checksum": 4238937948,
+          "compression": "lzo1x",
+          "compressed_checksum": 4266741003,
+          "padding_bytes": 1,
+          "stored_sha256": "77650cf76b7381b8b5c3eb4447294db32f0b137b34fe804b762f9e032b5b54ec",
+          "decoded_sha256": "8f61532780e75a89dc654b654460b111d915f8bb450656ad324c96b96f25ed1e"
+        },
+        {
+          "tag": "ARM0",
+          "offset": 314156,
+          "load_address": 4294901792,
+          "decoded_bytes": 616,
+          "stored_bytes": 616,
+          "checksum": 4294887713,
+          "compression": "none",
+          "compressed_checksum": 0,
+          "padding_bytes": 0,
+          "stored_sha256": "538d9fb904bd81a525af965b0915e57cbda88545c764533d278663936f0e2b05",
+          "decoded_sha256": "538d9fb904bd81a525af965b0915e57cbda88545c764533d278663936f0e2b05"
+        }
+      ]
+    }
+  ]
+}

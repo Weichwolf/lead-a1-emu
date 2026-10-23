@@ -26,6 +26,7 @@ First integration sequence
    qualify complete functions, ordinary host playback and hardware comparisons.
 
 Quality commands
+  python3 tools/dependencies.py --fetch
   cmake --preset strict
   cmake --build --preset strict
   cmake --build build/strict --target quality
@@ -36,5 +37,7 @@ The quality target runs format, CTest and Python bootstrap regressions. Optional
 reference identity checks skip explicitly if local originals are absent.
 GTK integration runs separately and requires GTK4 plus an isolated display.
 release retains strict checks; thread is for future separate concurrency testing.
-No fuzz targets or runtime dependencies have been invented before processor
-identification; future harnesses run only on explicit user request.
+miniLZO is built from pinned upstream source for safe container decoding, with
+native sanitizers/hardening. CPU backend selection is pending ARM-state evidence
+review; no Blofeld CPU model has been imported. Future fuzz harnesses run only
+on explicit user request.

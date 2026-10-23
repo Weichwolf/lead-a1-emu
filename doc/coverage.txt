@@ -2,9 +2,11 @@ Acceptance coverage — see objective.txt for the complete scope
 
 ID  State    Evidence / remaining work
 1   partial  reference/1.36.json pins ZIP/updater/bundle/two parts. Python checks
-             all hashes; C++ checks bounded container geometry. English manual
-             pinned in reference/manual.json. Architectures, roles, board/clock
-             identity and required factory/storage inputs remain unresolved.
+             all hashes; C++ decodes all six sections/checksums with native LZO.
+             Six decoded SHA-256 identities match independent reference metadata.
+             English manual pinned in reference/manual.json. ARM-state startup
+             evidence received; exact SoC/DSP, roles, board/clock identity and
+             required factory/storage inputs remain unresolved (firmware-format.txt).
 2   pending  No core, board, peripheral or scheduler implementation. No Blofeld
              hardware copied. Dependencies await processor identification.
 3   pending  No original execution or boot. doc/features.tsv inventories manual
@@ -17,11 +19,13 @@ ID  State    Evidence / remaining work
              state extraction/producer and MIDI/program-driven values pending.
 7   pending  No original update/recovery execution or power-loss evidence.
 8   partial  LLVM19/C++23, mandatory tidy/format, hardening, ASan/UBSan, synthetic
-             malformed-container and snapshot/lifecycle regression checks.
+             malformed-container/image and snapshot/lifecycle regression checks;
+             native LZO instrumentation/object hooks and hardening checked.
              Boot/CPU/MIDI/audio/update/fuzz harnesses/performance remain pending.
              TSan preset prepared; no concurrent native code or TSan claim yet.
 9   partial  Private reconstruction repo verified; coordination contract and
-             bootstrap handoff issue. No reconstructed executable source yet.
+             bootstrap handoff issue. Source-built ARM0 identity evidence received;
+             no reconstructed source copied. Full source-only bundle pending.
 10  pending  No hardware comparison, timing measurement or flashing performed.
 
 Quality and UI checks validate only the named bootstrap behavior. Unknown values

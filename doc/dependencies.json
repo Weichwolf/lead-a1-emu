@@ -1,0 +1,12 @@
+{
+  "lzo": {
+    "version": "2.10",
+    "file": "lzo-2.10.tar.gz",
+    "url": "https://www.oberhumer.com/opensource/lzo/download/lzo-2.10.tar.gz",
+    "bytes": 600622,
+    "sha256": "c0f892943208266f9b6543b3ae308fab6284c5c90e627931446fb49b4221a072",
+    "directory": "lzo-2.10",
+    "license": "GPL-2.0-or-later",
+    "integration": "Static miniLZO safe LZO1X decompression; instrumented native source, no system-library fallback."
+  }
+}

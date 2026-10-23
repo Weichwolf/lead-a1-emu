@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+"""Check native decoding against independent pinned section SHA-256 identities."""
+
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def main():
+    reference = ROOT / "doc/local/reference/firmware.bin"
+    if not reference.exists():
+        print("SKIP: original reference absent")
+        return 77
+    specs = json.loads((ROOT / "reference/sections.json").read_text())
+    if hashlib.sha256(reference.read_bytes()).hexdigest() != specs["bundle_sha256"]:
+        raise ValueError("Unexpected original bundle hash")
+    with tempfile.TemporaryDirectory(dir=ROOT / "doc/local") as directory:
+        subprocess.run([sys.argv[1], "--extract", str(reference), directory], check=True)
+        for part in specs["parts"]:
+            for section in part["sections"]:
+                name = f"{part['index']}-{section['tag']}.bin"
+                data = (Path(directory) / name).read_bytes()
+                if (len(data) != section["decoded_bytes"]
+                        or hashlib.sha256(data).hexdigest() != section["decoded_sha256"]):
+                    raise ValueError(f"Decoded section identity mismatch: {name}")
+    print("All six native decoded sections match independent pinned hashes")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

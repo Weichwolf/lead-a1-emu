@@ -17,12 +17,15 @@ endforeach()
 include(cmake/Quality.cmake)
 find_program(LEAD_A1_CLANG_TIDY NAMES clang-tidy-19 REQUIRED)
 find_program(LEAD_A1_CLANG_FORMAT NAMES clang-format-19 REQUIRED)
+find_program(LEAD_A1_LLVM_NM NAMES llvm-nm-19 REQUIRED)
+find_program(LEAD_A1_LLVM_READELF NAMES llvm-readelf-19 REQUIRED)
 find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
+include(cmake/Dependencies.cmake)
 set(CMAKE_CXX_CLANG_TIDY "${LEAD_A1_CLANG_TIDY};--warnings-as-errors=*")
 
-add_library(lead_a1_core STATIC src/firmware.cpp)
+add_library(lead_a1_core STATIC src/firmware.cpp src/image.cpp)
 target_include_directories(lead_a1_core PUBLIC include)
-target_link_libraries(lead_a1_core PUBLIC lead_a1_quality)
+target_link_libraries(lead_a1_core PUBLIC lead_a1_quality PRIVATE lead_a1_lzo)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
@@ -30,6 +33,17 @@ if(BUILD_TESTING)
   add_executable(lead-a1-firmware-test test/firmware_test.cpp)
   target_link_libraries(lead-a1-firmware-test PRIVATE lead_a1_core)
   add_test(NAME firmware_structure COMMAND lead-a1-firmware-test)
+  add_executable(lead-a1-image-test test/image_test.cpp)
+  target_link_libraries(lead-a1-image-test PRIVATE lead_a1_core)
+  add_test(NAME image_sections COMMAND lead-a1-image-test)
+  add_test(NAME original_images COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>)
+  set_tests_properties(original_images PROPERTIES SKIP_RETURN_CODE 77)
+  add_test(NAME native_build COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/native_build.py"
+    --build "${CMAKE_CURRENT_BINARY_DIR}" --sanitizer "${LEAD_A1_SANITIZER}"
+    --nm "${LEAD_A1_LLVM_NM}" --readelf "${LEAD_A1_LLVM_READELF}"
+    --binary $<TARGET_FILE:lead-a1-emu> --native $<TARGET_FILE:lead_a1_lzo>)
   add_test(NAME bootstrap_python COMMAND "${Python3_EXECUTABLE}" -B -m unittest
     discover -s test -p "test_*.py" -v)
   set_tests_properties(bootstrap_python PROPERTIES
@@ -49,7 +63,7 @@ add_custom_target(format-check
 if(BUILD_TESTING)
   add_custom_target(quality
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
-    DEPENDS format-check lead-a1-emu lead-a1-firmware-test VERBATIM)
+    DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test VERBATIM)
 endif()
 
 install(TARGETS lead-a1-emu RUNTIME DESTINATION bin)
@@ -59,3 +73,4 @@ install(FILES gui/__init__.py gui/parameters.py gui/snapshot.py gui/watch.py gui
 install(FILES reference/parameters.json DESTINATION share/lead-a1-emu/reference)
 install(FILES packaging/org.lead_a1_emu.Parameters.desktop DESTINATION share/applications)
 install(FILES LICENSE THIRD_PARTY.txt README.txt DESTINATION share/doc/lead-a1-emu)
+install(FILES LICENSES/LZO-GPL2.txt DESTINATION share/doc/lead-a1-emu/licenses)

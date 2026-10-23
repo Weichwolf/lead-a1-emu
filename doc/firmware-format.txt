@@ -1,0 +1,50 @@
+Supported instrument container
+
+reference/1.36.json pins the official bundle. reference/sections.json records
+reviewed section identities from the private reconstruction handoff at revisions
+933014d / 10f9d69. The native decoder is independently written; no reconstruction
+source, manufacturer instructions or raw disassembly are included.
+
+Outer container: eight big-endian words, two contiguous offset/length pairs and
+four reserved zero words. Both contained images remain in scope. Their roles
+are unresolved; do not equate part indices with processors or model variants.
+
+Each image has a 20-byte header followed by sixteen 44-byte descriptor slots.
+The first header word contains uint16 version/type; three subsequent uint32
+words have unresolved semantics, and the final uint32 is the descriptor count.
+The supported layout has three populated descriptors, tagged SRAM/CODE/ARM0;
+unused descriptors and reserved descriptor words are zero. Payload starts at
+offset 724 and stored sections are consecutive with zero four-byte padding.
+
+Descriptor: tag, stored offset, decoded length, load address, decoded checksum,
+compressed length (zero for raw), compressed checksum, four reserved zero words.
+Checksum is the one's complement of the sum of bytes modulo 2^32. CODE uses
+LZO1X. The native safe decompressor checks its result and exact output length;
+both stored and decoded checksums are required. Decoder bounds allocation,
+rejects load-range overflow/overlap, malformed descriptors, holes, nonzero
+padding and trailing data. Unknown header words are retained without invented
+hardware meaning. SHA-256 identity verification remains a separate requirement.
+
+Commands (local assets are ignored):
+  python3 tools/dependencies.py --fetch
+  cmake --preset strict
+  cmake --build --preset strict
+  build/strict/lead-a1-emu --inspect doc/local/reference/firmware.bin
+  build/strict/lead-a1-emu --extract doc/local/reference/firmware.bin doc/local/images
+  ctest --test-dir build/strict -R 'image_sections|original_images|native_build' --output-on-failure
+
+Original checks compare all six decoded identities against independent pinned
+SHA-256 values. Synthetic checks use an owned literal-only LZO stream and
+independent byte/checksum expectations, every truncated prefix, malformed
+stream/checksum/padding, reserved fields, load overlap/overflow and allocation
+limits. Native dependency compilation and sanitizer object hooks are checked.
+Configure/build remain offline; only explicit dependency/reference fetch tools
+use the network. This milestone establishes decoding, not firmware execution.
+
+Architecture handoff: little-endian ARM-state instructions are established in
+SRAM/ARM0 and CODE startup. Several MMIO addresses support a TI DA8xx-family
+hypothesis; exact SoC, silicon/DSP identities, reset/vector/MMU setup and board
+timing remain unresolved. Physical reset is not established by a software entry.
+Keep detailed instruction/address analysis in ignored doc/local/ and private
+coordination issues. CPU backend selection/integration and parameter-state
+locations are still pending; no original execution or audio is claimed.

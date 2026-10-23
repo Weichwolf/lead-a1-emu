@@ -10,9 +10,17 @@ project's versioned parameter snapshot contract.
 Source: https://github.com/Weichwolf/blofeld-emu
 No Blofeld firmware, CPU adapter, board model or manufacturer assets are copied.
 
+LZO 2.10 / miniLZO, Markus F. X. J. Oberhumer, GPL-2.0-or-later:
+  https://www.oberhumer.com/opensource/lzo/
+  Pinned source archive: doc/dependencies.json; notice: LICENSES/LZO-GPL2.txt.
+  Built statically with native dependency sanitizers and hardening. Upstream's
+  LZO_CFG_NO_UNALIGNED=1 selects bytewise access without disabling sanitizer
+  checks. No system-library fallback. Corresponding native source must accompany
+  redistributable binary packages as required by its license.
+
 Python and native GTK4/PyGObject are host runtime prerequisites, not vendored
 source. Preserve their upstream licenses when packaging them. No CPU/DSP/audio
-dependency has been selected: processor identities must first be established.
+dependency is integrated yet; architecture and backend work remain partial.
 
 reference/1.36.json contains factual official download identities also recorded
 by the private lead-a1-src reconstruction project; it contains no program bytes.
