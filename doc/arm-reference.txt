@@ -5,15 +5,34 @@ used. reference/ghidra.json pins the release and all consumed files. SLEIGH and
 its static zlib dependency receive native sanitizers/hardening. Adapted public
 executor infrastructure and the byte-memory patch are credited in THIRD_PARTY.txt.
 
-Each step decodes/commits one instruction without fetching the next. Lookahead
-is side-effect-free; executed bytes must be known/executable. Decoding uses the
+Each step executes/commits one instruction. Decoder lookahead is side-effect-free;
+executed bytes and guest cache-line fills must be known/executable. Decoding uses the
 fetched instruction, including stale I-cache contents when configured. Without
 an enabled I-cache, RAM code changes are visible on the next fetch.
 Registers/temporaries are unknown until provided or
 written. Caller-supplied CPSR flags synchronize individual flag storage. Explicit
 RAM mappings distinguish unknown from loaded/written bytes. Access errors give
 operation, address, width and PC. Failed instructions roll back register and
-staged RAM writes. Peripheral side effects/interrupt delivery are not implemented.
+staged RAM writes. Images can initialize an offset within a larger RAM region;
+surrounding bytes remain unknown. Peripheral side effects/interrupt delivery are
+not implemented.
+
+Host decode cache
+At most 128 translations are retained, keyed by ARM PC and the fetched word.
+Every instruction still performs the guest fetch and executes its p-code with
+current registers, flags and memory. This cache does not replace the guest
+instruction cache or elide loop iterations. A miss creates a fresh ARM5 decoder
+context; decompiler flow hints are not architectural state. This also avoids
+re-registering variables in an initialized SLEIGH context after MOV LR,PC.
+ARM/Thumb switching remains unsupported. ArmExecutionOptions can disable the
+host cache for comparison; decode_statistics reports host work, not guest state.
+Host translation statistics are excluded from instruction rollback.
+
+Owned tests compare cached/uncached state, assembly and data after each of 256
+instructions, including changed/restored opcodes. Independent final arithmetic
+expectations supplement equivalence. Identical PC-relative opcodes at 129
+different addresses test address keys and cache bounds. MOV LR,PC followed by
+BX and LDR PC checks indirect calls/returns, LR and unchanged flags in both paths.
 
 Evidence
 - Owned assembly tests: overflow/comparison flags, conditions, little-endian
@@ -80,8 +99,24 @@ complete CP15 diagnostic. With explicit reference inputs (control 0x00050078,
 write buffer), both unchanged ARM0/CODE paths reach CODE +0x158 after 46 guest
 instructions. Original invalidation resolves cache validity before enabling it.
 All six banked stack tops and System mode with IRQ/FIQ masked match independent
-private reconstruction expectations. Section-sized memory mappings still leave
-stack storage and BSS initialization pending; this checkpoint precedes them.
+private reconstruction expectations. With only PC/CPSR initially supplied, the
+initializer's first PUSH stops unchanged on unknown preserved registers.
+
+The extended fixture supplies explicit nonzero caller markers in r3/r7/r9/r10/
+r11, 16 MiB DDR, 128 KiB shared RAM and 8 KiB local RAM, placing ARM0 at offset
+0x20. Region extents follow observed original mapping-constructor arguments,
+not physical reset qualification. Only sections plus the BSS/tail test fill are
+loaded; other RAM remains unknown. The original initializer clears its own BSS
+from a 0xa5 test fill and reaches CODE +0x298 before runtime continuation:
+
+Part   Instructions   BSS bytes   BSS start      BSS end (exclusive)
+0      2335493        0x474578    0xc0300550     0xc0774ac8
+1      63861          0x01f258    0xc008a438     0xc00a9690
+
+Every decoded CODE byte remains unchanged; all BSS bytes are known zero and
+the next 16 bytes retain 0xa5. The System stack frame contains the three caller
+markers and exact original return address. Region count, preserved r9/r10,
+SP and CPSR flags/masks are checked. No guest loop is replaced by host clearing.
 
 This is software-entry execution, not physical reset, ROM loading, hardware cache
 qualification, DSP loading, audio or MIDI. Original instructions/disassembly and
@@ -95,3 +130,10 @@ private reconstruction sources are not embedded in public tests.
 Original checks skip explicitly without local firmware. Owned instruction/RAM
 tests remain mandatory. Native checks audit actual compile commands, all three
 dependency archives' sanitizer hooks and executable PIE/RELRO/NX properties.
+With verified extracted images, an optional bounded continuation probe writes
+its raw trace only to ignored local storage (part 0 is the longer BSS test):
+
+  build/strict/lead-a1-original-arm-test build/strict/share/ARM5_le.sla doc/local/images 1 --probe-runtime >doc/local/arm-runtime.log 2>&1
+
+The probe stops visibly on an unsupported operation or its instruction budget;
+it is diagnostic evidence, not an additional boot acceptance result.

@@ -4,6 +4,7 @@
 #include "lead_a1/arm_system.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -48,18 +49,30 @@ struct ArmStep {
   std::string assembly;
 };
 
+struct ArmExecutionOptions {
+  bool cache_translations{true};
+};
+
+struct ArmDecodeStatistics {
+  std::size_t entries{};
+  std::uint64_t translations{};
+  std::uint64_t hits{};
+};
+
 // ARM-state instruction reference, not a reset/SoC/clock or complete ARM926 model.
 class Arm {
 public:
   Arm(Memory &memory,
       const std::filesystem::path &specification,
       const ArmState &initial,
-      const std::optional<ArmSystemInitial> &system = std::nullopt);
+      const std::optional<ArmSystemInitial> &system = std::nullopt,
+      ArmExecutionOptions execution = {});
   ~Arm();
   Arm(const Arm &) = delete;
   Arm &operator=(const Arm &) = delete;
   [[nodiscard]] ArmState state() const;
   [[nodiscard]] ArmSystemState system_state() const;
+  [[nodiscard]] ArmDecodeStatistics decode_statistics() const;
   [[nodiscard]] ArmStep step();
 
 private:

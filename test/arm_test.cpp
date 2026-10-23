@@ -146,6 +146,86 @@ void interworking(const std::filesystem::path &spec, std::span<const std::byte> 
   require(odd.state().registers == state.registers && odd.state().cpsr == state.cpsr);
 }
 
+void decode_equivalence(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
+  lead_a1::Memory cached_memory;
+  lead_a1::Memory direct_memory;
+  map_program(cached_memory, bytes);
+  map_program(direct_memory, bytes);
+  lead_a1::Arm cached(cached_memory, spec, initial(9));
+  lead_a1::Arm direct(direct_memory, spec, initial(9), std::nullopt, {.cache_translations = false});
+  constexpr std::uint32_t loop_address = code_base + (9 * case_spacing) + 12;
+  constexpr std::uint32_t subtract_opcode = 0xe0400002;
+  constexpr std::uint32_t add_opcode = 0xe0800002;
+  constexpr unsigned int total_steps = 256;
+  constexpr unsigned int mutation_step = 64;
+  constexpr unsigned int restoration_step = 128;
+  for (unsigned int index = 0; index < total_steps; ++index) {
+    if (index == mutation_step || index == restoration_step) {
+      const auto word = index == mutation_step ? subtract_opcode : add_opcode;
+      cached_memory.write({.address = loop_address, .size = 4}, word);
+      direct_memory.write({.address = loop_address, .size = 4}, word);
+    }
+    const auto left = cached.step();
+    const auto right = direct.step();
+    require(left.before == right.before && left.after == right.after);
+    require(left.assembly == right.assembly);
+    require(cached.state() == direct.state() && cached.system_state() == direct.system_state());
+    for (std::uint32_t offset = 0; offset < 4; ++offset) {
+      require(cached_memory.peek(data_base + offset) == direct_memory.peek(data_base + offset));
+    }
+  }
+  constexpr std::uint32_t final_accumulator = 23;
+  constexpr std::uint32_t final_stored_value = 22;
+  require(cached.state().registers[0] == final_accumulator);
+  require(cached_memory.read({.address = data_base, .size = 4}) == final_stored_value);
+  constexpr std::uint64_t distinct_translations = 10;
+  require(cached.decode_statistics().translations == distinct_translations);
+  require(cached.decode_statistics().hits == total_steps - distinct_translations);
+  require(direct.decode_statistics().translations == total_steps);
+  require(direct.decode_statistics().hits == 0 && direct.decode_statistics().entries == 0);
+}
+
+void bounded_decoding(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
+  lead_a1::Memory memory;
+  map_program(memory, bytes);
+  lead_a1::Arm cpu(memory, spec, initial(10));
+  constexpr unsigned int distinct_addresses = 129;
+  constexpr unsigned int cycles = 2;
+  constexpr unsigned int cache_bound = 128;
+  constexpr auto branch_address =
+      code_base + (10 * case_spacing) + (std::size_t{distinct_addresses} * 4);
+  for (unsigned int index = 0; index < (distinct_addresses + 1) * cycles; ++index) {
+    const auto step = cpu.step();
+    if (step.before != branch_address) { require(cpu.state().registers[0] == step.before); }
+    require(cpu.decode_statistics().entries <= cache_bound);
+  }
+  require(cpu.state().registers[pc_index] == code_base + (10 * case_spacing));
+}
+
+void indirect_calls(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
+  lead_a1::Memory cached_memory;
+  lead_a1::Memory direct_memory;
+  map_program(cached_memory, bytes);
+  map_program(direct_memory, bytes);
+  lead_a1::Arm cached(cached_memory, spec, initial(13));
+  lead_a1::Arm direct(
+      direct_memory, spec, initial(13), std::nullopt, {.cache_translations = false});
+  constexpr unsigned int instruction_count = 14;
+  for (unsigned int index = 0; index < instruction_count; ++index) {
+    const auto left = cached.step();
+    const auto right = direct.step();
+    require(left.before == right.before && left.after == right.after);
+    require(cached.state() == direct.state());
+  }
+  require(cached.state().registers[1] == 2 && cached.state().registers[2] == 7);
+  constexpr std::uint32_t return_offset = 32;
+  require(cached.state().registers[14] == code_base + (13 * case_spacing) + return_offset);
+  constexpr std::uint32_t target_offset = 36;
+  require(cached_memory.read({.address = data_base, .size = 4}) ==
+          code_base + (13 * case_spacing) + target_offset);
+  require(cached.state().cpsr == initial_cpsr);
+}
+
 }
 
 int main(int argc, char **argv) {
@@ -156,6 +236,9 @@ int main(int argc, char **argv) {
     rollback(argv[1], bytes);
     mutations(argv[1], bytes);
     interworking(argv[1], bytes);
+    decode_equivalence(argv[1], bytes);
+    bounded_decoding(argv[1], bytes);
+    indirect_calls(argv[1], bytes);
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

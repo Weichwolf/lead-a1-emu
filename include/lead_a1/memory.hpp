@@ -34,7 +34,9 @@ public:
 // Explicit RAM regions only. No automatic peripheral mapping or zero-filled readback.
 class Memory {
 public:
-  void map(MemoryMapping mapping, std::span<const std::byte> initial = {});
+  void map(MemoryMapping mapping,
+           std::span<const std::byte> initial = {},
+           std::size_t initial_offset = 0);
 
   void set_pc(std::uint32_t pc) { pc_ = pc; }
 

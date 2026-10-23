@@ -46,9 +46,12 @@ MemoryFault::MemoryFault(AccessKind kind,
                          const std::string &reason)
     : std::runtime_error(fault_message(kind, access, pc, reason)) {}
 
-void Memory::map(MemoryMapping mapping, std::span<const std::byte> initial) {
+void Memory::map(MemoryMapping mapping,
+                 std::span<const std::byte> initial,
+                 std::size_t initial_offset) {
   if (active_ || mapping.size == 0 || mapping.size > maximum_ram_region ||
-      initial.size() > mapping.size || mapping.size > address_space_bytes - mapping.address) {
+      initial_offset > mapping.size || initial.size() > mapping.size - initial_offset ||
+      mapping.size > address_space_bytes - mapping.address) {
     throw std::invalid_argument("Invalid RAM mapping or active instruction");
   }
   const auto end = static_cast<std::uint64_t>(mapping.address) + mapping.size;
@@ -61,8 +64,9 @@ void Memory::map(MemoryMapping mapping, std::span<const std::byte> initial) {
   Region result{.mapping = std::move(mapping), .bytes = {}, .known = {}};
   result.bytes.resize(result.mapping.size);
   result.known.resize(result.mapping.size, false);
-  std::ranges::copy(initial, result.bytes.begin());
-  std::fill_n(result.known.begin(), initial.size(), true);
+  const auto offset = static_cast<std::ptrdiff_t>(initial_offset);
+  std::ranges::copy(initial, result.bytes.begin() + offset);
+  std::fill_n(result.known.begin() + offset, initial.size(), true);
   regions_.push_back(std::move(result));
 }
 

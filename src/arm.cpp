@@ -173,6 +173,11 @@ struct Translation {
   }
 };
 
+struct DecodedInstruction {
+  std::string assembly;
+  std::unique_ptr<Translation> semantics;
+};
+
 class Assembly final : public ghidra::AssemblyEmit {
 public:
   std::string text;
@@ -206,16 +211,20 @@ public:
 
   [[nodiscard]] ghidra::Address getExecuteAddress() const override { return address_; }
 
-  void execute(std::uint32_t pc) {
-    address_ = ghidra::Address(translator_.getDefaultCodeSpace(), pc);
-    Translation decoded;
-    ghidra::PcodeEmitCache emitter(decoded.operations, decoded.varnodes, behaviors_, 0);
-    const auto length = translator_.oneInstruction(emitter, address_);
+  [[nodiscard]] std::unique_ptr<Translation> decode(const ghidra::Address &address) {
+    auto decoded = std::make_unique<Translation>();
+    ghidra::PcodeEmitCache emitter(decoded->operations, decoded->varnodes, behaviors_, 0);
+    const auto length = translator_.oneInstruction(emitter, address);
     if (length != instruction_bytes) {
       throw std::runtime_error("Unsupported ARM instruction width");
     }
+    return decoded;
+  }
+
+  void execute(std::uint32_t pc, const Translation &decoded) {
+    address_ = ghidra::Address(translator_.getDefaultCodeSpace(), pc);
     operations_ = decoded.operations;
-    next_ = address_ + length;
+    next_ = address_ + instruction_bytes;
     memstate->setValue("pc", next_.getOffset());
     index_ = 0;
     finished_ = false;
@@ -233,6 +242,10 @@ public:
       executeCurrentOp();
     }
     memstate->setValue("pc", address_.getOffset());
+    clear();
+  }
+
+  void clear() {
     operations_ = {};
     currentOp = nullptr;
     currentBehave = nullptr;
@@ -360,12 +373,15 @@ public:
   Impl(Memory &bus,
        const std::filesystem::path &specification,
        const ArmState &initial,
-       const std::optional<ArmSystemInitial> &system_initial)
+       const std::optional<ArmSystemInitial> &system_initial,
+       ArmExecutionOptions execution_options)
       : system(bus, system_initial),
         bus(bus),
         image(bus),
-        translator(&image, &context),
-        memory(&translator) {
+        context(std::make_unique<ghidra::ContextInternal>()),
+        translator(&image, context.get()),
+        memory(&translator),
+        execution(execution_options) {
     std::istringstream configuration(xml_path(specification));
     ghidra::DocumentStorage documents;
     auto *root = documents.parseDocument(configuration)->getRoot();
@@ -415,6 +431,43 @@ public:
     return result;
   }
 
+  DecodedInstruction &decode(CodeImage::Instruction instruction) {
+    constexpr unsigned int word_bits = 32;
+    const auto key =
+        (static_cast<std::uint64_t>(instruction.address) << word_bits) | instruction.word;
+    if (execution.cache_translations) {
+      const auto found = decoded.find(key);
+      if (found != decoded.end()) {
+        ++statistics.hits;
+        return *found->second;
+      }
+    }
+    image.set_instruction(instruction);
+    // ARM5 has a fixed ISA here; per-address decompiler flow hints are not CPU state.
+    auto next_context = std::make_unique<ghidra::ContextInternal>();
+    translator.reset(&image, next_context.get());
+    context = std::move(next_context);
+    ghidra::DocumentStorage documents;
+    translator.initialize(documents);
+    const ghidra::Address address(translator.getDefaultCodeSpace(), instruction.address);
+    Assembly assembly;
+    translator.printAssembly(assembly, address);
+    auto result = std::make_unique<DecodedInstruction>();
+    result->assembly = std::move(assembly.text);
+    result->semantics = executor->decode(address);
+    ++statistics.translations;
+    if (!execution.cache_translations) {
+      uncached = std::move(result);
+      return *uncached;
+    }
+    constexpr std::size_t maximum_entries = 128;
+    if (decoded.size() == maximum_entries) { decoded.clear(); }
+    auto &entry = *result;
+    decoded.emplace(key, std::move(result));
+    statistics.entries = decoded.size();
+    return entry;
+  }
+
   ArmStep step() {
     const auto before = state();
     const auto known_pc = before.registers[program_counter_index];
@@ -429,35 +482,32 @@ public:
     system.begin_instruction();
     try {
       const auto opcode = system.fetch(pc);
-      image.set_instruction({.address = pc, .word = opcode});
-      translator.reset(&image, &context);
-      ghidra::DocumentStorage documents;
-      translator.initialize(documents);
+      const auto &instruction = decode({.address = pc, .word = opcode});
       temporaries->bytes.clear();
-      Assembly assembly;
-      const ghidra::Address address(translator.getDefaultCodeSpace(), pc);
-      translator.printAssembly(assembly, address);
       auto after = before;
       if (detail::execute_arm_status(opcode, after) || system.execute(opcode, after)) {
         apply(after);
       } else {
-        executor->execute(pc);
+        executor->execute(pc, *instruction.semantics);
         after = state();
       }
       if (memory.getValue("TB") != 0) { throw std::runtime_error("Unsupported Thumb transition"); }
       const auto next_pc = after.registers[program_counter_index];
       if (!next_pc) { throw std::runtime_error("ARM produced an unknown program counter"); }
+      ArmStep result{.before = pc, .after = *next_pc, .assembly = instruction.assembly};
       bus.commit_instruction();
       system.commit_instruction();
       banks = after.banks;
-      return {.before = pc, .after = *next_pc, .assembly = std::move(assembly.text)};
+      return result;
     } catch (const ghidra::LowlevelError &error) {
+      executor->clear();
       registers->bytes = std::move(saved_registers);
       banks = before.banks;
       bus.abort_instruction();
       system.abort_instruction();
       throw std::runtime_error(fault_context(pc, error.explain));
     } catch (const std::exception &error) {
+      executor->clear();
       registers->bytes = std::move(saved_registers);
       banks = before.banks;
       bus.abort_instruction();
@@ -470,19 +520,24 @@ public:
   detail::ArmSystem system;
   Memory &bus;
   CodeImage image;
-  ghidra::ContextInternal context;
+  std::unique_ptr<ghidra::ContextInternal> context;
   ghidra::Sleigh translator;
   ghidra::MemoryState memory;
   std::unique_ptr<SparseBank> registers;
   std::unique_ptr<SparseBank> temporaries;
   std::unique_ptr<Executor> executor;
+  ArmExecutionOptions execution;
+  ArmDecodeStatistics statistics;
+  std::map<std::uint64_t, std::unique_ptr<DecodedInstruction>> decoded;
+  std::unique_ptr<DecodedInstruction> uncached;
 };
 
 Arm::Arm(Memory &memory,
          const std::filesystem::path &specification,
          const ArmState &initial,
-         const std::optional<ArmSystemInitial> &system) try
-    : impl_(std::make_unique<Impl>(memory, specification, initial, system)) {
+         const std::optional<ArmSystemInitial> &system,
+         ArmExecutionOptions execution) try
+    : impl_(std::make_unique<Impl>(memory, specification, initial, system, execution)) {
 } catch (const ghidra::LowlevelError &error) {
 
   throw std::runtime_error("Cannot initialize ARM semantics: " + error.explain);
@@ -496,6 +551,10 @@ ArmState Arm::state() const {
 
 ArmSystemState Arm::system_state() const {
   return impl_->system.state();
+}
+
+ArmDecodeStatistics Arm::decode_statistics() const {
+  return impl_->statistics;
 }
 
 ArmStep Arm::step() {

@@ -46,7 +46,7 @@ SRAM/ARM0 and CODE startup. Several MMIO addresses support a TI DA8xx-family
 hypothesis; exact SoC, silicon/DSP identities, reset/vector/MMU setup and board
 timing remain unresolved. Physical reset is not established by a software entry.
 Keep detailed instruction/address analysis in ignored doc/local/ and private
-coordination issues. Native ARM reference execution reaches the memory initializer
+coordination issues. Native ARM reference execution completes BSS initialization
 under explicit reference control/cache/buffer inputs (arm-reference.txt).
 Complete board boot, parameter-state mapping
 and original audio remain pending.

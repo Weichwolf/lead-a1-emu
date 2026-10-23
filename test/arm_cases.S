@@ -50,3 +50,42 @@ mov r0, #13
 .balign 256
 /* Interworking: even target stays ARM; odd target must fail before committing. */
 bx r0
+
+.balign 256
+/* 9: reuse arithmetic/conditional/memory translations with changed operands. */
+mov r0, #0
+mov r1, #0x100
+mov r2, #1
+cache_loop:
+add r0, r0, r2
+str r0, [r1]
+ldr r3, [r1]
+cmp r3, r0
+addeq r4, r0, #1
+b cache_loop
+
+.balign 256
+/* 10: identical opcodes at distinct PCs exceed the host decode-cache bound. */
+cache_many:
+.rept 129
+adr r0, .
+.endr
+b cache_many
+
+.balign 256
+/* 13: ARM indirect calls retain architectural LR without decoder flow hints. */
+mov r1, #0
+adr r0, call_target
+mov r3, #0x100
+str r0, [r3]
+mov lr, pc
+bx r0
+mov lr, pc
+ldr pc, [r3]
+b call_done
+call_target:
+add r1, r1, #1
+bx lr
+call_done:
+mov r2, #7
+b call_done

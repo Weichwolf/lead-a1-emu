@@ -83,11 +83,45 @@ void check_ram() {
   require(memory.read({.address = read_only_base}) == 1);
 }
 
+void offset_initialization() {
+  lead_a1::Memory memory;
+  constexpr std::size_t region_bytes = 16;
+  constexpr std::size_t offset = 4;
+  constexpr std::array known{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
+  memory.map({.address = base, .size = region_bytes, .name = "offset image"}, known, offset);
+  constexpr std::uint32_t word = 0x04030201;
+  require(memory.read({.address = base + offset, .size = 4}) == word);
+  require(!memory.peek(base) && !memory.peek(base + offset - 1));
+  require(!memory.peek(base + offset + known.size()));
+  fault([&memory] { static_cast<void>(memory.read({.address = base + 3, .size = 4})); },
+        "uninitialized");
+  fault([&memory] { static_cast<void>(memory.read({.address = base + 5, .size = 4})); },
+        "uninitialized");
+  fault(
+      [&memory, &known] {
+        memory.map({.address = unmapped_address, .size = region_bytes, .name = "overflow"},
+                   known,
+                   region_bytes - known.size() + 1);
+      },
+      "Invalid RAM mapping");
+  fault(
+      [&memory] {
+        memory.map({.address = unmapped_address, .size = region_bytes, .name = "overflow"},
+                   {},
+                   std::numeric_limits<std::size_t>::max());
+      },
+      "Invalid RAM mapping");
+  memory.map(
+      {.address = unmapped_address, .size = region_bytes, .name = "empty image"}, {}, region_bytes);
+  require(!memory.peek(unmapped_address + region_bytes - 1));
+}
+
 }
 
 int main() {
   try {
     check_ram();
+    offset_initialization();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;
