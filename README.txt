@@ -7,11 +7,12 @@ is in doc/objective.txt; actual evidence and missing work are in doc/coverage.tx
 
 Current state: native ARM-state reference execution through original cache setup,
 banked stacks, BSS initialization and MMU register setup under explicit fixture
-inputs; independently tested MMU, D-cache and RAM-bus buffer semantics; image parsing
-and safe LZO decoding, verified references, strict build gates and a working
-snapshot viewer. Complete CPU/board boot, DSP, MIDI,
-audio and a parameter-state producer remain pending. The UI starts with unknown
-values and waits for snapshots. See doc/arm-reference.txt.
+inputs; independently tested MMU, D-cache, RAM-bus buffers and ARM IRQ/FIQ/SWI
+entry/return; both original SVC handlers exercised in isolation. Image parsing,
+safe LZO decoding, verified references, strict build gates and the snapshot viewer
+work. Complete CPU/board boot, DSP, MIDI, audio and a parameter-state producer
+remain pending. The UI starts with unknown values and waits for snapshots.
+See doc/arm-reference.txt and doc/arm-exceptions.txt.
 
 Build and checks (Linux, regular user)
 Requires LLVM 19 (clang++, clang-tidy, clang-format, sanitizer runtimes),

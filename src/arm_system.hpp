@@ -22,6 +22,8 @@ public:
 
   [[nodiscard]] ArmSystemState state() const { return state_; }
 
+  [[nodiscard]] std::uint32_t exception_vector_base() const;
+
   void begin_instruction(std::uint32_t cpsr);
   void commit_instruction();
   void abort_instruction();

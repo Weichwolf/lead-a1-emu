@@ -1,0 +1,66 @@
+ARM-state exception reference
+
+Arm::set_interrupts supplies IRQ/FIQ level inputs between steps on the owning
+emulation thread. Arm::interrupts reads those levels. They are not acknowledged,
+deasserted, queued, synchronized across host threads or driven by host wall time.
+The future interrupt controller/board owns those actions. This is functional
+instruction-boundary delivery, without cycle or pin-synchronizer qualification.
+
+Routing and entry
+Each step checks eligible FIQ before IRQ, honoring CPSR.F/I independently.
+An eligible level enters its exception before fetching the interrupted instruction.
+ArmStep.exception identifies the event; IRQ/FIQ event steps retire no guest
+instruction and perform no host decode. A held level can enter again after return.
+Masking retains the input level. Unknown CP15 configuration/vector selection fails
+transactionally; no reset value or vector contents are fabricated.
+
+Executed ARM SWI instructions enter Supervisor at vector +8 and save PC+4;
+untaken conditional SWI does not read unknown vector configuration. IRQ/FIQ save
+the next instruction address +4 and use offsets +0x18/+0x1c. All preserve flags,
+save CPSR into the target SPSR and switch SP/LR banks. FIQ also switches r8-r12
+and sets both interrupt masks; other entries set I and retain F. CP15 c1.V selects
+base zero or 0xffff0000. Unknown inactive registers remain unknown.
+
+The independently tested entry-transition helper also covers Undefined, Prefetch
+Abort and Data Abort modes/vectors/links. Automatic undefined/MMU/bus-abort
+classification and delivery, c5/c6 fault registers, reset, Thumb/Jazelle, interrupt
+controller, timers and scheduler remain pending. Unsupported guest operations and
+unknown memory still fail explicitly; they do not become successful abort handlers.
+
+Return
+ARM data-processing S=1/Rd=PC result operations restore the current mode's complete
+SPSR and branch to the word-aligned result. The adapter supports all twelve result
+operations, rotated immediates, immediate register shifts and RRX. Arithmetic uses
+the handler's carry where required, then restores saved flags rather than ALU flags.
+Wide intermediates implement explicit 32-bit wrap under strict integer sanitizers.
+Register-controlled shifts with destination PC are rejected as unpredictable.
+
+LDM with S=1 and PC in the list supports IA/IB/DA/DB, optional writeback and
+ascending register/address order. Registers load into the current handler bank;
+writeback updates that bank before restoring the saved mode. Loads of banked
+SP/LR/FIQ high registers stay in the handler bank after return. User/System share
+their original SP/LR bank. Unknown saved implemented bits, reserved/invalid status,
+User/System return, Thumb/Jazelle targets, unpredictable base overlap and unaligned/
+spanning-wrap blocks fail before commit. User-bank transfers without PC remain
+unsupported. Source instruction, RAM, caches, TLBs and registers use the normal
+transaction boundary; a partial LDM failure rolls back all its current effects.
+
+Evidence
+Owned tests cover all source modes, six entry kinds, low/high vectors and I/F
+mask combinations; independent literals verify modes, SPSRs, links and flags.
+Executed programs check priority/masking, held levels, unfetched interrupted
+addresses, actual vector fetch/return, SWI, FIQ bank isolation, all result operations,
+carry/borrow and shifter boundaries, every LDM addressing mode, current-bank
+writeback, skipped and wrapping returns, unknown/invalid states and partial faults.
+Expectations follow pinned ARM DDI 0100E sections 2.6, MOV/data-processing, LDM(3)
+and addressing modes 1/4, plus ARM DDI 0198E c1 vector selection.
+
+The original-images check additionally executes the unchanged ARM0 SVC handler
+at 0xffff002c in both OS 1.36 images. An owned caller/vector jump and explicit
+Supervisor stack are supplied with M=0, I-cache disabled and high vectors.
+The original compares the actual SWI instruction's immediate: exactly 0x050000
+returns in System mode (13 handler instructions); 0x050001 returns in the prior
+User mode (9). All r0-r14, caller flags, saved status, the 56-byte stack frame,
+untouched scratch slot and ARM0 bytes are checked. The owned caller resumes
+normally afterward. This qualifies that isolated original handler, not physical
+exception-vector installation, interrupt routing, full boot or device equivalence.

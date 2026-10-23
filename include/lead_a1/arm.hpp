@@ -43,10 +43,26 @@ struct ArmState {
   bool operator==(const ArmState &) const = default;
 };
 
+enum class ArmException : std::uint8_t {
+  undefined_instruction,
+  software_interrupt,
+  prefetch_abort,
+  data_abort,
+  irq,
+  fiq
+};
+
+struct ArmInterruptLines {
+  bool irq{};
+  bool fiq{};
+  bool operator==(const ArmInterruptLines &) const = default;
+};
+
 struct ArmStep {
   std::uint32_t before{};
   std::uint32_t after{};
   std::string assembly;
+  std::optional<ArmException> exception;
 };
 
 struct ArmExecutionOptions {
@@ -73,6 +89,8 @@ public:
   [[nodiscard]] ArmState state() const;
   [[nodiscard]] ArmSystemState system_state() const;
   [[nodiscard]] ArmDecodeStatistics decode_statistics() const;
+  void set_interrupts(ArmInterruptLines lines);
+  [[nodiscard]] ArmInterruptLines interrupts() const;
   [[nodiscard]] ArmStep step();
 
 private:

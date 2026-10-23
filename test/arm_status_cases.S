@@ -115,7 +115,7 @@ msr cpsr_c, #0xdb
 mov r2, sp
 
 .balign 256
-/* 14: exception return needs a complete adapter even with known saved state. */
+/* 14: A32 exception return with a complete saved status. */
 subs pc, lr, #4
 
 .balign 256

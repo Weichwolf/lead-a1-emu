@@ -193,7 +193,7 @@ void invalid(lead_a1::Memory &memory, const std::filesystem::path &spec) {
   lead_a1::Arm ignored(memory, spec, masked);
   step(ignored);
   require(ignored.state().cpsr == supervisor_cpsr);
-  for (auto index : std::array{14U, 15U}) {
+  for (auto index : std::array{15U}) {
     auto state = initial(index);
     state.registers[0] = base;
     state.registers[14] = base + 4;
@@ -202,6 +202,14 @@ void invalid(lead_a1::Memory &memory, const std::filesystem::path &spec) {
     lead_a1::Arm unsupported(memory, spec, state);
     reject(unsupported, "exception return or banked block");
   }
+  constexpr unsigned int return_case = 14;
+  auto returning = initial(return_case);
+  returning.registers[14] = base + 4;
+  constexpr std::uint32_t implemented_psr_bits = 0xf90000ff;
+  returning.banks.modes[3].saved = {.bits = user_cpsr, .known_mask = implemented_psr_bits};
+  lead_a1::Arm allowed(memory, spec, returning);
+  step(allowed);
+  require(allowed.state().cpsr == user_cpsr && allowed.state().registers[15] == base);
 }
 
 void abort_undefined(lead_a1::Memory &memory, const std::filesystem::path &spec) {

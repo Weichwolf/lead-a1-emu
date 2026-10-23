@@ -7,7 +7,7 @@
       "url": "https://kib.kiev.ua/x86docs/ARM/ARMARMv5/DDI0100E.pdf",
       "bytes": 13299945,
       "sha256": "cab3e59387b14968a10b05098fe883bca70a6b3db53bcbcde5896afcd78ec87b",
-      "sections": "A2 processor modes/registers/status; A4 MOV/MRS/MSR and restrictions"
+      "sections": "A2 modes/registers/status and 2.6 exception entry/return; A4 data-processing/MOV/MRS/MSR/LDM(3); A5 addressing modes 1/4 and restrictions"
     },
     {
       "title": "ARM Architecture Reference Manual, ARM DDI 0100I",

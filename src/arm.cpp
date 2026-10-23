@@ -4,6 +4,7 @@
 #include "lead_a1/arm.hpp"
 
 #include "address.hh"
+#include "arm_exception.hpp"
 #include "arm_status.hpp"
 #include "arm_system.hpp"
 #include "emulate.hh"
@@ -478,20 +479,42 @@ public:
     bus.begin_instruction();
     system.begin_instruction(before.cpsr);
     try {
-      const auto opcode = system.fetch(pc);
-      const auto &instruction = decode({.address = pc, .word = opcode});
-      temporaries->bytes.clear();
       auto after = before;
-      if (detail::execute_arm_status(opcode, after) || system.execute(opcode, after)) {
+      ArmStep result{.before = pc,
+                     .after = pc,
+                     .assembly = {},
+                     .exception = detail::pending_arm_interrupt(before, interrupt_lines)};
+      if (result.exception) {
+        detail::enter_arm_exception(after, *result.exception, system.exception_vector_base());
+        result.assembly = *result.exception == ArmException::fiq ? "FIQ entry" : "IRQ entry";
         apply(after);
       } else {
-        executor->execute(pc, *instruction.semantics);
-        after = state();
+        const auto opcode = system.fetch(pc);
+        const auto &instruction = decode({.address = pc, .word = opcode});
+        result.assembly = instruction.assembly;
+        temporaries->bytes.clear();
+        constexpr std::uint32_t software_mask = 0x0f000000;
+        if ((opcode & software_mask) == software_mask) {
+          if (detail::arm_condition_passes(opcode, before)) {
+            result.exception = ArmException::software_interrupt;
+            detail::enter_arm_exception(after, *result.exception, system.exception_vector_base());
+          } else {
+            after.registers[program_counter_index] =
+                detail::arm_wrapped_address(static_cast<std::uint64_t>(pc) + 4);
+          }
+          apply(after);
+        } else if (detail::execute_arm_exception_return(opcode, after, system) ||
+                   detail::execute_arm_status(opcode, after) || system.execute(opcode, after)) {
+          apply(after);
+        } else {
+          executor->execute(pc, *instruction.semantics);
+          after = state();
+        }
       }
       if (memory.getValue("TB") != 0) { throw std::runtime_error("Unsupported Thumb transition"); }
       const auto next_pc = after.registers[program_counter_index];
       if (!next_pc) { throw std::runtime_error("ARM produced an unknown program counter"); }
-      ArmStep result{.before = pc, .after = *next_pc, .assembly = instruction.assembly};
+      result.after = *next_pc;
       bus.commit_instruction();
       system.commit_instruction();
       banks = after.banks;
@@ -514,6 +537,7 @@ public:
   }
 
   ArmBanks banks;
+  ArmInterruptLines interrupt_lines;
   detail::ArmSystem system;
   Memory &bus;
   CodeImage image;
@@ -552,6 +576,14 @@ ArmSystemState Arm::system_state() const {
 
 ArmDecodeStatistics Arm::decode_statistics() const {
   return impl_->statistics;
+}
+
+void Arm::set_interrupts(ArmInterruptLines lines) {
+  impl_->interrupt_lines = lines;
+}
+
+ArmInterruptLines Arm::interrupts() const {
+  return impl_->interrupt_lines;
 }
 
 ArmStep Arm::step() {

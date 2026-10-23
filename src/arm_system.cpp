@@ -88,6 +88,12 @@ std::uint32_t ArmSystem::control() const {
   return *value;
 }
 
+std::uint32_t ArmSystem::exception_vector_base() const {
+  constexpr std::uint32_t high_vectors = 0x2000;
+  constexpr std::uint32_t high_base = 0xffff0000;
+  return (control() & high_vectors) != 0 ? high_base : 0;
+}
+
 void ArmSystem::begin_instruction(std::uint32_t cpsr) {
   if (active_) { throw std::logic_error("Nested ARM system instruction"); }
   active_ = true;

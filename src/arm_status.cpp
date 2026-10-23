@@ -176,9 +176,7 @@ void write_current(ArmState &state, const StatusOperation &operation, std::uint3
   const auto mask = field_mask(operation.fields) & writable;
   const auto updated = (state.cpsr & ~mask) | (value & mask);
   static_cast<void>(arm_bank_index(updated));
-  capture_arm_banks(state);
-  state.cpsr = updated;
-  restore_banks(state);
+  set_arm_status(state, updated);
 }
 
 }
@@ -205,6 +203,13 @@ void capture_arm_banks(ArmState &state) {
   }
   state.banks.modes[index].sp = state.registers[13];
   state.banks.modes[index].lr = state.registers[14];
+}
+
+void set_arm_status(ArmState &state, std::uint32_t cpsr) {
+  static_cast<void>(arm_bank_index(cpsr));
+  capture_arm_banks(state);
+  state.cpsr = cpsr;
+  restore_banks(state);
 }
 
 bool execute_arm_status(std::uint32_t opcode, ArmState &state) {

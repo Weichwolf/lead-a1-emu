@@ -15,7 +15,8 @@ RAM mappings distinguish unknown from loaded/written bytes. Access errors give
 operation, address, width and PC. Failed instructions roll back register and
 staged RAM writes. Images can initialize an offset within a larger RAM region;
 surrounding bytes remain unknown. Peripheral side effects/interrupt delivery are
-not implemented.
+not implemented by the memory model. Functional ARM-state exception delivery and
+return are described in arm-exceptions.txt; board IRQ sources remain pending.
 
 Host decode cache
 At most 128 translations are retained, keyed by ARM PC and the fetched word.
@@ -54,8 +55,9 @@ are canonical snapshots; supplied active registers take precedence over duplicat
 active-bank fields at initialization. Partial SPSR writes retain bit knowledge;
 reading uninitialized implemented bits fails. Reserved status bits are modeled
 as zero and attempts to set them are rejected as unpredictable. Unsupported
-execution-state changes, invalid modes, PC status operands/destinations, exception
-returns and user-bank block transfers stop without committing side effects.
+execution-state changes, invalid modes, PC status operands/destinations and
+user-bank block transfers without PC stop without committing side effects.
+ARM exception-return forms use the separate adapter in arm-exceptions.txt.
 Independent expectations follow the ARM references in arm-architecture.json.
 
 The adapter also handles canonical NOP and MOV LR,PC. The latter copies PC+8
@@ -98,7 +100,8 @@ With multiple available ways, replacing a valid line still stops until random/
 round-robin internal replacement state is qualified. The functional D-cache and
 RAM-bus reference is described in arm-data.txt. TCM, big endian,
 legacy PC loads, WFI and other CP15
-operations remain unsupported. Exception delivery and cycle timing are pending.
+operations remain unsupported. Automatic fault delivery and cycle timing remain
+pending.
 
 Owned assembly verifies stale instructions, Harvard data visibility, invalidation,
 disable/re-enable retention, control masks/privilege, NZCV reads to PC, unknown
@@ -151,8 +154,9 @@ FCSE PID changes are guarded pending a qualified prefetch model.
 Translation/domain/permission/alignment faults are diagnostics with operation,
 VA, MVA, status and domain where defined. CPU/RAM/MMU state rolls back on a
 failed instruction, including partial LDM/STM. Abort exception delivery and
-c5/c6 fault-register latching are pending. Unknown physical table bytes remain
-explicit memory failures; they are not fabricated external-abort responses.
+c5/c6 fault-register latching are pending. IRQ/FIQ/SWI delivery does not convert
+these diagnostic MMU faults into exceptions yet. Unknown physical table bytes
+remain explicit memory failures; they are not fabricated external-abort responses.
 Owned CPU tests cover guest register setup, identity MMU enabling, translated
 loads/stores, TLB remapping, stale virtual instruction tags, user/LDRT/STRT
 permissions and transactional faults. A canonical ARMv5 NOP preserves unknown

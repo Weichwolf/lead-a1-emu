@@ -24,11 +24,15 @@ ID  State    Evidence / remaining work
              and c7 MVA/Set-Way maintenance have owned CPU and literal tests.
              I-cache entry invalidation/journaling and critical-word-first requests
              pass; MOV LR,PC flags/conditional/wrap/unknown-register tests pass.
+             ARM-boundary IRQ/FIQ level priority/masks, SWI, banked entry and
+             A32 data-processing/LDM exception returns have independent literal
+             and executed-vector tests (arm-exceptions.txt).
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
              abort delivery/fault-register latching, nonidentity MMU
-             transitions, hardware TLB replacement, TCM, exception return,
-             interrupts, board and scheduler remain pending. No Blofeld behavior
-             imported; reference inputs do not establish physical entry state.
+             transitions, hardware TLB replacement, TCM, Thumb/Jazelle,
+             interrupt controller/sources, board and scheduler remain pending.
+             No Blofeld behavior imported; reference inputs do not establish
+             physical entry state.
 3   partial  Both original ARM0 software entries reach CODE in two instructions;
              under explicit reference control/cache/buffer inputs both reach
              CODE +0x158 in 46 instructions, checking six banked stack tops.
@@ -44,6 +48,9 @@ ID  State    Evidence / remaining work
              Separately, both original indexed cache sweeps issue all 512 expected
              operands in 2578 instructions and drain two dirty half-lines through
              original helpers with owned MMU/caller inputs (arm-data.txt).
+             Both unchanged ARM0 SVC handlers preserve state/stack/flags and
+             select System mode only for original selector 0x050000 under owned
+             caller/vector inputs (arm-exceptions.txt). No physical IRQ claim.
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
