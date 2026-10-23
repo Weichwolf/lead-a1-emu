@@ -34,14 +34,32 @@ host enable/disable operations and HIER written-one bits release that host's
 hold. Disabling hold mode resumes dynamic readback. Pending sources are not
 cleared by these release operations. Host outputs use live pending status.
 
-CR NESTMODE 0 and 3 are supported; software manual nesting uses source/host
-enables. GNLR/HINLR retain their writable nine-bit fields and read bit 31 as zero
-in those modes. Automatic individual/global nesting (modes 1/2) is explicitly
-rejected: its exact update/override timing is not yet qualified. VSR >29,
-out-of-range source/channel indices, reserved writes, missing registers and
-unsupported widths stop with diagnostics. These guards do not claim hardware
-would fault identically. No cycle timing, source synchronizer, debugger, reset
-sequencer or physical peripheral event generation is modeled.
+Nesting protocol
+CR NESTMODE 1/2 supports the documented per-host/global software override
+protocol. GNLR/HINLR write bit 31 selects a persistent override, although readback
+always clears that bit. The programmed nine-bit limit and hidden override flag
+are separate state, both transactional. An override excludes equal and lower
+priority channels from live selection/outputs; per-host overrides do not suppress
+the other host. Mode 2 uses the global limit across both hosts. Modes 0/3 retain
+the fields without applying these automatic-mode cutoffs; manual software can
+mask individual sources/hosts.
+
+Clearing OVERRIDE exposes the current eligible channel in the functional
+reference; no eligible source reads 0x100. Firmware can read that value and
+write it back with bit 31 set before acknowledging the source and re-enabling
+ARM IRQs. The programmed values in AintcState remain distinct from this automatic
+read view. Clearing a raw source does not erase an override. Held index/vector
+pairs remain frozen until their documented release even if a threshold changes.
+
+This is a software-visible interpretation of SPRUH82C 11.3.7/11.4.4/35/36,
+corroborated by TI SYS/BIOS's documented HINLR-based IRQ dispatcher and FIQ
+handler that does not use HINLR. It qualifies the tested override protocol,
+not autonomous silicon update, held-priority/retrigger races or pin/bus-cycle
+timing. Source pulses occur only at explicit host instruction boundaries in
+tests. Arrivals in the clear/read/set window still need hardware qualification.
+VSR >29, out-of-range source/channel indices, reserved writes, missing registers
+and unsupported widths stop. No source synchronizer, debugger, reset sequencer
+or physical peripheral event generation is modeled.
 
 Memory integration
 Memory::map_device binds one externally owned MemoryDevice to an explicit,
@@ -75,8 +93,42 @@ acknowledges its actual selected source via SICR, invokes the owned callback and
 restores the original caller. Checks cover all caller registers/flags, IRQ/FIQ
 stack frames, IRQ's System-mode callback frame, HINLR restoration, no held/raw
 source left behind, unchanged ARM0 and normal caller resumption. The tests do
-not qualify preemption, automatic nesting, peripheral sources, boot or audio.
+not qualify physical peripheral sources, boot or audio.
 FIQ takes 11 original plus four owned callback instructions; IRQ takes 39 plus
 four, excluding the exception-entry event and owned vector branch. Reproduce:
 
   build/strict/lead-a1-original-interrupt-test build/strict/share/ARM5_le.sla doc/local/images build/strict/generated/aintc-cases.bin
+
+That test also composes original initialization with the nested dispatch in both
+images. The unchanged vector installer, AINTC constructor, callback/channel
+binding, source enables, nesting setter and global enable build the eight high
+vectors, actual original-address table, CR=0x14 and IRQ override=100. The harness
+supplies object/table RAM, stacks and calls under explicit c1=0x52078; it is not
+the full board constructor/loader chain. A parent IRQ callback receives higher-
+and equal-priority IRQ sources plus FIQ.
+The original wrappers execute callbacks in FIQ/higher-IRQ/parent/equal order,
+defer the equal source until the outer return, preserve both nested System/IRQ
+frames and restore caller registers/flags, both stack banks and override 100.
+Independent counter snapshots verify actual callback execution order. These are
+owned callback/stack/event inputs, not proof of complete board initialization.
+
+Original controller initialization
+Private reconstruction 1660f7b identifies original constructor entries
+0xc0172504 / 0xc002e258 and dispatch tables 0xc0767e6c / 0xc00a8004. The
+optional original check executes both unchanged CODE images through 8 constructor
+fixtures (four initial CR patterns each), plus 64 original helper calls. It
+checks all eleven constructor MMIO stores in order, object/table publication,
+VNR/VBR/VSR, the two CR updates selecting mode 1 then hold, unchanged GER/HIER,
+indexed global enable/disable order, raw source operations, HINLR exchange and
+the original unchecked channel argument spilling into its neighboring byte.
+Caller saved registers/stack and all 428 original component bytes are preserved.
+
+The constructor clears only bits 0..90 in ECR/SECR; the all-clear helper writes
+three complete words. Tests deliberately retain bits 91..100 or 96..100 in the
+101-source reference respectively. This is observed mask behavior, not evidence
+that the exact Nord chip has 91, 96 or 101 sources. It does not reset channel
+maps, GNLR/HINLR or all dispatch slots. The later board call supplies override
+100, then enables hosts/global and finally ARM IRQ/FIQ; the full caller chain,
+retained state and physical reset remain unqualified. Reproduce:
+
+  build/strict/lead-a1-original-aintc-test build/strict/share/ARM5_le.sla doc/local/images

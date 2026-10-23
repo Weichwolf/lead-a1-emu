@@ -25,7 +25,7 @@ base zero or 0xffff0000. Unknown inactive registers remain unknown.
 The independently tested entry-transition helper also covers Undefined, Prefetch
 Abort and Data Abort modes/vectors/links. Automatic undefined/MMU/bus-abort
 classification and delivery, c5/c6 fault registers, reset, Thumb/Jazelle, interrupt
-sources, automatic controller nesting, timers and scheduler remain pending.
+sources, autonomous controller timing, timers and scheduler remain pending.
 Unsupported guest operations and unknown memory still fail explicitly; they do
 not become successful abort handlers.
 

@@ -37,8 +37,10 @@ def main():
             subprocess.run([sys.argv[4], sys.argv[3], directory, sys.argv[5]], check=True)
         if len(sys.argv) >= 8:
             subprocess.run([sys.argv[6], sys.argv[3], directory, sys.argv[7]], check=True)
-        if len(sys.argv) == 10:
+        if len(sys.argv) >= 10:
             subprocess.run([sys.argv[8], sys.argv[3], directory, sys.argv[9]], check=True)
+        if len(sys.argv) == 11:
+            subprocess.run([sys.argv[10], sys.argv[3], directory], check=True)
     print("All six native decoded sections match independent pinned hashes")
     return 0
 

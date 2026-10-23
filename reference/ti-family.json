@@ -11,6 +11,14 @@
     },
     {
       "author": "Texas Instruments",
+      "title": "SYS/BIOS 6.76.01.12 da830 Hwi module documentation",
+      "url": "https://software-dl.ti.com/dsps/dsps_public_sw/sdo_sb/targetcontent/sysbios/6_76_01_12/exports/bios_6_76_01_12/docs/cdoc/ti/sysbios/family/arm/da830/Hwi.html",
+      "bytes": 315189,
+      "sha256": "6c4bf1a27dd048b78165623e9a97170c9d47c88f25d317caba8966645ec1d58a",
+      "sections": "DETAILS: IRQ dispatcher uses HINLR to suppress lower priorities; default FIQ dispatcher does not use HINLR; software protocol corroboration, not silicon timing"
+    },
+    {
+      "author": "Texas Instruments",
       "title": "AM1808 ARM Microprocessor Data Manual, SPRS653E",
       "url": "https://www.ti.com/lit/ds/symlink/am1808.pdf",
       "bytes": 2167667,

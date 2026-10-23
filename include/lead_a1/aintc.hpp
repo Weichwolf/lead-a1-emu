@@ -28,6 +28,8 @@ struct AintcState {
   std::uint32_t null_vector{};
   std::uint32_t global_nesting{0x100};
   std::array<std::uint32_t, 2> host_nesting{0x100, 0x100};
+  bool global_nesting_override{};
+  std::array<bool, 2> host_nesting_override{};
   std::array<std::uint32_t, 4> pending{};
   std::array<std::uint32_t, 4> enabled{};
   std::array<unsigned int, aintc_sources> channels{};

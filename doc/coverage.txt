@@ -31,11 +31,14 @@ ID  State    Evidence / remaining work
              physical bus. TI-family AINTC source status/enables, channel/host
              priorities, vectors and priority holding have owned tests;
              CPU LDM/STM faults roll back device effects (aintc.txt).
+             Per-host/global override nesting, automatic priority read views and
+             threshold/hold rollback have independent tests. Both original IRQ
+             wrappers exercise nested FIQ/higher IRQ and defer equal priorities.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
              abort delivery/fault-register latching, nonidentity MMU
              transitions, hardware TLB replacement, TCM, Thumb/Jazelle,
-             automatic AINTC nesting, source wiring/timing, board and scheduler
-             remain pending.
+             autonomous AINTC update/retrigger timing, source wiring, board and
+             scheduler remain pending.
              No Blofeld behavior imported; reference inputs do not establish
              physical entry state.
 3   partial  Both original ARM0 software entries reach CODE in two instructions;
@@ -58,7 +61,12 @@ ID  State    Evidence / remaining work
              caller/vector inputs (arm-exceptions.txt). No physical IRQ claim.
              Both unchanged ARM0 FIQ/IRQ wrappers acknowledge the AINTC reference,
              invoke an owned callback and restore caller state under explicit
-             non-preempting inputs. No automatic-nesting/board qualification.
+             non-preempting inputs. The added override-protocol fixture checks
+             nested FIQ/higher-IRQ/parent/equal callback order and stack/level
+             restoration after original vector/controller/binding initialization.
+             Both original AINTC constructors/helpers check ordered
+             MMIO, original masks and channel spill (aintc.txt). No physical
+             controller timing or board qualification.
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.

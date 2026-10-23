@@ -51,10 +51,6 @@ constexpr std::uint32_t channel_end = 0x468;
 
 void validate_control(std::uint32_t value) {
   if ((value & ~control_mask) != 0) { throw std::runtime_error("Reserved AINTC control bits"); }
-  const auto mode = (value >> 2) & 3;
-  if (mode == 1 || mode == 2) {
-    throw std::runtime_error("Unqualified AINTC automatic nesting mode");
-  }
 }
 
 void validate(const AintcState &state) {
@@ -82,6 +78,14 @@ bool active(const AintcState &state, unsigned int source) {
   return (state.pending[source / word_bits] & state.enabled[source / word_bits] & bit) != 0;
 }
 
+bool nested_out(const AintcState &state, unsigned int channel, unsigned int host) {
+  const auto mode = (state.control >> 2) & 3;
+  if (mode == 1 && state.host_nesting_override[host]) {
+    return channel >= state.host_nesting[host];
+  }
+  return mode == 2 && state.global_nesting_override && channel >= state.global_nesting;
+}
+
 std::uint32_t prioritized(const AintcState &state, std::optional<unsigned int> host) {
   std::uint32_t selected = none;
   unsigned int best_channel = channel_count;
@@ -89,12 +93,23 @@ std::uint32_t prioritized(const AintcState &state, std::optional<unsigned int> h
     const auto channel = state.channels[source];
     const auto mapped_host = channel < 2 ? 0U : 1U;
     if (host && *host != mapped_host) { continue; }
+    if (nested_out(state, channel, mapped_host)) { continue; }
     if (active(state, source) && channel < best_channel) {
       selected = source;
       best_channel = channel;
     }
   }
   return selected;
+}
+
+std::uint32_t nesting_read(const AintcState &state, std::optional<unsigned int> host) {
+  const auto mode = (state.control >> 2) & 3;
+  const bool automatic = host ? mode == 1 && !state.host_nesting_override[*host]
+                              : mode == 2 && !state.global_nesting_override;
+  if (!automatic) { return host ? state.host_nesting[*host] : state.global_nesting; }
+  const auto selected = prioritized(state, host);
+  constexpr std::uint32_t no_channel = 0x100;
+  return selected == none ? no_channel : state.channels[selected];
 }
 
 std::uint32_t vector(const AintcState &state, std::uint32_t index) {
@@ -147,7 +162,7 @@ std::uint32_t read_word(AintcState &state, std::uint32_t offset) {
       return *state.revision;
     case 4: return state.control;
     case 0x10: return state.global_enabled ? 1 : 0;
-    case global_nesting_offset: return state.global_nesting;
+    case global_nesting_offset: return nesting_read(state, {});
     case 0x20:
     case status_clear_offset:
     case enable_set_offset:
@@ -161,8 +176,8 @@ std::uint32_t read_word(AintcState &state, std::uint32_t offset) {
     case global_vector_offset: return vector(state, prioritized(state, {}));
     case fiq_index_offset: return host_read(state, 0, false);
     case irq_index_offset: return host_read(state, 1, false);
-    case fiq_nesting_offset: return state.host_nesting[0];
-    case irq_nesting_offset: return state.host_nesting[1];
+    case fiq_nesting_offset: return nesting_read(state, 0);
+    case irq_nesting_offset: return nesting_read(state, 1);
     case host_enable_offset: return state.host_enabled;
     case fiq_vector_offset: return host_read(state, 0, true);
     case irq_vector_offset: return host_read(state, 1, true);
@@ -235,6 +250,7 @@ void write_word(AintcState &state, std::uint32_t offset, std::uint32_t value) {
     case global_nesting_offset:
       check_mask(value, none | nesting_mask);
       state.global_nesting = value & nesting_mask;
+      state.global_nesting_override = (value & none) != 0;
       break;
     case host_set_offset:
     case host_clear_offset: {
@@ -255,10 +271,13 @@ void write_word(AintcState &state, std::uint32_t offset, std::uint32_t value) {
     case fiq_index_offset:
     case irq_index_offset: state.held[(offset - fiq_index_offset) / 4].reset(); break;
     case fiq_nesting_offset:
-    case irq_nesting_offset:
+    case irq_nesting_offset: {
       check_mask(value, none | nesting_mask);
-      state.host_nesting[(offset - fiq_nesting_offset) / 4] = value & nesting_mask;
+      const auto host = (offset - fiq_nesting_offset) / 4;
+      state.host_nesting[host] = value & nesting_mask;
+      state.host_nesting_override[host] = (value & none) != 0;
       break;
+    }
     case host_enable_offset: host_enable(state, value); break;
     case fiq_vector_offset:
     case irq_vector_offset: state.held[(offset - fiq_vector_offset) / 4].reset(); break;

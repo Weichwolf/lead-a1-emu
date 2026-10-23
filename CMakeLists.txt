@@ -36,6 +36,11 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-original-aintc-test test/original_aintc_test.cpp)
+  target_link_libraries(lead-a1-original-aintc-test PRIVATE lead_a1_arm)
+  add_executable(lead-a1-aintc-nesting-test test/aintc_nesting_test.cpp)
+  target_link_libraries(lead-a1-aintc-nesting-test PRIVATE lead_a1_arm)
+  add_test(NAME aintc_nesting COMMAND lead-a1-aintc-nesting-test)
   add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/aintc-cases.bin"
     COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
       --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/aintc_cases.S"
@@ -172,7 +177,8 @@ if(BUILD_TESTING)
     $<TARGET_FILE:lead-a1-original-arm-test> "${CMAKE_CURRENT_BINARY_DIR}/share/ARM5_le.sla"
     $<TARGET_FILE:lead-a1-original-cache-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cache-call.bin"
     $<TARGET_FILE:lead-a1-original-exception-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-exception-cases.bin"
-    $<TARGET_FILE:lead-a1-original-interrupt-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/aintc-cases.bin")
+    $<TARGET_FILE:lead-a1-original-interrupt-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/aintc-cases.bin"
+    $<TARGET_FILE:lead-a1-original-aintc-test>)
   set_tests_properties(original_images PROPERTIES SKIP_RETURN_CODE 77)
   add_test(NAME native_build COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/test/native_build.py"
@@ -204,7 +210,8 @@ if(BUILD_TESTING)
       lead-a1-memory-test lead-a1-original-arm-test lead-a1-mmu-walk-test
       lead-a1-mmu-cpu-test lead-a1-arm-data-test lead-a1-original-cache-test
       lead-a1-arm-exception-test lead-a1-original-exception-test lead-a1-aintc-test
-      lead-a1-aintc-cpu-test lead-a1-original-interrupt-test VERBATIM)
+      lead-a1-aintc-cpu-test lead-a1-original-interrupt-test lead-a1-aintc-nesting-test
+      lead-a1-original-aintc-test VERBATIM)
 endif()
 
 install(TARGETS lead-a1-emu RUNTIME DESTINATION bin)

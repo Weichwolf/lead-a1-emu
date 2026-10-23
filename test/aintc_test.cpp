@@ -230,9 +230,9 @@ void rejected_registers() {
   lead_a1::Aintc device(lead_a1::Aintc::reset_reference());
   constexpr std::array<std::uint32_t, 12> offsets{
       4, 4, 4, 0x10, 0x20, 0x34, 0x54, 0x20c, 0x1500, 0x1100, 0, 0x1608};
-  constexpr std::array<std::uint32_t, 12> values{4, 8, 1, 2, 101, 2, 30, 32, 4, 0x200, 0, 0};
-  constexpr std::array<const char *, 12> reasons{"nesting",
-                                                 "nesting",
+  constexpr std::array<std::uint32_t, 12> values{1, 2, 0x80, 2, 101, 2, 30, 32, 4, 0x200, 0, 0};
+  constexpr std::array<const char *, 12> reasons{"Reserved",
+                                                 "Reserved",
                                                  "Reserved",
                                                  "Reserved",
                                                  "source",

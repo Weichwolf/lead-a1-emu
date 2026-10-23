@@ -223,6 +223,209 @@ void execute(const Inputs &inputs, unsigned int part, bool fiq) {
             << " instructions including four owned callback instructions)\n";
 }
 
+struct NestedObservations {
+  unsigned int irq_events{};
+  unsigned int fiq_events{};
+  std::vector<std::uint32_t> callbacks;
+  std::vector<std::uint32_t> counter;
+  bool injected{};
+};
+
+constexpr std::uint32_t higher_callback = 0x1400;
+constexpr std::uint32_t equal_callback = 0x1500;
+constexpr std::uint32_t fiq_callback = 0x1600;
+constexpr unsigned int parent_source = 41;
+constexpr unsigned int equal_source = 42;
+constexpr unsigned int higher_source = 43;
+constexpr unsigned int nested_fiq_source = 44;
+constexpr std::uint32_t board_limit = 100;
+
+struct ControllerPlacement {
+  std::uint32_t installer;
+  std::uint32_t constructor;
+  std::uint32_t table;
+};
+
+constexpr std::array<ControllerPlacement, 2> controller_placements{
+    {{.installer = 0xc0172238, .constructor = 0xc0172504, .table = 0xc0767e6c},
+     {.installer = 0xc002d83c, .constructor = 0xc002e258, .table = 0xc00a8004}}};
+
+void original_call(lead_a1::Memory &memory,
+                   const std::filesystem::path &spec,
+                   std::uint32_t entry,
+                   std::array<std::uint32_t, 4> arguments) {
+  auto state = initial();
+  constexpr std::uint32_t masked_system = 0xb80000df;
+  state.cpsr = masked_system;
+  state.registers[pc_index] = entry;
+  state.registers[14] = code_base;
+  for (unsigned int index = 0; index < arguments.size(); ++index) {
+    state.registers[index] = arguments[index];
+  }
+  lead_a1::Arm cpu(memory, spec, state, profile());
+  constexpr unsigned int limit = 512;
+  unsigned int count{};
+  while (cpu.state().registers[pc_index] != code_base && count < limit) {
+    require(!cpu.step().exception);
+    ++count;
+  }
+  require(cpu.state().registers[pc_index] == code_base && cpu.state().registers[13] == user_stack);
+}
+
+void check_original_vectors(const lead_a1::Memory &memory) {
+  constexpr std::array<std::uint32_t, 8> targets{0xffff0020,
+                                                 0xffff0128,
+                                                 0xffff002c,
+                                                 0xffff0130,
+                                                 0xffff012c,
+                                                 0xffff0014,
+                                                 0xffff008c,
+                                                 0xffff0060};
+  constexpr std::uint32_t branch = 0xea000000;
+  constexpr std::uint32_t displacement_mask = 0x00ffffff;
+  constexpr auto address_bytes = std::uint64_t{1} << 32;
+  for (unsigned int index = 0; index < targets.size(); ++index) {
+    const auto address = local_base + (index * 4);
+    const auto displacement = (address_bytes + targets[index] - address - 8) / 4;
+    require(memory.read({.address = address, .size = 4}) ==
+            (branch | (displacement & displacement_mask)));
+  }
+}
+
+void initialize_original_controller(lead_a1::Memory &memory,
+                                    lead_a1::Aintc &device,
+                                    const Inputs &inputs,
+                                    unsigned int part) {
+  const auto code = read(inputs.images / (std::to_string(part) + "-CODE.bin"));
+  const auto where = controller_placements[part];
+  constexpr std::uint32_t code_image_base = 0xc0000000;
+  constexpr std::uint32_t object = 0x6000;
+  constexpr unsigned int table_extent = 512;
+  memory.map(
+      {.address = code_image_base, .size = code.size(), .name = "original CODE", .writable = false},
+      code);
+  memory.map({.address = where.table, .size = table_extent, .name = "owned original dispatch RAM"});
+  memory.map({.address = object, .size = 4, .name = "owned original controller object"});
+  original_call(memory, inputs.spec, where.installer, {});
+  check_original_vectors(memory);
+  original_call(memory, inputs.spec, where.constructor, {object, 0, 0, 0});
+  constexpr std::uint32_t bind_offset = 0xf8;
+  constexpr std::uint32_t source_offset = 0x13c;
+  constexpr std::uint32_t nesting_offset = 0x18c;
+  constexpr std::uint32_t global_offset = 0x80;
+  constexpr std::array<unsigned int, 4> sources{
+      parent_source, equal_source, higher_source, nested_fiq_source};
+  constexpr std::array<std::uint32_t, 4> callbacks{
+      callback, equal_callback, higher_callback, fiq_callback};
+  constexpr std::array<unsigned int, 4> channels{5, 5, 2, 0};
+  for (unsigned int index = 0; index < sources.size(); ++index) {
+    original_call(memory,
+                  inputs.spec,
+                  where.constructor + bind_offset,
+                  {object, sources[index], callbacks[index], channels[index]});
+    original_call(
+        memory, inputs.spec, where.constructor + source_offset, {object, sources[index], 1, 0});
+  }
+  original_call(memory, inputs.spec, where.constructor + nesting_offset, {board_limit, 0, 0, 0});
+  original_call(memory, inputs.spec, where.constructor + global_offset, {object, 1, 0, 0});
+  constexpr std::uint32_t individual_hold = 0x14;
+  const auto state = device.state();
+  require(state.control == individual_hold && state.vector_base == where.table + 4);
+  require(state.host_nesting[1] == board_limit && state.host_nesting_override[1]);
+  require(state.global_enabled && state.host_enabled == 3 && state.vector_size_programmed);
+}
+
+void observe_callback(const lead_a1::ArmState &before,
+                      std::uint32_t pc,
+                      const lead_a1::Aintc &device,
+                      NestedObservations &observed) {
+  if (pc != callback && pc != higher_callback && pc != equal_callback && pc != fiq_callback) {
+    return;
+  }
+  constexpr std::uint32_t system_status = 0xb800001f;
+  constexpr std::uint32_t fiq_status = 0xb80000d1;
+  const auto expected_status = pc == fiq_callback ? fiq_status : system_status;
+  require(before.cpsr == expected_status);
+  if (pc == higher_callback) {
+    constexpr unsigned int two_system_frames = 40;
+    constexpr unsigned int two_irq_frames = 120;
+    require(before.registers[13] == user_stack - two_system_frames);
+    require(before.banks.modes[2].sp == irq_stack - two_irq_frames);
+    require(device.state().host_nesting[1] == 2);
+  } else {
+    require(device.state().host_nesting[1] == 5);
+  }
+  observed.callbacks.push_back(pc);
+}
+
+void nested_step(lead_a1::Arm &cpu,
+                 lead_a1::Aintc &device,
+                 lead_a1::Memory &memory,
+                 NestedObservations &observed) {
+  const auto before = cpu.state();
+  const auto pc = before.registers[pc_index];
+  if (!pc) { throw std::runtime_error("Unknown nested test PC"); }
+  if (*pc == callback && !observed.injected) {
+    device.pulse(equal_source);
+    device.pulse(higher_source);
+    device.pulse(nested_fiq_source);
+    observed.injected = true;
+  }
+  const auto event = step(cpu, device);
+  if (event.exception == lead_a1::ArmException::irq) { ++observed.irq_events; }
+  if (event.exception == lead_a1::ArmException::fiq) { ++observed.fiq_events; }
+  if (event.exception) { return; }
+  observe_callback(before, *pc, device, observed);
+  constexpr unsigned int store_offset = 8;
+  if (*pc == callback + store_offset || *pc == higher_callback + store_offset ||
+      *pc == equal_callback + store_offset || *pc == fiq_callback + store_offset) {
+    observed.counter.push_back(
+        static_cast<std::uint32_t>(memory.read({.address = marker, .size = 4})));
+  }
+}
+
+void execute_nested(const Inputs &inputs, unsigned int part) {
+  const auto original = read(inputs.images / (std::to_string(part) + "-ARM0.bin"));
+  const auto owned = read(inputs.owned);
+  lead_a1::Aintc device(lead_a1::Aintc::reset_reference());
+  lead_a1::Memory memory;
+  map(memory, original, owned, device);
+  initialize_original_controller(memory, device, inputs, part);
+  const auto caller = initial();
+  lead_a1::Arm cpu(memory, inputs.spec, caller, profile());
+  device.pulse(parent_source);
+  NestedObservations observed;
+  constexpr unsigned int limit = 256;
+  unsigned int count{};
+  while (cpu.state().registers[pc_index] != code_base + 4 && count < limit) {
+    nested_step(cpu, device, memory, observed);
+    ++count;
+  }
+  require(cpu.state().registers[pc_index] == code_base + 4 && count < limit);
+  require(observed.injected && observed.irq_events == 3 && observed.fiq_events == 1);
+  const std::vector<std::uint32_t> expected_calls{
+      fiq_callback, higher_callback, callback, equal_callback};
+  const std::vector<std::uint32_t> expected_counters{
+      0x10204040, 0x10204050, 0x10204051, 0x10204151};
+  require(observed.callbacks == expected_calls && observed.counter == expected_counters);
+  require(cpu.state().cpsr == caller_status && cpu.state().registers[0] == 7);
+  for (unsigned int reg = 1; reg < pc_index; ++reg) {
+    require(cpu.state().registers[reg] == caller.registers[reg]);
+  }
+  require(cpu.state().banks.modes[2].sp == irq_stack && cpu.state().banks.modes[1].sp == fiq_stack);
+  require(cpu.state().banks.modes[2].saved.bits == caller_status);
+  require(device.state().host_nesting[1] == board_limit && device.state().host_nesting_override[1]);
+  require(device.state().pending == (std::array<std::uint32_t, 4>{}));
+  require(device.state().held == (std::array<std::optional<lead_a1::AintcPriority>, 2>{}));
+  for (unsigned int byte = 0; byte < original.size(); ++byte) {
+    require(memory.peek(original_entry + byte) == original[byte]);
+  }
+  std::cout
+      << "Part " << part
+      << ": original vector/controller initialization and nested IRQ/FIQ defer equal priority, "
+         "preempt in FIQ/higher-IRQ/parent/equal order and restore caller/levels/stacks\n";
+}
+
 }
 
 int main(int argc, char **argv) {
@@ -231,6 +434,7 @@ int main(int argc, char **argv) {
     const Inputs inputs{.spec = argv[1], .images = argv[2], .owned = argv[3]};
     for (const unsigned int part : {0U, 1U}) {
       for (const bool fiq : {false, true}) { execute(inputs, part, fiq); }
+      execute_nested(inputs, part);
     }
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

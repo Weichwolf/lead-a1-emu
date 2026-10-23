@@ -9,9 +9,10 @@ Current state: native ARM-state reference execution through original cache setup
 banked stacks, BSS initialization and MMU register setup under explicit fixture
 inputs; independently tested MMU, D-cache, RAM-bus buffers and ARM IRQ/FIQ/SWI
 entry/return; explicit transactional MMIO and a TI-family AINTC reference. Both
-original SVC and FIQ/IRQ dispatch handlers are exercised in isolation. Image parsing,
-safe LZO decoding, verified references, strict build gates and the snapshot viewer
-work. Complete CPU/board boot, DSP, MIDI, audio and a parameter-state producer
+original SVC and FIQ/IRQ dispatch handlers are exercised, including nested priority
+dispatch after original vector/controller initialization under explicit fixtures.
+Image parsing, safe LZO decoding, verified references, strict build gates and the
+snapshot viewer work. Complete CPU/board boot, DSP, MIDI, audio and a parameter-state producer
 remain pending. The UI starts with unknown values and waits for snapshots.
 See doc/arm-reference.txt, doc/arm-exceptions.txt and doc/aintc.txt.
 

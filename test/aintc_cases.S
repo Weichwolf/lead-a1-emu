@@ -17,3 +17,20 @@ ldmia r0!, {r1, r2}
 .balign 256
 stmia r0!, {r1, r2}
 .balign 32
+.balign 256
+/* 4/5/6: distinct owned callbacks expose execution order during preemption. */
+ldr r0, [r6]
+add r0, r0, #16
+str r0, [r6]
+bx lr
+.balign 256
+ldr r0, [r6]
+add r0, r0, #256
+str r0, [r6]
+bx lr
+.balign 256
+ldr r0, [r6]
+add r0, r0, #4096
+str r0, [r6]
+bx lr
+.balign 32
