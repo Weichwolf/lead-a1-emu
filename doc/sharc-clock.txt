@@ -1,0 +1,83 @@
+SHARC PMCTL and short counter-loop reference
+
+SharcClock models the ADSP-2147x/2148x PMCTL register at word 0x2000 using the
+hardware reference rev1.1, 23-3..17 and A-7..10. This is an explicit candidate
+reference, not physical Nord clock/package/pin qualification. CLKIN frequency,
+voltage/analog behavior, jitter, actual mux phase, PLL operating limits, peripheral
+gating/PMCTL1 and full board timing are not established by these tests.
+
+Clock contract
+The caller supplies CLK_CFG1:0, stable ideal CLKIN/reference conditions and
+whether the documented reset settling has completed. Configuration 0/1/2 gives
+initial PLLM 8/32/16; 3 is reserved and fails. Missing configuration remains
+unknown and prevents a complete PMCTL read, even after PLLM is programmed.
+CRAT follows the latched input and ignores writes. PLLM/INDIV program the VCO;
+PLLD/EPCKR are shadow fields captured by a DIVEN command. DIVEN reads zero,
+independently of whether the divider transition has completed. Reading never
+advances clocks. CLKOUT and family/reserved controls remain guarded.
+
+advance receives explicit lower bounds on elapsed core and stable CLKIN clocks.
+Clock-source loss does not count as stable CLKIN time. A new divider is known
+effective after 14 core clocks; a reprogrammed PLL requires 4096 CLKIN clocks
+and the documented bypass procedure. Programming VCO before bypass is allowed
+for HWR 23-14 method 1, but normal-mode time alone does not certify the new
+clock. Re-entering bypass after leaving requires 6 core clocks. Combined DIVEN/
+PLLBP changes, early exits and overlapping divider commands fail transactionally.
+Unknown/transitioning output ratios remain absent, including during normal-mode
+PLL settling. There is no guest-visible invented PLL-lock/ready status.
+
+rates reports ideal, settled logical ratios relative to CLKIN, not measured Hz
+or output pad activity. VCO factor is 2*PLLM (PLLM 0 encodes 128), INDIV divides
+by 2 and PLLD selects 2/4/8/16. PCLK=CCLK/2; EPCKR 0..4 selects 2/2.5/3/3.5/4.
+Bypass gives CCLK=CLKIN independently of the still-settling PLL. Absolute
+frequency/voltage/range constraints need a qualified board/source profile;
+valid ratios alone do not prove physical PLL operation.
+
+All read/write effects join instruction transactions. Failed accesses preserve
+registers, captured divider commands and remaining waits. External clock/source
+events are delivered on the owning emulation thread outside instructions.
+
+Short-loop contract
+The native core implements Type 12a immediate/UREG-count loops whose body is a
+single NOP. It executes every fetched NOP; the loop is not a host wait or a
+successful initialization callback. Count 0 means 2^32 iterations. Remaining
+iteration state is logical bookkeeping, not fabricated LCNTR/CURLCNTR readback.
+Other bodies, multiple instructions, nesting, arithmetic loops and loop-resource
+instructions remain guarded until their pipeline semantics are implemented.
+
+PC-stack loop frames keep bit 24 clear and preserve the parent CALL frame. Stack
+pre-pop and STKYx.LSEM follow the one-instruction counter-loop cases in PGR
+4-61..63, including count 1/2/3/4/5 and larger counts. Functional loop execution
+can remain in the pipeline after its architectural loop/PC frames have popped.
+SharcStep.minimum_core_cycles is a lower bound, not complete CPU timing. It
+includes the initial short-loop bubble and the three drain cycles for counts
+below 4. Fetch/cache/IOP/other pipeline timing and interrupt delivery remain open.
+Failed instructions preserve count, frames, pending controls and memory.
+
+Original composition
+The optional original SPI regression retains its unconfigured-clock failure
+case, then maps a CLK_CFG=0, stable/settled ideal reference and starts a new
+candidate CPU state against the unchanged serially loaded kernel. This is a
+separate reference composition, not a physical reset or concurrent-board test.
+It advances core time by committed internal-instruction lower bounds and counts
+CLKIN time only for those intervals in bypass. PMCTL access intervals are
+excluded; posted IOP bridge/mux latency is not qualified by that fixture.
+
+Each of the four original placements executes 8291 instructions to PC 0x8c0b2.
+The six original loops execute 16/4096/16/4096/16/16 NOPs, 8256 total. Literal
+oracles check all five reads and six writes, final PMCTL 0x40012, an empty loop
+pipeline/stack and preserved CALL frame 0x108c008. Ideal logical ratios finish
+at CCLK 18, PCLK 9, external 36/5 relative to CLKIN; no MHz value is inferred.
+The next original FLAGS read/modify operation fails unchanged because its pin
+semantics are not implemented. RAM clearing, remaining loader records,
+application execution, MIDI/audio and complete boot remain open.
+
+sharc_clock independently checks three reset-pin profiles, unknown pins, shadow
+and active dividers, multiplier 0/63 encodings, fractional ratios, absent time,
+source loss, reset/PLL/divider/reentry waits, read-only masks and IOP rollback.
+sharc_short_count_loops checks literal pipeline/frame/cycle expectations and a
+bounded prefix of the 2^32-iteration case, plus rejection and repair/retry.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^sharc_' --output-on-failure
+  cmake --build build/strict --target quality

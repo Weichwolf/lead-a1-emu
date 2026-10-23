@@ -5,6 +5,7 @@
 #include "lead_a1/memory.hpp"
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_boot.hpp"
+#include "lead_a1/sharc_clock.hpp"
 #include "lead_a1/sharc_memory.hpp"
 #include "lead_a1/spi.hpp"
 
@@ -165,6 +166,10 @@ struct Fixture {
   std::optional<std::uint64_t> due;
   std::vector<std::uint16_t> transmitted;
   std::optional<lead_a1::SharcSpiBoot> dsp;
+  std::uint64_t dsp_steps{};
+  Recorded<lead_a1::SharcClock> clock{
+      lead_a1::SharcClockReference{.configuration = 0, .input_stable = true, .reset_settled = true},
+      dsp_steps};
   lead_a1::SharcMemory dsp_memory;
   unsigned int dsp_channel{};
 
@@ -470,6 +475,76 @@ void kernel_prefix(lead_a1::SharcMemory &memory, std::uint32_t entry) {
   require(stopped && cpu.state() == before && !memory.active());
 }
 
+void check_clock_transactions(const Fixture &fixture) {
+  constexpr std::array<std::uint32_t, 6> writes{0x248, 0x8148, 0x148, 0x8052, 0x52, 0x40212};
+  constexpr std::array<std::uint32_t, 5> reads{8, 0x8148, 0x148, 0x8052, 0x52};
+  unsigned int written{};
+  unsigned int read{};
+  for (const auto &event : fixture.clock.events) {
+    require(event.width == 4 && event.offset == 0);
+    if (event.write) {
+      require(written < writes.size() && event.value == writes[written]);
+      ++written;
+    } else {
+      require(read < reads.size() && event.value == reads[read]);
+      ++read;
+    }
+  }
+  require(written == writes.size() && read == reads.size());
+}
+
+void clock_setup(Fixture &fixture) {
+  constexpr std::uint32_t pmctl = 0x2000;
+  constexpr std::uint32_t entry = 0x8c000;
+  constexpr std::uint32_t flags_entry = 0x8c0b2;
+  constexpr unsigned int instruction_limit = 20000;
+  constexpr unsigned int instruction_count = 8291;
+  constexpr std::uint32_t bypass = 0x8000;
+  fixture.dsp_memory.map_io({.first_word = pmctl, .words = 1}, fixture.clock);
+  lead_a1::Sharc cpu(fixture.dsp_memory, lead_a1::Sharc::reset_reference_214xx(entry));
+  while (cpu.state().pc != flags_entry && fixture.dsp_steps < instruction_limit) {
+    const auto events = fixture.clock.events.size();
+    const auto step = cpu.step();
+    ++fixture.dsp_steps;
+    if (fixture.clock.events.size() == events) {
+      const bool bypassed = (fixture.clock.device.state().control & bypass) != 0;
+      // Owned lower-bound clock reference: internal instructions retire at least
+      // one core clock; pure short-loop bubbles are included. In settled bypass
+      // those clocks also guarantee CLKIN time. Skip the PMCTL access itself.
+      fixture.clock.device.advance({.core_cycles = step.minimum_core_cycles,
+                                    .clkin_cycles = bypassed ? step.minimum_core_cycles : 0});
+    }
+  }
+  require(cpu.state().pc == flags_entry && fixture.dsp_steps == instruction_count);
+  require(cpu.state().depth == 1 && cpu.state().loops_empty == true && !cpu.state().count_loop);
+  constexpr std::uint32_t call_frame = 0x108c008;
+  require(cpu.state().pc_stack[0] == call_frame);
+  check_clock_transactions(fixture);
+  const auto clock = fixture.clock.device.state();
+  constexpr std::uint32_t expected_control = 0x40012;
+  require(clock.control == expected_control && !clock.pending_dividers && clock.pll_remaining == 0);
+  constexpr std::uint32_t final_multiplier = 18;
+  const auto rates = fixture.clock.device.rates();
+  require((rates.core == lead_a1::SharcClockRatio{.numerator = final_multiplier}));
+  require((rates.peripheral == lead_a1::SharcClockRatio{.numerator = 9}));
+  constexpr std::uint32_t ep_numerator = 36;
+  require(
+      (rates.external == lead_a1::SharcClockRatio{.numerator = ep_numerator, .denominator = 5}));
+  const auto before = cpu.state();
+  bool stopped{};
+  try {
+    static_cast<void>(cpu.step());
+  } catch (const std::exception &error) {
+    const std::string message(error.what());
+    require(message.find("native48 pc=0x8c0b2") != std::string::npos);
+    require(message.find("pin/mask-pointer/link-register read not implemented") !=
+            std::string::npos);
+    stopped = true;
+  }
+  require(stopped && cpu.state() == before && fixture.clock.device.state() == clock &&
+          !fixture.dsp_memory.active());
+}
+
 void kernel_transfer(std::span<const std::byte> image,
                      const std::filesystem::path &spec,
                      unsigned int part) {
@@ -523,9 +598,10 @@ void kernel_transfer(std::span<const std::byte> image,
     require(fixture.memory.read({.address = placements[part].scratch, .size = 2}) ==
             pullup_halfword);
     kernel_prefix(fixture.dsp_memory, reset_word);
+    clock_setup(fixture);
     std::cout << "Part " << part << " transport " << channel
-              << ": original ARM serial loading and native SHARC prefix reach unresolved clock "
-                 "IOP0x2000\n";
+              << ": original ARM/SPI loading and 8291 SHARC instructions complete clock setup; "
+                 "FLAGS remains unresolved\n";
   }
 }
 

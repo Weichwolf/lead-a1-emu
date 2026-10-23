@@ -91,3 +91,8 @@ All four serially loaded original kernels execute their first eight instructions
 and stop unchanged on the original IOP0x2000 read at word PC0x8c091 under the
 candidate reset-register reference. The initial loader itself remains separate
 from instruction execution and does not fabricate subsequent SPI success.
+
+With the explicit PMCTL reference and native short NOP loops, the same kernels
+continue through 8291 instructions to the FLAGS operation at word PC 0x8c0b2.
+See sharc-clock.txt for clock inputs, wait bounds, register sequences and the
+remaining timing/boot gaps. No physical CLKIN frequency is inferred.

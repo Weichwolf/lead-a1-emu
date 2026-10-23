@@ -55,6 +55,11 @@ ID  State    Evidence / remaining work
              Native-48 SHARC sequencing/system-register execution has owned
              literal/frame/condition/rollback tests, including two delay slots,
              read-only interrupt bits and delayed control effects (sharc-core.txt).
+             PMCTL pin-dependent reset/control, captured divider commands and
+             explicit PLL/divider/reentry wait bounds have owned tests. Native
+             single-NOP counter loops preserve frames/pre-pop and report cycle
+             lower bounds. Source frequency/physical timing remain unqualified
+             (sharc-clock.txt). General loops and counter readback remain open.
              Computation/DAG/VISA, runtime SPI/DMA/interrupts and timing remain
              open. No automatic ready signal or programmable-port stub.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
@@ -111,6 +116,12 @@ ID  State    Evidence / remaining work
              inputs and stops unchanged on its original clock-control read at
              word PC 0x8c091/IOP 0x2000. Remaining instruction classes, clock devices,
              stream/application execution and boot are open (sharc-core.txt).
+             With an explicit CLK_CFG=0/stable/settled clock reference, all four
+             kernels additionally execute 8291 instructions and 8256 NOP iterations,
+             checking five PMCTL reads/six writes, final logical ratios and parent
+             CALL frame. They stop unchanged at FLAGS word PC 0x8c0b2. This does
+             not qualify physical MHz, bridge/mux timing or board reset; general
+             loader/application boot and audio remain open (sharc-clock.txt).
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.

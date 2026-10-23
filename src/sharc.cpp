@@ -170,6 +170,8 @@ std::optional<std::uint32_t> execute(SharcMemory &memory, SharcState &state, std
     case 6:
     case 7: return direct_branch(state, opcode);
     case 10: return return_branch(state, opcode);
+    case 12:
+    case 13: detail::sharc_begin_count_loop(state, opcode); return {};
     case 15: {
       constexpr std::uint64_t visa_form = 0x8000000000;
       if ((opcode & visa_form) != 0) {
@@ -200,6 +202,7 @@ std::optional<std::uint32_t> execute(SharcMemory &memory, SharcState &state, std
 
 Sharc::Sharc(SharcMemory &memory, SharcState initial) : memory_(memory), state_(initial) {
   validate(state_);
+  detail::sharc_validate_count_loop(state_);
   detail::sharc_stack_status(state_);
 }
 
@@ -232,7 +235,7 @@ SharcStep Sharc::step() {
     if (state_.depth && *state_.depth >= almost_full) {
       throw std::runtime_error("SHARC stack-full interrupt state not implemented");
     }
-    if (!state_.loops_empty || !*state_.loops_empty) {
+    if ((!state_.loops_empty || !*state_.loops_empty) && !state_.count_loop) {
       throw std::runtime_error("SHARC active/unknown loop sequencing not implemented");
     }
     detail::sharc_interrupt_guard(state_);
@@ -247,8 +250,13 @@ SharcStep Sharc::step() {
     opcode = memory_.read({.address = state_.pc, .width = SharcWidth::wide48}, AccessKind::fetch);
     auto next = state_;
     next.pending.fill({});
-    const auto target = execute(memory_, next, *opcode);
-    next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
+    unsigned int minimum_cycles = 1;
+    if (state_.count_loop) {
+      minimum_cycles = detail::sharc_count_loop_step(next, *opcode);
+    } else {
+      const auto target = execute(memory_, next, *opcode);
+      next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
+    }
     for (unsigned int index = 0; index < state_.pending.size(); ++index) {
       const auto effect = state_.pending[index];
       if (effect) { next.effective[index] = *effect; }
@@ -263,7 +271,10 @@ SharcStep Sharc::step() {
     }
     memory_.commit_instruction();
     transaction = false;
-    const SharcStep result{.pc = state_.pc, .opcode = *opcode, .next_pc = next.pc};
+    const SharcStep result{.pc = state_.pc,
+                           .opcode = *opcode,
+                           .next_pc = next.pc,
+                           .minimum_core_cycles = minimum_cycles};
     state_ = next;
     return result;
   } catch (const std::exception &error) {

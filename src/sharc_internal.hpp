@@ -27,5 +27,8 @@ void sharc_bit_operation(SharcState &state, std::uint64_t opcode);
 [[nodiscard]] bool sharc_condition(const SharcState &state, unsigned int code);
 void sharc_interrupt_guard(const SharcState &state);
 void sharc_stack_status(SharcState &state);
+void sharc_validate_count_loop(const SharcState &state);
+void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode);
+[[nodiscard]] unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode);
 
 }

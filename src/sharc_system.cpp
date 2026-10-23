@@ -209,6 +209,14 @@ void sharc_stack_status(SharcState &state) {
   }
   state.system[sharc_stky_x] = merge(state.system[sharc_stky_x], flags, full | empty);
   state.effective[sharc_stky_x] = merge(state.effective[sharc_stky_x], flags, full | empty);
+  constexpr std::uint32_t loop_empty = 0x4000000;
+  SharcKnown32 loop_flags;
+  if (state.loops_empty) {
+    loop_flags.known = loop_empty;
+    if (*state.loops_empty) { loop_flags.value = loop_empty; }
+  }
+  state.system[sharc_stky_x] = merge(state.system[sharc_stky_x], loop_flags, loop_empty);
+  state.effective[sharc_stky_x] = merge(state.effective[sharc_stky_x], loop_flags, loop_empty);
 }
 
 }

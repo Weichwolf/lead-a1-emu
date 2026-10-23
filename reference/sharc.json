@@ -9,7 +9,7 @@
       "local_copy_bytes": 5516505,
       "local_copy_sha256": "0b40637d05c7f33bc8e39235ee8a9d2c734b12c0372aff1eeac56a7554895869",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified. Official document independently consulted; no source reused.",
-      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending); 4-12/24 CALL/return stack and delay slots; 9/10 native instruction forms; A-10 26-bit frame metadata, A-39 interrupt RO bits, A-32/35 effects, A-54/56 reset register reference"
+      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending); 4-12/24 CALL/return stack and delay slots; 9/10 native instruction forms; A-10 26-bit frame metadata, A-39 interrupt RO bits, A-32/35 effects, A-54/56 reset register reference; 4-61/63 single-instruction counter loops, stack pre-pop and pipeline bubbles"
     },
     {
       "author": "Analog Devices",
@@ -19,7 +19,7 @@
       "local_copy_bytes": 18156850,
       "local_copy_sha256": "a9534d75e8946af83d5c9e250bb7e212224786b56977d6fec90d88e178f034dc",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified; no source reused.",
-      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4"
+      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings"
     },
     {
       "author": "Analog Devices",
@@ -80,5 +80,55 @@
       "state_on_failure": "unchanged, including pending IRPTL effect and CALL frame0x108c008"
     },
     "uncertainty": "FLAGS reset summary A-18 parity conflicts with A-5 field table; leave FLAGS unknown; unqualified execution modes and possible interrupt/timer delivery fail explicitly"
+  },
+  "clock_reference": {
+    "family": "Explicit 2147x/2148x ideal PMCTL reference, not Nord chip/pin/frequency qualification",
+    "word_address": "0x2000",
+    "configuration_reset_multipliers": [
+      8,
+      32,
+      16
+    ],
+    "divider_core_clocks": 14,
+    "pll_stable_clkin_clocks": 4096,
+    "bypass_reentry_core_clocks": 6,
+    "time_contract": "Explicit elapsed lower bounds; no progress by read, no wall-clock/analog/posted-IOP/mux timing claim; source stable and settled-reset inputs explicit",
+    "original_fixture": {
+      "configuration": 0,
+      "committed_instructions": 8291,
+      "nop_iterations": 8256,
+      "nop_loop_counts": [
+        16,
+        4096,
+        16,
+        4096,
+        16,
+        16
+      ],
+      "pmctl_reads": [
+        "0x8",
+        "0x8148",
+        "0x148",
+        "0x8052",
+        "0x52"
+      ],
+      "pmctl_writes": [
+        "0x248",
+        "0x8148",
+        "0x148",
+        "0x8052",
+        "0x52",
+        "0x40212"
+      ],
+      "final_pmctl": "0x40012",
+      "logical_ratios_to_clkin": {
+        "core": "18",
+        "peripheral": "9",
+        "external": "36/5"
+      },
+      "next_pc_word": "0x8c0b2",
+      "next_operation": "FLAGS read/modify unsupported, state unchanged"
+    },
+    "limits": "Only one-instruction NOP counter-loop bodies; no counter-register readback, general loops, physical clock rate, voltage/range/analog failure, full board timing or complete boot claim"
   }
 }

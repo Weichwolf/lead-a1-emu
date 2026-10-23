@@ -9,7 +9,7 @@ Sharc operates on SharcMemory word addresses. It currently implements NOP,
 Type8a absolute/relative JUMP/CALL, plain Type11a RTS, Type17a immediate moves
 to reviewed system registers, Type18a SET/CLR/TGL/TST/XOR and Type14a 32-bit IOP
 transfers for reviewed system/sequencer registers. Execution is native-48 only.
-Data/PX/DAG registers, computation fields, DO loops, general RAM data-width
+Data/PX/DAG registers, computation fields, general DO loops, RAM data-width
 selection/SYSCTL, forced LW, VISA, IDLE, interrupt entry/return and caches remain
 pending. Unsupported forms fail with PC, fetched opcode and access context.
 
@@ -86,3 +86,11 @@ not complete boot or processor identity.
   cmake --build --preset strict
   ctest --test-dir build/strict -R '^sharc_' --output-on-failure
   cmake --build build/strict --target quality
+
+Clock and counter-loop extension
+sharc-clock.txt documents PMCTL, explicit clock-reference inputs and native
+one-instruction NOP counter loops. With that device mapped, all four original
+kernels now execute 8291 instructions through their entire clock setup and stop
+unchanged at the unresolved FLAGS operation at PC 0x8c0b2. The unconfigured-clock
+prefix case above remains a separate regression. General loops, counter-register
+readback, other bodies and full pipeline/board timing remain pending.

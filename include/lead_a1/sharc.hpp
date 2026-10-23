@@ -21,6 +21,15 @@ struct SharcBranch {
   bool operator==(const SharcBranch &) const = default;
 };
 
+struct SharcCountLoop {
+  std::uint32_t body{};
+  std::uint64_t total{};
+  std::uint64_t remaining{};
+  unsigned int saved_depth{};
+  bool frame_live{};
+  bool operator==(const SharcCountLoop &) const = default;
+};
+
 struct SharcState {
   std::uint32_t pc{};
   // UREG 0x70..0x7f. Read views and effective controls are distinct.
@@ -33,6 +42,7 @@ struct SharcState {
   std::optional<unsigned int> depth;
   std::optional<bool> loops_empty;
   std::optional<SharcBranch> branch;
+  std::optional<SharcCountLoop> count_loop;
   bool operator==(const SharcState &) const = default;
 };
 
@@ -40,6 +50,8 @@ struct SharcStep {
   std::uint32_t pc{};
   std::uint64_t opcode{};
   std::uint32_t next_pc{};
+  // Known minimum; not a complete pipeline/cache/IOP timing model.
+  unsigned int minimum_core_cycles{1};
 };
 
 // Functional native-48 instruction reference; unsupported execution fails.
