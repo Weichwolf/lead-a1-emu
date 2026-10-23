@@ -308,11 +308,13 @@ SharcStep Sharc::step() {
     auto next = state_;
     next.pending.fill({});
     unsigned int minimum_cycles = 1;
-    if (state_.count_loop) {
+    if (state_.count_loop && state_.count_loop->body == state_.count_loop->end) {
       minimum_cycles = execute_loop(memory_, next, *opcode, control_);
     } else {
+      detail::sharc_long_loop_prepare(next, *opcode);
       const auto target = execute(memory_, next, *opcode, control_);
       next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
+      detail::sharc_long_loop_finish(state_, next);
     }
     for (unsigned int index = 0; index < state_.pending.size(); ++index) {
       const auto effect = state_.pending[index];

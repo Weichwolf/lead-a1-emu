@@ -167,6 +167,9 @@ void sharc_ureg(SharcState &state, unsigned int ureg, SharcKnown32 value) {
     return;
   }
   if (ureg == stack_ureg) {
+    if (state.count_loop) {
+      throw std::runtime_error("SHARC PCSTK modification inside a count loop not qualified");
+    }
     if (!state.depth) { throw std::runtime_error("Unknown SHARC PC stack depth"); }
     if (*state.depth != 0) {
       state.pc_stack[*state.depth - 1] = sharc_value(value) & sharc_frame_mask;

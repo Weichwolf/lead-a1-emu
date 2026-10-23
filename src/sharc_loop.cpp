@@ -26,10 +26,20 @@ void sharc_validate_count_loop(const SharcState &state) {
   if (!loop) { return; }
   if (state.branch || !state.depth || !state.loops_empty || loop->total == 0 ||
       loop->total > full_counter || loop->remaining == 0 || loop->remaining > loop->total ||
-      loop->saved_depth >= before_almost_full || state.pc != loop->body ||
-      *state.depth != loop->saved_depth + (loop->frame_live ? 1U : 0U) ||
+      loop->saved_depth >= before_almost_full || loop->end < loop->body ||
+      loop->end > sharc_pc_mask || (loop->end != loop->body && loop->end - loop->body < 4) ||
       *state.loops_empty == loop->frame_live) {
-    throw std::invalid_argument("Invalid SHARC single-instruction count-loop state");
+    throw std::invalid_argument("Invalid SHARC count-loop state");
+  }
+  const auto floor = loop->saved_depth + (loop->frame_live ? 1U : 0U);
+  const bool in_body = state.pc >= loop->body && state.pc <= loop->end;
+  if (*state.depth < floor || (in_body != (*state.depth == floor)) ||
+      (loop->end != loop->body && !loop->frame_live &&
+       (loop->remaining != 1 || state.pc < loop->end - 3 || !in_body || *state.depth != floor)) ||
+      (loop->end != loop->body && loop->frame_live && loop->remaining == 1 && in_body &&
+       state.pc > loop->end - 3) ||
+      (loop->end == loop->body && (state.pc != loop->body || *state.depth != floor))) {
+    throw std::invalid_argument("Invalid SHARC count-loop execution context");
   }
   if (loop->frame_live && state.pc_stack[loop->saved_depth] != loop->body) {
     throw std::invalid_argument("Invalid SHARC loop PC frame");
@@ -52,8 +62,8 @@ void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode) {
   const auto end =
       (state.pc + (static_cast<std::uint32_t>(opcode) & sharc_pc_mask)) & sharc_pc_mask;
   const auto body = (state.pc + 1) & sharc_pc_mask;
-  if (end != body) {
-    throw std::runtime_error("SHARC multi-instruction count loops not implemented");
+  if (end < body || (end != body && end - body < 4)) {
+    throw std::runtime_error("SHARC wrapped/two-to-four-instruction count loops not implemented");
   }
   constexpr unsigned int class_shift = 40;
   constexpr unsigned int immediate_class = 12;
@@ -72,6 +82,7 @@ void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode) {
   }
   const auto iterations = count == 0 ? full_counter : count;
   state.count_loop = SharcCountLoop{.body = body,
+                                    .end = end,
                                     .total = iterations,
                                     .remaining = iterations,
                                     .saved_depth = *state.depth,

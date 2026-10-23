@@ -56,7 +56,7 @@ the represented reset registers from A-54..56. This is a candidate register
 reference, not a physical Nord post-DMA state. HWR24-28 confirms FLAG0..3 reset
 inputs; their odd direction bits are known zero per detailed A-5. Other FLAGS
 bits stay unknown despite A-18's conflicting parity (sharc-flags.txt).
-Active/unknown loops and timers, possible enabled interrupts, nonmaskable
+Unqualified/unknown loops and timers, possible enabled interrupts, nonmaskable
 interrupts and IOP access monitoring are guarded. No event is silently delivered
 or discarded.
 
@@ -106,7 +106,10 @@ Configured runtime SPI RX DMA and the actual ARM header writer extend this
 to PC0x8c01b after171791 instructions, with masked P1I latched (sharc-spi.txt).
 Native integer arithmetic and UREG transfers extend this to PC0x8c04c after
 171801 instructions (sharc-arithmetic.txt). Immediate LSHIFT extends this to
-PC0x8c04d after171802; the multi-instruction loop remains guarded (sharc-shifts.txt).
+PC0x8c04d after171802 (sharc-shifts.txt). Native long count loops with ordinary
+CALLs then reach171817/PC0x8c04f after genuine serial receipt of the first
+code-record word and RTS. The next SW16 read remains guarded
+(sharc-long-loops.txt).
 The unconfigured-clock prefix above remains separate.
-General loops, counter-register
+Other loop forms, counter-register
 readback, other bodies and full pipeline/board timing remain pending.

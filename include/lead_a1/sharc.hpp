@@ -31,6 +31,8 @@ struct SharcKnown40 {
 
 struct SharcCountLoop {
   std::uint32_t body{};
+  std::uint32_t end{};
+  // Functional iterations remaining, not the pipelined CURLCNTR read view.
   std::uint64_t total{};
   std::uint64_t remaining{};
   unsigned int saved_depth{};

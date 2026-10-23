@@ -86,7 +86,10 @@ word PC0x8c01b after171791 committed instructions, with depth0 and original
 tag/count/destination in R0/R8,R2,R3. Native integer arithmetic and UREG
 transfers then continue the composition through171801 instructions
 to PC0x8c04c (sharc-arithmetic.txt). Native immediate LSHIFT then reaches
-171802/PC0x8c04d and the loop-setup frontier (sharc-shifts.txt). Earlier preservation
+171802/PC0x8c04d (sharc-shifts.txt). The long count loop and actual next one-word
+ARM transfer then reach171817/PC0x8c04f after genuine polling/read/RTS, with
+the loop count unchanged by its callee. Short-word read remains guarded
+(sharc-long-loops.txt). Earlier preservation
 oracle precedes the genuine runtime writes at0x92003..5, which legitimately
 alias old NOP instruction storage.
 

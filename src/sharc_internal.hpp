@@ -63,5 +63,7 @@ void sharc_validate_count_loop(const SharcState &state);
 void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode);
 [[nodiscard]] bool sharc_loop_body_supported(std::uint64_t opcode);
 [[nodiscard]] unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode);
+void sharc_long_loop_prepare(SharcState &state, std::uint64_t opcode);
+void sharc_long_loop_finish(const SharcState &previous, SharcState &next);
 
 }

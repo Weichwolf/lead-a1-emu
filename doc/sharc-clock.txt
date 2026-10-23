@@ -44,8 +44,9 @@ logical operation (sharc-compute.txt). It executes every
 fetched body instruction; the loop is not a host wait or a
 successful initialization callback. Count 0 means 2^32 iterations. Remaining
 iteration state is logical bookkeeping, not fabricated LCNTR/CURLCNTR readback.
-Other bodies, multiple instructions, nesting, arithmetic loops and loop-resource
-instructions remain guarded until their pipeline semantics are implemented.
+Loops with at least five instructions and ordinary calls are separately
+documented in sharc-long-loops.txt. Two-to-four-instruction loops, nesting,
+arithmetic loops and loop-resource instructions remain guarded.
 
 PC-stack loop frames keep bit 24 clear and preserve the parent CALL frame. Stack
 pre-pop and STKYx.LSEM follow the one-instruction counter-loop cases in PGR

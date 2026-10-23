@@ -63,9 +63,9 @@ All four unchanged original kernel placements retain the earlier171801-step
 tag3/UREG/arithmetic assertions atPC0x8c04c. The genuine next immediate LSHIFT
 now halves R2 from274/268 to137/134 and clears SZ/SV/SS, preserving ALU status8 (AC=1)
 and the raw count in USTAT2. Each reaches wordPC0x8c04d after171802 committed
-instructions. The next original multi-instruction counter-loop setup fails
-without consuming processor/control/memory effects. No application body has
-been loaded by this increment; full uploader/cold boot/audio remain open.
+instructions. sharc-long-loops.txt extends this through the original count-loop
+setup, receive CALL, actual first code-word transfer and RTS to171817/PC0x8c04f.
+The next short-word read remains guarded; full uploader/cold boot/audio remain open.
 
   cmake --build --preset strict
   ctest --test-dir build/strict -R '^sharc_' --output-on-failure

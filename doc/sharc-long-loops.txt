@@ -1,0 +1,74 @@
+SHARC native counter loops with subroutine calls
+
+The functional native-48 reference executes Type12a immediate/UREG-count
+DO/UNTIL LCE loops with at least five consecutive instructions. Existing
+single-instruction loops retain their separately tested short-loop rules.
+Count zero means 2^32 iterations; every body instruction, subroutine instruction
+and memory operation executes normally. No loop body is copied or summarized.
+
+The loop records its inclusive end, body, original count, remaining functional
+iterations and parent PC-stack depth. Remaining iterations are bookkeeping,
+not the pipelined CURLCNTR read view. PC-stack loop frames have bit24 clear;
+ordinary CALL frames have bit24 set. Parent and physical popped entries remain.
+On the final iteration, the loop frame and LSEM update before operands of e-3
+execute, where e is the inclusive end. The last four body instructions still
+execute after the architectural stacks have popped. This follows PGR4-47's
+cycle2 and4-48's last-four-instruction register-access description.
+
+Immediate direct CALLs through e-4 execute with separate return frames. The
+callee may call further subroutines and use ordinary conditional direct branches
+for polling. Its instructions consume no body iterations. In particular, an
+immediate CALL at e-4 redirects Fetch1 before e can be fetched (PGR4-20,
+table4-5). The loop resources remain live throughout that callee. On the final
+return, the stack pop occurs before the resumed e-3 instruction, without popping
+its CALL frame or decrementing the functional count twice. This path does not
+need RTS(LR): late CALLs at e-3..e, including the special PCSTK bit25 boundary,
+remain guarded. A CALL target cannot overlap its active body.
+
+Execution phases join the existing CPU/memory/control transaction. A failed
+instruction rolls back the tentative pre-pop, pending controls, registers and
+device accesses. PCSTK writes inside a count loop are rejected rather than
+silently replacing a loop or return frame. Unknown/special return frames fail.
+
+Two-to-four-instruction loops, wrapped bodies, nested DO, body JUMPs/RTS,
+delayed control flow inside a loop and late CALL/RTS(LR) are still guarded.
+Unsupported body operations use their usual PC/opcode/address diagnostics.
+CURLCNTR, LCNTR, LADDR, FADDR/DADDR, explicit resource manipulation, conditional
+LCE latency, speculative fetch, caches, interrupt entry and complete cycle/bus
+scheduling are not implemented by this functional extension. One minimum cycle
+per ordinary committed instruction is not a complete branch-timing claim.
+PGR4-68/71's fetch-stage counter decrements/freezes must be modeled before
+exposing those pipeline resources or supporting the additional branch cases.
+
+Primary evidence: ADI Programming Reference rev2.4,4-20..22,4-45..56,4-67..75,
+A-10; provenance in reference/sharc.json. No private reconstruction source,
+assembler/decoder or manufacturer program bytes are public build inputs.
+
+Owned sharc_long_count_loops checks lengths5/6/9 and counts1/2/5; literal
+PCSTK/PCSTKP and STKY.LSEM/PCEM operand reads around final pre-pop; preserved
+parent/physical frames; CALL at e-4, nested CALL/RTS and a genuine three-pass
+conditional polling loop; count retention throughout subroutines; failed
+pre-pop with a pending MODE1 effect and repair/retry; guarded flow/resource
+writes; inherited body/callee/tail state and rejected inconsistent restoration;
+a false CALL with an empty parent stack; and a bounded two-iteration prefix
+of an actual zero/2^32 count loop.
+
+Original paced composition
+
+All four original kernel placements retain171802/PC0x8c04d assertions, then
+execute the original DO, immediate CALL and receive configuration. One busy
+poll completes at171812/PC0x8c038. The unchanged ARM block writer transmits
+the actual next NW32 stream word through real TI SPI serial edges; one final
+short DMA grant writes0x92003. The completion event is explicitly latched as
+P1I, still masked by IMASK3, then acknowledged at the peripheral.
+
+Five original poll/read/RTS instructions reach171817/PC0x8c04f. R8 contains
+the actual first code-record word. The loop still has137/134 iterations;
+its frame is0x8c04e, depth1, and the popped CALL frame remains0x108c04f in
+physical storage. The next original SW16 read at0x124006 fails unchanged.
+No payload destination store or complete body/stream has executed yet.
+
+The fixture explicitly pauses the DSP during the ARM transfers and grants
+DMA between serial edges/instructions. It does not execute the complete
+uploader concurrently or establish physical FLAG/pad wiring/timing, full
+boot, application audio, slot responsibilities or hardware equivalence.
