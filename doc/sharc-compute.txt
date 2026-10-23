@@ -69,7 +69,9 @@ reading a busy status cannot substitute for that transfer.
 The additional configured-runtime composition now does so: sharc-spi.txt
 documents the real ARM/header transfer and171791-instruction header milestone.
 The subsequent native integer subset and UREG transfers now reach171801
-instructions at the immediate-shift frontier; see sharc-arithmetic.txt.
+instructions atPC0x8c04c; see sharc-arithmetic.txt. Native LSHIFT/ASHIFT compute
+and immediate paths are now separate reviewed shifter operations; the original
+immediate LSHIFT reaches171802/PC0x8c04d (sharc-shifts.txt).
 
 This is an explicit candidate clock/reset/boot/RAM reference composition.
 Physical pin/slot/chip roles, timing, complete loader/application boot, MIDI/

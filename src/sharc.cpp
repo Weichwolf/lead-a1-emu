@@ -191,6 +191,7 @@ execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const Shar
       }
       return {};
     case 1: detail::sharc_compute(state, opcode); return {};
+    case 2: detail::sharc_shift(state, opcode, true); return {};
     case 6:
     case 7: return direct_branch(state, opcode);
     case 10: return return_branch(state, opcode);
@@ -232,6 +233,8 @@ unsigned int execute_loop(SharcMemory &memory,
     }
     if ((opcode >> class_shift) == 1) {
       detail::sharc_compute(state, opcode);
+    } else if ((opcode >> class_shift) == 2) {
+      detail::sharc_shift(state, opcode, true);
     } else {
       detail::sharc_data_move(memory, state, opcode, control);
     }

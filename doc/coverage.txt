@@ -78,6 +78,12 @@ ID  State    Evidence / remaining work
              sticky-AOS oracles, per-PE conditions and transactional rollback.
              Scalar host arithmetic uses unsigned64, with known-bit alias
              cancellation and ignored unary Ry (sharc-arithmetic.txt).
+             LSHIFT/ASHIFT register32/immediate8 counts have literal and all256
+             immediate-count routing oracles, off-scale/sign/unknown-bit handling,
+             per-PE SZ/SV/SS, bank/alias/predicate and rollback/short-loop tests.
+             Type6 no-access encoding is independently corroborated against the
+             duplicate PGR diagram (sharc-shifts.txt); memory/OR/other shifter
+             forms remain guarded.
              Compute-free SISD Type5a transfers capture old UREG values with
              reviewed32-bit DREG/DAG/SREG alignment, split source fields,
              Bx/Ix side effects, bank/condition/latency and rejection tests
@@ -165,8 +171,10 @@ ID  State    Evidence / remaining work
              P1I remains latched with IMASK3. Native integer DEC/tag branches
              and UREG copies then select the code-record path and reach
              PC0x8c04c after171801 instructions. R0=0,I0=destination,
-             USTAT2=count,R6=count-1; the next immediate shift fails unchanged
-             (sharc-arithmetic.txt). This paced composition supplies no
+             USTAT2=count,R6=count-1 (sharc-arithmetic.txt). The genuine immediate
+             shift then halves R2 while preserving USTAT2/ALU carry, reaching
+             PC0x8c04d after171802 instructions. The multi-instruction loop setup
+             fails unchanged (sharc-shifts.txt). This paced composition supplies no
              physical ready wiring or full-uploader schedule (sharc-spi.txt).
              This does not qualify physical MHz, bridge/mux timing or board reset; general
              loader/application boot and audio remain open (sharc-clock.txt).

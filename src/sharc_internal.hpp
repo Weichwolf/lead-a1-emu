@@ -44,6 +44,7 @@ void sharc_ram_transfer(SharcMemory &memory,
 [[nodiscard]] SharcKnown40 &
 sharc_compute_register(SharcState &state, unsigned int reg, unsigned int element);
 void sharc_compute(SharcState &state, std::uint64_t opcode);
+void sharc_shift(SharcState &state, std::uint64_t opcode, bool immediate);
 void sharc_register_move(SharcState &state, std::uint64_t opcode);
 void sharc_data_move(SharcMemory &memory,
                      SharcState &state,

@@ -1,0 +1,72 @@
+Native SHARC logical and arithmetic shifts
+
+The scalar reference implements LSHIFT and ASHIFT with a register count
+(Type2a COMPUTE, CU010) or an immediate count (Type6a without memory access,
+native class2). Register counts follow the signed32 operand description in
+PGRrev2.4 11-59/61. Immediate DATA is signed8, from-128 through127. The input
+and output use the upper32 fixed-point bits of a 40-bit data register; output
+low8 becomes known zero. Input extension bits are neither read nor preserved.
+
+Positive counts shift left, negative counts shift right, and zero preserves
+the upper32 input. Off-scale logical shifts produce zero. Off-scale arithmetic
+right shifts fill with the input sign; arithmetic left shifts wrap just like
+logical left shifts. Magnitudes and shifts use unsigned arithmetic with explicit
+range handling, including INT32_MIN. No host signed shift, abs(INT_MIN),
+out-of-range32-bit shift or count modulo32 is used. Input knowledge propagates through
+shifted bits, zero fill and sign fill. An off-scale logical shift can establish
+zero despite an unknown input; unknown sign fill remains unknown.
+
+Each active PE captures its input and register count before writing its result,
+including destination/count aliases. Immediate counts are shared by both PEs
+and never read a count register. Effective MODE1 selects low/high banks and
+SIMD; predicates are evaluated independently for PEx/PEy before either writes.
+Inactive operands/banks are not read. Unknown register counts or relevant bank/
+mode/condition bits fail transactionally, including rollback of tentative PEx
+data/flags and pending effects when a PEy count is unknown.
+
+Only SZ/SV/SS change. SZ follows result knowledge, SV follows any positive
+count (the operation-specific11-59/61 rule, even for zero input), and SS clears.
+ALU/multiplier flags, AF, CACC, BTF, read-only SF and all sticky flags survive.
+This does not set ALU overflow or invent an arithmetic interrupt. Native
+single-instruction counter loops accept both reviewed shift forms while
+retaining their existing stack pre-pop and minimum-cycle reference.
+
+Encoding evidence
+
+COMPUTE uses full8-bit shifter operation codes0/4 for LSHIFT/ASHIFT. SHIFTIM
+uses their upper6 bits in21:16, DATA8 in15:8, Rn in7:4 and Rx in3:0. COND
+is37:33. DATAEX30:27 supplies extra bits only for wider immediate field
+operations; these8-bit shifts ignore it, including the kernel's sign-extended
+DATAEX15. Reserved/VISA/memory fields are rejected; OR, rotate, bit-field/FIFO,
+other shifter operations and Type6a parallel memory moves remain guarded.
+
+PGRrev2.4 10-11 actually duplicates the with-memory diagram under its
+without-memory heading. The analysis-only ADI21160 excerpt, GroupI3-25, has
+the correct no-access class00000010 and separate DATAEX/SHIFTIM fields; the
+official21160 revision2.1 also corroborates that layout. Both diagrams were
+inspected, not inferred from a private encoder. PGR12-9's bits38:9 wording is
+inconsistent with the explicit39:8 alignment in2-5/3-23 and is not used.
+reference/sharc.json pins the local excerpt identity and its provenance limits.
+Legacy field evidence does not qualify21489 reset, timing or Nord package roles.
+Other primary sections: PGR3-22/23,9-25/26,11-59/61,12-1/2,12-9/10,A-19/20.
+
+sharc_shifts checks24 literal cases, all256 immediate counts on four inputs
+for both operations (2048 independent per-bit routing cases), partial knowledge,
+INT32 count extremes, all four SIMD predicate outcomes in both forms, all16
+DATAEX values, secondary/unknown-unused banks, count aliases, unsupported
+fields/operations, rollback and both forms in real three-iteration loops.
+No random fuzzing, host acceleration, full pipeline or hardware timing is claimed.
+
+Original composition
+
+All four unchanged original kernel placements retain the earlier171801-step
+tag3/UREG/arithmetic assertions atPC0x8c04c. The genuine next immediate LSHIFT
+now halves R2 from274/268 to137/134 and clears SZ/SV/SS, preserving ALU status8 (AC=1)
+and the raw count in USTAT2. Each reaches wordPC0x8c04d after171802 committed
+instructions. The next original multi-instruction counter-loop setup fails
+without consuming processor/control/memory effects. No application body has
+been loaded by this increment; full uploader/cold boot/audio remain open.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^sharc_' --output-on-failure
+  cmake --build build/strict --target quality

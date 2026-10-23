@@ -85,7 +85,8 @@ bool sharc_loop_body_supported(std::uint64_t opcode) {
   constexpr std::uint64_t indexed_mask = 0xf00000000000;
   constexpr std::uint64_t indexed_move = 0x600000000000;
   constexpr unsigned int class_shift = 40;
-  return opcode == 0 || (opcode >> class_shift) == 1 || (opcode & indexed_mask) == indexed_move;
+  return opcode == 0 || (opcode >> class_shift) == 1 || (opcode >> class_shift) == 2 ||
+         (opcode & indexed_mask) == indexed_move;
 }
 
 unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode) {
@@ -99,7 +100,7 @@ unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode) {
   const bool first = loop->remaining == loop->total;
   const bool last = loop->remaining == 1;
   // PGR4-61..63: stack pre-pop occurs before the final executions have drained.
-  // Reviewed RAM/logical operations cannot access loop resources.
+  // Reviewed RAM/compute operations cannot access loop resources.
   if ((loop->total > 4 && loop->remaining == 4) || (loop->total < 4 && loop->total > 1 && last)) {
     pop(state, *loop);
   }

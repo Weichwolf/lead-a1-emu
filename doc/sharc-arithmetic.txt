@@ -29,8 +29,9 @@ State, sticky flags, memory and pending control effects commit together.
 Unknown PEy input after tentative PEx overflow rolls back both lanes, including
 the tentative PEx AOS bit. Native one-instruction count loops execute each
 arithmetic body normally. General loops, carry-input forms, comparison,
-negation/ABS/MIN/MAX, float, multiplier/shifter/multifunction and parallel
+negation/ABS/MIN/MAX, float, multiplier/multifunction and parallel
 compute/moves remain outside this implemented subset and fail when encountered.
+Separate LSHIFT/ASHIFT references are documented in sharc-shifts.txt.
 
 Primary sources: pinned ADI Programming Reference rev2.4,11-1..3,11-11..12,
 12-2..3,A-5,A-17..19,A-23. Manuals stay local; no original/reconstructed program
@@ -50,8 +51,9 @@ The original Type5a I0=R3 and USTAT2=R2 transfers (sharc-register-moves.txt),
 DEC R6=R2-1 and next conditional branch then reach word PC0x8c04c after171801
 instructions. R0=0, I0 holds the received short-word destination, USTAT2 holds
 the received count and R6=count-1. The last ALU status has AC=1,AZ/AV/AN=0.
-The following immediate shift is still unsupported; failure preserves CPU,
-DMA/control and memory state. The test has not loaded the application body or
+The following immediate shift now executes, reaching171802/PC0x8c04d and the
+unimplemented multi-instruction loop setup (sharc-shifts.txt). Its failure
+preserves CPU/control/memory. The test has not loaded the application body or
 completed the original uploader, cold boot or audio path.
 
   cmake --build --preset strict

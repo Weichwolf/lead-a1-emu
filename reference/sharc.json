@@ -9,7 +9,7 @@
       "local_copy_bytes": 5516505,
       "local_copy_sha256": "0b40637d05c7f33bc8e39235ee8a9d2c734b12c0372aff1eeac56a7554895869",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified. Official document independently consulted; no source reused.",
-      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending); 4-12/24 CALL/return stack and delay slots; 9/10 native instruction forms; A-10 26-bit frame metadata, A-39 interrupt RO bits, A-32/35 effects, A-54/56 reset register reference; 4-61/63 single-instruction counter loops, stack pre-pop and pipeline bubbles; 4-90/91 FLAG direction/level separation and toggle spacing; A-13/14 detailed FLAGS fields, sampled input read view, A-34 effect latency; 2-5 40-bit registers/32-bit left justification; 6-18 extended stores zero low8, 6-23 B/I relationship; 9-17/18 and 10-8 Type4a; A-4 register banks, A-45/47 boot-dependent SYSCTL/IMDW; 9-10/11 per-PE compute conditions; 10-6 Type2a, 12-2/3 CU/ALU fields; 11-15/19 fixed logical results/status; A-17/20 ASTAT bit positions, 10-33 conditions; 9-53/54 Type14a direct RAM"
+      "sections": "6-8/9 forced LW alignment, 7-12/20 shared 16-bit columns, 40-bit bits47:8, 48-bit packing and address aliasing; 7-25 unaligned-access indication (core pending); 4-12/24 CALL/return stack and delay slots; 9/10 native instruction forms; A-10 26-bit frame metadata, A-39 interrupt RO bits, A-32/35 effects, A-54/56 reset register reference; 4-61/63 single-instruction counter loops, stack pre-pop and pipeline bubbles; 4-90/91 FLAG direction/level separation and toggle spacing; A-13/14 detailed FLAGS fields, sampled input read view, A-34 effect latency; 2-5 40-bit registers/32-bit left justification; 6-18 extended stores zero low8, 6-23 B/I relationship; 9-17/18 and 10-8 Type4a; A-4 register banks, A-45/47 boot-dependent SYSCTL/IMDW; 9-10/11 per-PE compute conditions; 10-6 Type2a, 12-2/3 CU/ALU fields; 11-15/19 fixed logical results/status; A-17/20 ASTAT bit positions, 10-33 conditions; 9-53/54 Type14a direct RAM; 3-22/23 shifter input fields; 11-59/61 LSHIFT/ASHIFT signed register32/immediate8 counts and status; 12-1/2 and12-9/10 compute/SHIFTIM fields; A-19/20 SZ/SV/SS; 10-11 duplicate no-access diagram requires legacy encoding corroboration"
     },
     {
       "author": "Analog Devices",
@@ -20,6 +20,16 @@
       "local_copy_sha256": "a9534d75e8946af83d5c9e250bb7e212224786b56977d6fec90d88e178f034dc",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified; no source reused.",
       "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals"
+    },
+    {
+      "author": "Analog Devices",
+      "title": "ADSP-21160 SHARC DSP Instruction Set Reference, Group I excerpt (older edition)",
+      "official_url": "https://www.analog.com/media/en/dsp-documentation/processor-manuals/adsp-21160_isr_rev2.1.pdf",
+      "local_copy_url": "https://www.smd.hu/Data/Analog/DSP/SHARC/ADSP-21160%20Instruction%20Set%20Reference/instgrp1.pdf",
+      "local_copy_bytes": 275465,
+      "local_copy_sha256": "d63b3ad0d22cb4549b8c07b4c908ffad30de1ad3c1b58dbc8622a01b84eaa69a",
+      "provenance": "Analysis-only older manufacturer manual excerpt mirror; exact issue date and official-byte identity unverified. Current official reference independently consulted. Legacy native encoding corroboration only, not Nord processor/reset/timing evidence; no source reused.",
+      "sections": "3-25 no-data Type6 native class2, COND37:33, DATAEX30:27 and SHIFTIM; diagram independently inspected against the duplicated figure in ADSP-214xx PGRrev2.4 10-11"
     },
     {
       "author": "Analog Devices",

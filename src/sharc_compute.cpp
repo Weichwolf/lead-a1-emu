@@ -158,6 +158,11 @@ void sharc_compute(SharcState &state, std::uint64_t opcode) {
     throw std::runtime_error("Unknown SHARC compute SIMD mode");
   }
   constexpr std::uint64_t unit_mask = 0x700000;
+  constexpr std::uint64_t shifter_unit = 0x200000;
+  if ((opcode & unit_mask) == shifter_unit) {
+    sharc_shift(state, opcode, false);
+    return;
+  }
   if ((opcode & unit_mask) != 0) {
     throw std::runtime_error("SHARC multiplier/shifter/multifunction compute not implemented");
   }

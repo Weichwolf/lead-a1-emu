@@ -658,14 +658,22 @@ void integer_dispatch(Fixture &fixture, lead_a1::Sharc &cpu) {
   require(cpu.state().dag[0][0][0].value == (cpu.state().data[0][3].value >> 8));
   constexpr std::uint32_t alu_status = 0x43f;
   require((cpu.state().system[6].value & alu_status) == 8);
+  static_cast<void>(cpu.step());
+  ++fixture.dsp_steps;
+  constexpr std::uint32_t loop_pc = 0x8c04d;
+  require(cpu.state().pc == loop_pc && fixture.dsp_steps == total + 1);
+  require(cpu.state().data[0][2].value == (std::uint64_t{count / 2} << 8));
+  require(cpu.state().system[1].value == count); // Preserve the odd-count test input.
+  constexpr std::uint32_t shifter_status = 0x3800;
+  require((cpu.state().system[6].value & (alu_status | shifter_status)) == 8);
   const auto before = cpu.state();
   bool stopped{};
   try {
     static_cast<void>(cpu.step());
   } catch (const std::exception &error) {
     const std::string message(error.what());
-    require(message.find("native48 pc=0x8c04c") != std::string::npos);
-    require(message.find("instruction class not implemented") != std::string::npos);
+    require(message.find("native48 pc=0x8c04d") != std::string::npos);
+    require(message.find("multi-instruction count loops not implemented") != std::string::npos);
     stopped = true;
   }
   require(stopped && cpu.state() == before && !fixture.dsp_memory.active());
@@ -850,9 +858,9 @@ void kernel_transfer(std::span<const std::byte> image,
                  .endpoint = endpoint,
                  .source = code + offsets[part][channel] + kernel_bytes});
     std::cout << "Part " << part << " transport " << channel
-              << ": original ARM/SPI kernel+header loading and 171801 SHARC instructions through "
-                 "tag arithmetic, register transfers and code-record selection; immediate shift "
-                 "remains unsupported\n";
+              << ": original ARM/SPI kernel+header loading and 171802 SHARC instructions through "
+                 "code-record selection and logical shift; multi-instruction loop remains "
+                 "unsupported\n";
   }
 }
 
