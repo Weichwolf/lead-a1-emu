@@ -171,6 +171,12 @@ void direct_move(SharcMemory &memory,
 
 std::optional<std::uint32_t>
 execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const SharcControl *control) {
+  constexpr std::uint64_t register_class_mask = 0xf00000000000;
+  constexpr std::uint64_t register_class = 0x700000000000;
+  if ((opcode & register_class_mask) == register_class) {
+    detail::sharc_register_move(state, opcode);
+    return {};
+  }
   constexpr std::uint64_t indexed_mask = 0xf00000000000;
   constexpr std::uint64_t indexed_move = 0x600000000000;
   if ((opcode & indexed_mask) == indexed_move) {

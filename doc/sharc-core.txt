@@ -104,6 +104,8 @@ after 171769 instructions. Logical compute/loader setup now additionally reaches
 runtime SPI/DMA write PC0x8c034 after171774 instructions (sharc-compute.txt).
 Configured runtime SPI RX DMA and the actual ARM header writer extend this
 to PC0x8c01b after171791 instructions, with masked P1I latched (sharc-spi.txt).
+Native integer arithmetic and UREG transfers extend this to PC0x8c04c after
+171801 instructions; the immediate-shift class remains guarded (sharc-arithmetic.txt).
 The unconfigured-clock prefix above remains separate.
 General loops, counter-register
 readback, other bodies and full pipeline/board timing remain pending.

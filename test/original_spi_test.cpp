@@ -642,6 +642,35 @@ struct HeaderInput {
   std::uint32_t source;
 };
 
+void integer_dispatch(Fixture &fixture, lead_a1::Sharc &cpu) {
+  constexpr unsigned int dispatch_steps = 10;
+  for (unsigned int index = 0; index < dispatch_steps; ++index) {
+    static_cast<void>(cpu.step());
+    ++fixture.dsp_steps;
+  }
+  constexpr std::uint32_t shift_pc = 0x8c04c;
+  constexpr unsigned int total = 171801;
+  require(cpu.state().pc == shift_pc && fixture.dsp_steps == total);
+  require(cpu.state().data[0][0].value == 0 && cpu.state().depth == 0);
+  const auto count = static_cast<std::uint32_t>(cpu.state().data[0][2].value >> 8);
+  require(count > 1 && cpu.state().system[1].value == count);
+  require(cpu.state().data[0][6].value == (std::uint64_t{count - 1} << 8));
+  require(cpu.state().dag[0][0][0].value == (cpu.state().data[0][3].value >> 8));
+  constexpr std::uint32_t alu_status = 0x43f;
+  require((cpu.state().system[6].value & alu_status) == 8);
+  const auto before = cpu.state();
+  bool stopped{};
+  try {
+    static_cast<void>(cpu.step());
+  } catch (const std::exception &error) {
+    const std::string message(error.what());
+    require(message.find("native48 pc=0x8c04c") != std::string::npos);
+    require(message.find("instruction class not implemented") != std::string::npos);
+    stopped = true;
+  }
+  require(stopped && cpu.state() == before && !fixture.dsp_memory.active());
+}
+
 void runtime_header(Fixture &fixture,
                     lead_a1::Sharc &cpu,
                     const std::filesystem::path &spec,
@@ -695,8 +724,7 @@ void runtime_header(Fixture &fixture,
     require(fixture.transmitted[halfword] == (expected[index] & halfword_mask));
     require(fixture.transmitted[halfword + 1] == (expected[index] >> 16));
   }
-  // Genuine polling, header reads, return and tag dispatch. The first tag is
-  // nonzero; the following integer decrement remains an explicit ISA frontier.
+  // Genuine polling, header reads, return and the first tag-dispatch instruction.
   require(expected[0] != 0);
   constexpr unsigned int dispatch_instructions = 10;
   for (unsigned int index = 0; index < dispatch_instructions; ++index) {
@@ -713,17 +741,7 @@ void runtime_header(Fixture &fixture,
   require(cpu.state().depth == 0 && cpu.state().system[10].value == primary_spi);
   require(cpu.state().effective[11].value == 3 && events.size() == 5);
   require(!events[4].write && events[4].value == 7 && events[4].offset == 16);
-  const auto before = cpu.state();
-  bool stopped{};
-  try {
-    static_cast<void>(cpu.step());
-  } catch (const std::exception &error) {
-    const std::string message(error.what());
-    require(message.find("native48 pc=0x8c01b") != std::string::npos);
-    require(message.find("arithmetic/float/compare ALU") != std::string::npos);
-    stopped = true;
-  }
-  require(stopped && cpu.state() == before && !fixture.dsp_memory.active());
+  integer_dispatch(fixture, cpu);
 }
 
 void clock_setup(Fixture &fixture, const std::filesystem::path &spec, HeaderInput input) {
@@ -832,8 +850,8 @@ void kernel_transfer(std::span<const std::byte> image,
                  .endpoint = endpoint,
                  .source = code + offsets[part][channel] + kernel_bytes});
     std::cout << "Part " << part << " transport " << channel
-              << ": original ARM/SPI kernel+header loading and 171791 SHARC instructions through "
-                 "clock/FLAGS, RAM clearing, logical compute and runtime RX DMA; tag arithmetic "
+              << ": original ARM/SPI kernel+header loading and 171801 SHARC instructions through "
+                 "tag arithmetic, register transfers and code-record selection; immediate shift "
                  "remains unsupported\n";
   }
 }

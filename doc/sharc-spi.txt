@@ -44,6 +44,10 @@ prose is inconsistent with the 19-bit table and3-28's wrap description; the
 functional address path follows the latter. The boot table's full logical
 destination does not establish whether the offset bit is forced on readback.
 Do not infer a physical register value from the diagnostic logical cursor.
+ADI employee Mahesh's July8,2014 reply also describes low19 plus0x80000 for
+buffer writes. Its numerical example has an arithmetic typo (low19 of0xb2000
+is0x32000); neither that example nor the post specifies CPU raw readback:
+https://ez.analog.com/dsp/sharc-processors/f/q-a/61465/21489-spi-dma
 
 Completion with INTEN, or receive overflow with INTERR, records a peripheral
 interrupt event. The board owner must route it to the processor before
@@ -79,8 +83,9 @@ to default primary P1I. IMASK3 preserves that latch without delivering it.
 Ten further original instructions poll, read the received header, return,
 load its count/destination and begin tag dispatch. All four placements reach
 word PC0x8c01b after171791 committed instructions, with depth0 and original
-tag/count/destination in R0/R8,R2,R3. The next native integer decrement fails
-without changing CPU/control/memory state. The earlier kernel-preservation
+tag/count/destination in R0/R8,R2,R3. Native integer arithmetic and UREG
+transfers then continue the composition through171801 instructions
+to the immediate-shift frontier (sharc-arithmetic.txt). The earlier preservation
 oracle precedes the genuine runtime writes at0x92003..5, which legitimately
 alias old NOP instruction storage.
 

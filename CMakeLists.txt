@@ -39,6 +39,12 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-register-move-test test/sharc_register_move_test.cpp)
+  target_link_libraries(lead-a1-sharc-register-move-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_register_moves COMMAND lead-a1-sharc-register-move-test)
+  add_executable(lead-a1-sharc-arithmetic-test test/sharc_arithmetic_test.cpp)
+  target_link_libraries(lead-a1-sharc-arithmetic-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_integer_arithmetic COMMAND lead-a1-sharc-arithmetic-test)
   add_executable(lead-a1-sharc-spi-test test/sharc_spi_test.cpp)
   target_link_libraries(lead-a1-sharc-spi-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_runtime_spi COMMAND lead-a1-sharc-spi-test)
@@ -303,7 +309,7 @@ if(BUILD_TESTING)
       lead-a1-aintc-cpu-test lead-a1-original-interrupt-test lead-a1-aintc-nesting-test
       lead-a1-original-aintc-test lead-a1-arm-abort-test lead-a1-original-abort-test
       lead-a1-gpio-test lead-a1-original-gpio-test lead-a1-spi-test lead-a1-original-spi-test
-      lead-a1-spi-cpu-test lead-a1-sharc-memory-test lead-a1-sharc-boot-test lead-a1-sharc-cpu-test lead-a1-sharc-clock-test lead-a1-sharc-loop-test lead-a1-sharc-flags-test lead-a1-sharc-control-test lead-a1-sharc-data-test lead-a1-sharc-compute-test lead-a1-sharc-spi-test VERBATIM)
+      lead-a1-spi-cpu-test lead-a1-sharc-memory-test lead-a1-sharc-boot-test lead-a1-sharc-cpu-test lead-a1-sharc-clock-test lead-a1-sharc-loop-test lead-a1-sharc-flags-test lead-a1-sharc-control-test lead-a1-sharc-data-test lead-a1-sharc-compute-test lead-a1-sharc-spi-test lead-a1-sharc-arithmetic-test lead-a1-sharc-register-move-test VERBATIM)
 endif()
 
 install(TARGETS lead-a1-emu RUNTIME DESTINATION bin)

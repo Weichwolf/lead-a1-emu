@@ -67,7 +67,9 @@ IOP0x1081 (IMSPI); the unmapped device fails without consuming state or pending
 effects. Runtime SPI/DMA must receive real serial bits and complete its count;
 reading a busy status cannot substitute for that transfer.
 The additional configured-runtime composition now does so: sharc-spi.txt
-documents the real ARM/header transfer and171791-instruction arithmetic frontier.
+documents the real ARM/header transfer and171791-instruction header milestone.
+The subsequent native integer subset and UREG transfers now reach171801
+instructions at the immediate-shift frontier; see sharc-arithmetic.txt.
 
 This is an explicit candidate clock/reset/boot/RAM reference composition.
 Physical pin/slot/chip roles, timing, complete loader/application boot, MIDI/

@@ -97,4 +97,32 @@ void sharc_validate_registers(const SharcState &state) {
   }
 }
 
+void sharc_register_move(SharcState &state, std::uint64_t opcode) {
+  constexpr std::uint64_t swap = std::uint64_t{1} << 43;
+  constexpr std::uint64_t reserved = std::uint64_t{1} << 30;
+  constexpr std::uint64_t compute = 0x7fffff;
+  if ((opcode & (swap | reserved | compute)) != 0) {
+    throw std::runtime_error("SHARC swap/reserved/parallel-compute register move not implemented");
+  }
+  const auto mode = state.effective[sharc_mode1];
+  if ((mode.known & sharc_simd) == 0 || (mode.value & sharc_simd) != 0) {
+    throw std::runtime_error("SHARC SIMD register transfer not implemented");
+  }
+  const auto condition = static_cast<unsigned int>((opcode >> 33) & 31);
+  if (!sharc_condition(state, condition)) { return; }
+  constexpr unsigned int source_high_shift = 38;
+  const auto source =
+      static_cast<unsigned int>((((opcode >> source_high_shift) & 31) << 2) | ((opcode >> 31) & 3));
+  const auto destination = static_cast<unsigned int>((opcode >> 23) & 127);
+  const auto data_file = [](unsigned int reg) {
+    return reg < 16 || (reg >= complement_base && reg < complement_end);
+  };
+  if (data_file(source) && data_file(destination)) {
+    throw std::runtime_error("SHARC data-to-data register transfer width not qualified");
+  }
+  // Capture before the destination write, including Bx's implicit Ix update.
+  const auto value = sharc_ureg(state, source);
+  sharc_ureg(state, destination, value);
+}
+
 }

@@ -74,6 +74,14 @@ ID  State    Evidence / remaining work
              reference tests, per-element conditions/banks, immediate ALU flags
              and one-instruction loop support. AC/AV tests use A-6's actual bits,
              with raw AN/AC/AV distractors (sharc-compute.txt).
+             ADD/SUB/INC/DEC have independent signed-boundary/saturation/carry/
+             sticky-AOS oracles, per-PE conditions and transactional rollback.
+             Scalar host arithmetic uses unsigned64, with known-bit alias
+             cancellation and ignored unary Ry (sharc-arithmetic.txt).
+             Compute-free SISD Type5a transfers capture old UREG values with
+             reviewed32-bit DREG/DAG/SREG alignment, split source fields,
+             Bx/Ix side effects, bank/condition/latency and rejection tests
+             (sharc-register-moves.txt). Data-to-data width remains guarded.
              Runtime SPI RX DMA has a completed-bootstrap handoff, finite
              four-word FIFO plus receive buffer, explicit grouped memory grants,
              signed cursor steps, zero-count65536 semantics and transactional
@@ -81,7 +89,7 @@ ID  State    Evidence / remaining work
              survives count rearming. Maskable IRPTL requests latch even when
              delivery is masked (sharc-spi.txt). Other SPI modes/registers,
              raw IISPI readback, chaining/flush and interrupt entry remain open.
-             General DAG/circular/broadcast/SIMD transfers, arithmetic/float/
+             General DAG/circular/broadcast/SIMD transfers, remaining arithmetic/float/
              other computation/VISA and timing remain open. No automatic ready
              signal or silently successful programmable-port stub.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
@@ -154,8 +162,11 @@ ID  State    Evidence / remaining work
              the actual next three stream words; one explicit memory grant writes
              the header. The original poll, RAM reads, return and tag dispatch
              reach PC0x8c01b after171791 instructions in all four placements.
-             P1I remains latched with IMASK3. The following integer decrement
-             fails unchanged. This deliberately paced composition supplies no
+             P1I remains latched with IMASK3. Native integer DEC/tag branches
+             and UREG copies then select the code-record path and reach
+             PC0x8c04c after171801 instructions. R0=0,I0=destination,
+             USTAT2=count,R6=count-1; the next immediate shift fails unchanged
+             (sharc-arithmetic.txt). This paced composition supplies no
              physical ready wiring or full-uploader schedule (sharc-spi.txt).
              This does not qualify physical MHz, bridge/mux timing or board reset; general
              loader/application boot and audio remain open (sharc-clock.txt).

@@ -1,0 +1,32 @@
+Native SHARC universal-register transfers
+
+The compute-free Type5a SISD UREG transfer uses PGR rev2.4 9-22..24 and the
+actual field diagram10-9, with register codes in10-32. Source bits6:2 reside
+in native bits42:38 and source bits1:0 in32:31. Destination bits6:0 reside
+in29:23. Bit30 is reserved, not another source bit. COND is37:33. Swap and
+nonzero parallel COMPUTE fields remain guarded; SIMD transfer is rejected
+before a false PEx condition could hide an implicit PEy operation.
+
+A false SISD condition reads no source or destination bank. The instruction
+captures the source before writing its destination through the existing UREG
+interfaces. Register knowledge is preserved, not replaced by guessed values.
+The existing effective MODE1 selects data/DAG banks, and Bx writes still load
+Ix. SREG destinations retain their existing write/latency/readonly contracts;
+unimplemented selectors fail with native PC/opcode context. Transfers do not
+implicitly compute or change arithmetic flags. Native count-loop bodies do
+not yet accept this transfer class.
+
+Data-file-to-DAG/SREG and DAG/SREG-to-data-file moves transfer upper32 bits,
+aligned at bits39:8 of the data register. Such data-register writes clear the
+low8 extension bits. Data-to-data file copies remain guarded until their
+separate full-width transfer behavior is qualified; they are not silently
+truncated. Explicit Sx upper32 reads in SISD use the PEy register bank.
+PX, swap, SIMD pairing and parallel compute are not supplied by this path.
+Primary alignment references are2-5,2-10,6-5/Figure6-3.
+
+sharc_register_moves uses literal encodings for data/B/I/USTAT/explicit-Sx
+transfers, split source fields, partial knowledge, Bx-to-Ix side effects,
+zeroed extension bits, preserved flags, false conditions/unknown banks,
+secondary DAG selection, MODE1 effect latency and failed-mode/field rollback.
+The actual kernel I0=R3 and USTAT2=R2 execute in all four original placements
+without a special PC/opcode callback (sharc-arithmetic.txt).

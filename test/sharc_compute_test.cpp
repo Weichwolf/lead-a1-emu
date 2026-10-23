@@ -226,10 +226,10 @@ void guards_and_rollback() {
   const auto before = unknown_bank.state();
   rejected([&] { static_cast<void>(unknown_bank.step()); }, "bank selection");
   require(unknown_bank.state() == before && !memory.active());
-  constexpr std::uint64_t unsupported_add = 0x013e00001312;
-  memory.write({.address = base, .width = lead_a1::SharcWidth::wide48}, unsupported_add);
-  lead_a1::Sharc add(memory, lead_a1::Sharc::reset_reference_214xx(base));
-  rejected([&] { static_cast<void>(add.step()); }, "arithmetic/float/compare");
+  constexpr std::uint64_t unsupported_float = 0x013e00081312;
+  memory.write({.address = base, .width = lead_a1::SharcWidth::wide48}, unsupported_float);
+  lead_a1::Sharc floating(memory, lead_a1::Sharc::reset_reference_214xx(base));
+  rejected([&] { static_cast<void>(floating.step()); }, "arithmetic/float/compare");
   constexpr std::uint64_t reserved = 0x013e00821312;
   memory.write({.address = base, .width = lead_a1::SharcWidth::wide48}, reserved);
   lead_a1::Sharc invalid(memory, lead_a1::Sharc::reset_reference_214xx(base));
