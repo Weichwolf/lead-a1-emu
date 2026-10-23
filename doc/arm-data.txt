@@ -60,16 +60,19 @@ paths until cleaned and drained. Clean/drain does not invalidate I-cache.
 Rollback and tests
 CPU registers, RAM stores, TLB changes, D-cache line edits, both buffers and their
 counters commit together. A bounded 32-line journal avoids copying the whole
-cache each instruction. Failed partial STM, unknown linefill and partial dirty
-write-back faults preserve prior committed state. Unknown RAM is a diagnostic
-failure, not a fabricated external-abort response; CPU abort delivery is pending.
+cache each instruction. Diagnostic failures in partial STM, unknown linefill and
+partial dirty write-back preserve prior committed state. Unknown RAM is not a
+fabricated external-abort response. Actual MMU aborts commit completed effects
+and their fault registers/exception state (arm-aborts.txt), including a dirty
+first STM half-line or a descriptor-buffer drain before the failing access.
 
 Owned tests use independent little-endian width/value expectations, stale RAM
 and modified/physical tags, half-line dirty masks, no-write-allocate, write-through,
 lockdown masks/protected hits, Set/Way validation and capacity-triggered drains.
 Executed ARM programs check write-back visibility/maintenance, disable/re-enable
 retention and cached partial-STM rollback. Buffered page-table tests check both
-successful walks and failed-walk rollback, including the queued store's survival.
+successful walks and diagnostic failed-walk rollback, including the queued
+store's survival; architectural abort tests instead retain a completed drain.
 Run through the normal strict build/quality target; originals remain optional.
 
 The optional original-images check also calls each image's unchanged indexed

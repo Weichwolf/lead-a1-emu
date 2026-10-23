@@ -5,16 +5,18 @@ used. reference/ghidra.json pins the release and all consumed files. SLEIGH and
 its static zlib dependency receive native sanitizers/hardening. Adapted public
 executor infrastructure and the byte-memory patch are credited in THIRD_PARTY.txt.
 
-Each step executes/commits one instruction. Decoder lookahead is side-effect-free;
-executed bytes and guest cache-line fills must be known/executable. Decoding uses the
-fetched instruction, including stale I-cache contents when configured. Without
+Each step executes one instruction or enters an exception. Decoder lookahead is
+side-effect-free; executed bytes and guest cache-line fills must be known and
+executable. Decoding uses the fetched instruction, including stale I-cache
+contents when configured. Without
 an enabled I-cache, RAM code changes are visible on the next fetch.
 Registers/temporaries are unknown until provided or
 written. Caller-supplied CPSR flags synchronize individual flag storage. Explicit
 RAM mappings distinguish unknown from loaded/written bytes. Access errors give
-operation, address, width and PC. Failed instructions roll back register and
-staged RAM writes. Images can initialize an offset within a larger RAM region;
-surrounding bytes remain unknown. Explicit MMIO mappings stage device read/write
+operation, address, width and PC. Diagnostic failures roll back register and
+staged RAM writes; architectural MMU aborts follow arm-aborts.txt. Images can
+initialize an offset within a larger RAM region; surrounding bytes remain
+unknown. Explicit MMIO mappings stage device read/write
 effects in the same instruction transaction (aintc.txt). Functional ARM-state
 exception delivery and return are described in arm-exceptions.txt; board IRQ
 sources remain pending.
@@ -152,12 +154,12 @@ addresses for the two following instruction words and unchanged cache tag/
 cacheability when I-cache is enabled. Combined MMU/I-cache toggles and active
 FCSE PID changes are guarded pending a qualified prefetch model.
 
-Translation/domain/permission/alignment faults are diagnostics with operation,
-VA, MVA, status and domain where defined. CPU/RAM/MMU state rolls back on a
-failed instruction, including partial LDM/STM. Abort exception delivery and
-c5/c6 fault-register latching are pending. IRQ/FIQ/SWI delivery does not convert
-these diagnostic MMU faults into exceptions yet. Unknown physical table bytes
-remain explicit memory failures; they are not fabricated external-abort responses.
+Known translation/domain/permission/alignment faults now deliver guest Abort
+exceptions and latch c5/c6 by default (arm-aborts.txt). Partial architectural
+effects follow the Base Restored reference; diagnostic analysis mode instead
+throws and rolls back the current step, including partial LDM/STM. Unknown
+physical table bytes remain explicit memory failures; they are not fabricated
+external-abort responses. MMU transition qualification is not an actual prefetch.
 Owned CPU tests cover guest register setup, identity MMU enabling, translated
 loads/stores, TLB remapping, stale virtual instruction tags, user/LDRT/STRT
 permissions and transactional faults. A canonical ARMv5 NOP preserves unknown

@@ -91,7 +91,10 @@ MmuFault::MmuFault(const MmuRequest &request,
                    std::optional<std::uint8_t> domain)
     : std::runtime_error(fault_text(request, modified, status, domain)),
       status_(status),
-      domain_(domain) {}
+      domain_(domain),
+      modified_(modified),
+      kind_(request.kind),
+      architectural_(request.architectural) {}
 
 ArmMmu::ArmMmu(Memory &memory, const std::optional<ArmMmuInitial> &initial, ArmDataPath *data)
     : memory_(memory), data_(data) {
@@ -341,9 +344,12 @@ MmuTranslation ArmMmu::translate(const MmuRequest &request) {
       request.kind != AccessKind::fetch) {
     throw std::runtime_error("Invalid ARM MMU access kind");
   }
+  const auto modified = (request.control & mmu_enable) != 0 && access.address <= pid_low_mask
+                            ? access.address | known(pending_.fcse_pid, "FCSE PID")
+                            : access.address;
   if (access.address % access.size != 0) {
     if (request.kind != AccessKind::fetch && (request.control & 2) != 0) {
-      throw MmuFault(request, access.address, 1, std::nullopt);
+      throw MmuFault(request, modified, 1, std::nullopt);
     }
     throw std::runtime_error("Unsupported unaligned ARM MMU access");
   }
@@ -354,8 +360,6 @@ MmuTranslation ArmMmu::translate(const MmuRequest &request) {
             .bufferable = false};
   }
   require_ready();
-  const auto pid = known(pending_.fcse_pid, "FCSE PID");
-  const auto modified = access.address <= pid_low_mask ? access.address | pid : access.address;
   const auto &entries = cache();
   const auto *const found = std::ranges::find_if(
       entries, [modified](const Entry &entry) { return matches(entry, modified); });

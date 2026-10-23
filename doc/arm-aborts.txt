@@ -1,0 +1,81 @@
+ARM MMU abort delivery and fault-register reference
+
+Architectural translation, domain, permission and enabled alignment faults enter
+the ARM Abort mode by default. ArmStep.exception distinguishes Data Abort and
+Prefetch Abort. Instruction fetch faults enter vector +0x0c with LR=PC+4; data
+faults enter +0x10 with LR=PC+8. c1.V selects low/high vectors. Entry preserves
+flags and F, sets I, saves the source CPSR and switches the Abort SP/LR bank.
+Failure to fetch an abort vector can itself produce a Prefetch Abort; there is
+no invented successful handler or implicit double-fault recovery.
+
+Only known architectural MMU faults are delivered. Unknown RAM, missing table
+bytes, unimplemented MMIO, nonconforming descriptors, unsupported execution and
+unknown cache/TLB inputs remain diagnostics. They are not external bus-error
+responses. MMU control-transition qualification uses hypothetical future fetches;
+its failed checks also remain diagnostics rather than premature guest exceptions.
+Undefined-instruction exceptions, debug/BKPT and external/imprecise aborts remain
+pending.
+
+CP15 c5/c6
+ArmSystemInitial.faults supplies optional explicit prior DFSR, IFSR and FAR.
+Without input they are unknown, not reset to zero. c5 selector 0/1 accesses
+DFSR/IFSR and c6 selector 0 accesses FAR. MCR writes restore their guest values;
+FSR bit 8 writes are ignored and read zero. The reference reads reserved high
+fields as zero and accepts only zero SBZP high writes. This is not a physical
+silicon reserved-field readback assertion. MRC-to-PC uses the high NZCV fields
+and preserves Q/control, without demanding irrelevant unknown low bits.
+
+A real data fault latches its status/domain and modified virtual address in
+DFSR/FAR. A fetch fault changes only IFSR, leaving DFSR/FAR unchanged. FCSE is
+applied to the alignment-fault address when M=1; alignment with M=0 still updates
+DFSR/FAR. Domain bits are explicit unknown when the architecture marks them
+invalid, including alignment and first-level translation faults. The four-bit
+status remains visible in the state snapshot. A full MRC of such an FSR stops
+on unknown domain bits; general-register bit-level knowledge propagation is
+not yet available. No domain zero is fabricated to make a read succeed.
+
+Data-aborted instructions
+The ARM9EJ-S core's Base Restored Abort Model restores the original base even
+when an LDM had already loaded that base without writeback. Single-register
+load/SWP destinations remain unchanged; PC loads do not affect the saved abort
+link or vector. Multiple-load destinations other than base/PC and permitted
+stores are architecturally UNPREDICTABLE after abort. The functional reference
+retains completed sequential register/memory effects; this does not qualify
+the exact silicon bus/pipeline retirement order. LDR/STR, LDRT/STRT, halfword/
+signed loads, LDRD/STRD, LDM/STM and the owned LDM exception-return adapter use
+these rules. Coprocessor data transfers remain unsupported.
+
+Completed effects include MMIO transactions, dirty cache halves and buffer
+retirement performed while reading a descriptor. The faulting step commits
+those effects together with banked exception state and fault registers. Setting
+ArmExecutionOptions.deliver_mmu_aborts=false selects the explicit analysis path:
+the same MMU fault throws a diagnostic and rolls back the whole current step.
+Other unsupported/unknown-input failures always roll back. Earlier committed
+instructions are never undone by either path.
+
+Evidence and tests
+Pinned ARM DDI 0100E A2.6 defines entry/return and data-aborted register/memory
+rules; DDI 0222B 2-24 selects Base Restored for the ARM9EJ-S integer core named
+by DDI 0198E. DDI 0198E 2.3.6/7 and 3.3 define c5/c6, fault priorities, invalid
+domain fields and first-aborted-address FAR values. Manuals are analysis-only.
+
+Owned tests cover section/page translation/domain/permission statuses, low/high
+vectors, scalar/base restoration, User transfers from privileged mode, SWP,
+partial LDM/STM and exception-return loads, dirty cache effects, descriptor-buffer
+drains, recursive vector faults, M=0 alignment and FCSE alignment addresses.
+Guest handlers write repaired descriptors, invalidate the target TLB mapping
+and execute SUBS PC,LR,#8/#4 to retry; an alignment handler repairs its operand.
+The resumed guest access and original saved flags/mode are independently checked.
+Diagnostic-policy, unknown/reserved registers and skipped operations are checked
+separately from actual exception delivery.
+
+The optional original check runs both unchanged high-vector installers with
+explicit M=0 inputs, then uses an owned conforming page directory and explicit
+M=1/V=1/empty-TLB reference inputs to induce data/prefetch translation faults.
+All four cases execute the original vector branch, ARM0 fatal-entry branch and
+indirect trampoline in three instructions to 0xc0173ce4 / 0xc002f7d8. Original
+CODE is read-only and every ARM0 byte remains unchanged. Execution stops before
+the CODE fatal handler body. This does not exercise the original MMU table
+constructor, resolve inherited TLB state or repair the original clear bit 4.
+
+  build/strict/lead-a1-original-abort-test build/strict/share/ARM5_le.sla doc/local/images build/strict/generated/arm-abort-cases.bin

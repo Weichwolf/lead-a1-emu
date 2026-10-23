@@ -67,6 +67,7 @@ struct ArmStep {
 
 struct ArmExecutionOptions {
   bool cache_translations{true};
+  bool deliver_mmu_aborts{true};
 };
 
 struct ArmDecodeStatistics {

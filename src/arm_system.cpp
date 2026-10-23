@@ -2,6 +2,7 @@
 #include "arm_system.hpp"
 
 #include "arm_data.hpp"
+#include "arm_fault.hpp"
 #include "arm_mmu.hpp"
 #include "arm_status.hpp"
 #include "lead_a1/arm.hpp"
@@ -52,6 +53,8 @@ ArmSystem::ArmSystem(Memory &memory, const std::optional<ArmSystemInitial> &init
   summarize_data(state_);
   if (!initial) { return; }
   state_.configured = true;
+  validate_fault_registers(initial->faults);
+  state_.faults = initial->faults;
   state_.control = initial->control;
   if (initial->control) { validate_control(*initial->control); }
   if (const auto capacity = initial->instruction_cache_bytes) {
@@ -92,6 +95,11 @@ std::uint32_t ArmSystem::exception_vector_base() const {
   constexpr std::uint32_t high_vectors = 0x2000;
   constexpr std::uint32_t high_base = 0xffff0000;
   return (control() & high_vectors) != 0 ? high_base : 0;
+}
+
+void ArmSystem::latch_fault(const MmuFault &fault) {
+  if (!active_) { throw std::logic_error("ARM fault latch outside transaction"); }
+  latch_mmu_fault(pending_.faults, fault);
 }
 
 void ArmSystem::begin_instruction(std::uint32_t cpsr) {
@@ -222,7 +230,7 @@ std::uint32_t ArmSystem::fetch(std::uint32_t pc) {
     constexpr std::uint32_t unprivileged_transfer = 0x04200000;
     data_user_ = user_ || (opcode & unprivileged_mask) == unprivileged_transfer;
     return opcode;
-  } catch (const std::exception &error) {
+  } catch (const MmuFault &) { throw; } catch (const std::exception &error) {
     std::ostringstream text;
     text << "ARM instruction fetch address=0x" << std::hex << pc << " width=4: " << error.what();
     throw std::runtime_error(text.str());
@@ -281,7 +289,7 @@ MmuRequest ArmSystem::request(MemoryAccess access, AccessKind kind) const {
 std::uint64_t ArmSystem::read(MemoryAccess access) try {
   const auto translation = mmu_.translate(request(access, AccessKind::read));
   return data_.read(translation, data_policy());
-} catch (const std::exception &error) {
+} catch (const MmuFault &) { throw; } catch (const std::exception &error) {
 
   throw std::runtime_error(data_error(access, AccessKind::read, error));
 }
@@ -289,7 +297,7 @@ std::uint64_t ArmSystem::read(MemoryAccess access) try {
 void ArmSystem::write(MemoryAccess access, std::uint64_t value) try {
   const auto translation = mmu_.translate(request(access, AccessKind::write));
   data_.write(translation, data_policy(), value);
-} catch (const std::exception &error) {
+} catch (const MmuFault &) { throw; } catch (const std::exception &error) {
 
   throw std::runtime_error(data_error(access, AccessKind::write, error));
 }
@@ -309,6 +317,7 @@ void ArmSystem::verify_transition(std::uint32_t value, const ArmState &cpu) {
     auto access = request({.address = static_cast<std::uint32_t>(next), .size = word_bytes},
                           AccessKind::fetch);
     access.retain = false;
+    access.architectural = false;
     const auto before = mmu_.translate(access);
     access.control = value;
     const auto after = mmu_.translate(access);
@@ -454,6 +463,13 @@ void ArmSystem::read_register(const Transfer &transfer, ArmState &cpu) const {
   const auto value = [&] {
     if (transfer.crn == 1 && transfer.crm == 0 && transfer.selector == 0) { return control(); }
     if (transfer.crn == 9) { return read_lockdown(transfer); }
+    if ((transfer.crn == 5 || transfer.crn == 6) && transfer.crm == 0) {
+      if (transfer.crn == 5 && transfer.selector < 2 && transfer.reg == pc_index) {
+        return std::uint32_t{0};
+      }
+      return read_fault_register(pending_.faults,
+                                 {.crn = transfer.crn, .selector = transfer.selector});
+    }
     if (transfer.crn == 2 || transfer.crn == 3 || transfer.crn == 10 || transfer.crn == 13) {
       return mmu_.read({.crn = transfer.crn, .crm = transfer.crm, .selector = transfer.selector});
     }
@@ -476,6 +492,9 @@ void ArmSystem::write_register(const Transfer &transfer, const ArmState &cpu) {
     maintenance(transfer, *value);
   } else if (transfer.crn == 9) {
     write_lockdown(transfer, *value);
+  } else if ((transfer.crn == 5 || transfer.crn == 6) && transfer.crm == 0) {
+    write_fault_register(
+        pending_.faults, {.crn = transfer.crn, .selector = transfer.selector}, *value);
   } else if (transfer.crn == 2 || transfer.crn == 3 || transfer.crn == 8 || transfer.crn == 10 ||
              transfer.crn == 13) {
     if (transfer.crn == 13 && transfer.selector == 0 && (control() & mmu_enable) != 0 &&

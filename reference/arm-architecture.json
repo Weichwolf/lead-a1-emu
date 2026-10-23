@@ -17,11 +17,18 @@
       "sections": "Supplementary PSR fields and conditional-instruction review"
     },
     {
+      "title": "ARM9EJ-S Technical Reference Manual, ARM DDI 0222B, r1p2",
+      "url": "https://documentation-service.arm.com/static/5e8e476f88295d1e18d3aecb",
+      "bytes": 1700633,
+      "sha256": "f9c6a6ba75c6d6eae926e33b8251625c15cefa64f2f1c56b61533e90c73e8125",
+      "sections": "2-24 Prefetch/Data Abort, Base Restored Data Abort model; ARM926 DDI 0198E identifies its ARM9EJ-S integer core"
+    },
+    {
       "title": "ARM926EJ-S Technical Reference Manual, ARM DDI 0198E, r0p5",
       "url": "https://documentation-service.arm.com/static/5e8e3d1088295d1e18d3a9b2",
       "bytes": 1495050,
       "sha256": "baa4122918a4e54057ccd1e2199ec4b61e8ee28fab73f764b3f4c04662fad55c",
-      "sections": "2.3.2 control c1; 2.3.3-2.3.4 translation table/domain access; 2.3.8 cache operations c7; 2.3.9 TLB operations c8; 2.3.10 cache lockdown c9; 2.3.11 TLB lockdown c10; 2.3.13 FCSE/context c13; chapter 3 MMU descriptors/permissions/faults; chapter 4 cache organization"
+      "sections": "2.3.2 control c1; 2.3.3-2.3.4 translation table/domain access; 2.3.6-2.3.7 fault status/address c5/c6; 2.3.8 cache operations c7; 2.3.9 TLB operations c8; 2.3.10 cache lockdown c9; 2.3.11 TLB lockdown c10; 2.3.13 FCSE/context c13; chapter 3 MMU descriptors/permissions/faults; chapter 4 cache organization"
     }
   ]
 }

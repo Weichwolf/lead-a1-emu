@@ -34,8 +34,12 @@ ID  State    Evidence / remaining work
              Per-host/global override nesting, automatic priority read views and
              threshold/hold rollback have independent tests. Both original IRQ
              wrappers exercise nested FIQ/higher IRQ and defer equal priorities.
+             Known MMU faults deliver Abort exceptions/c5/c6, with Base Restored
+             register rules, partial effects and guest repair/retry tests. FCSE
+             alignment FAR and descriptor-buffer coherence are checked
+             (arm-aborts.txt); diagnostic rollback remains explicitly selectable.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
-             abort delivery/fault-register latching, nonidentity MMU
+             external/debug/undefined exception delivery, nonidentity MMU
              transitions, hardware TLB replacement, TCM, Thumb/Jazelle,
              autonomous AINTC update/retrigger timing, source wiring, board and
              scheduler remain pending.
@@ -67,6 +71,9 @@ ID  State    Evidence / remaining work
              Both original AINTC constructors/helpers check ordered
              MMIO, original masks and channel spill (aintc.txt). No physical
              controller timing or board qualification.
+             Both original data/prefetch vectors and ARM0 fatal trampolines reach
+             their CODE fatal entries under owned conforming-table inputs;
+             this does not resolve original table/TLB constraints (arm-aborts.txt).
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.

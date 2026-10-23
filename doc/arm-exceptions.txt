@@ -22,10 +22,10 @@ save CPSR into the target SPSR and switch SP/LR banks. FIQ also switches r8-r12
 and sets both interrupt masks; other entries set I and retain F. CP15 c1.V selects
 base zero or 0xffff0000. Unknown inactive registers remain unknown.
 
-The independently tested entry-transition helper also covers Undefined, Prefetch
-Abort and Data Abort modes/vectors/links. Automatic undefined/MMU/bus-abort
-classification and delivery, c5/c6 fault registers, reset, Thumb/Jazelle, interrupt
-sources, autonomous controller timing, timers and scheduler remain pending.
+Known MMU faults now enter Prefetch/Data Abort and latch c5/c6 (arm-aborts.txt).
+The entry-transition helper also covers Undefined. Automatic undefined/bus/debug
+abort classification, reset, Thumb/Jazelle, interrupt sources, autonomous
+controller timing, timers and scheduler remain pending.
 Unsupported guest operations and unknown memory still fail explicitly; they do
 not become successful abort handlers.
 
@@ -45,7 +45,8 @@ their original SP/LR bank. Unknown saved implemented bits, reserved/invalid stat
 User/System return, Thumb/Jazelle targets, unpredictable base overlap and unaligned/
 spanning-wrap blocks fail before commit. User-bank transfers without PC remain
 unsupported. Source instruction, RAM, caches, TLBs and registers use the normal
-transaction boundary; a partial LDM failure rolls back all its current effects.
+transaction boundary. Diagnostic failures roll back current effects; real MMU
+aborts preserve completed transfers and restore the base before Abort entry.
 
 Evidence
 Owned tests cover all source modes, six entry kinds, low/high vectors and I/F

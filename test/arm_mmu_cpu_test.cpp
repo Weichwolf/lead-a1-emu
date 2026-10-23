@@ -215,7 +215,7 @@ void atomic_page_faults(const std::filesystem::path &spec, std::span<const std::
     auto system = profile();
     if (!system.mmu) { throw std::runtime_error("Missing MMU fixture state"); }
     system.mmu->domain_access = 1;
-    lead_a1::Arm cpu(memory, spec, state, system);
+    lead_a1::Arm cpu(memory, spec, state, system, {.deliver_mmu_aborts = false});
     rejected(cpu, "status=0xf");
     require(memory.read({.address = physical_data + last_word, .size = 4}) == 7);
     require(cpu.system_state().mmu.entries == 0);
@@ -251,7 +251,7 @@ void privilege_and_alignment(const std::filesystem::path &spec, std::span<const 
     auto system = profile();
     if (!system.mmu) { throw std::runtime_error("Missing MMU fixture state"); }
     system.mmu->domain_access = 1;
-    lead_a1::Arm cpu(memory, spec, state, system);
+    lead_a1::Arm cpu(memory, spec, state, system, {.deliver_mmu_aborts = false});
     rejected(cpu, "status=0xd");
     require(memory.read({.address = physical_data, .size = 4}) == marker);
   }
@@ -262,13 +262,13 @@ void privilege_and_alignment(const std::filesystem::path &spec, std::span<const 
   auto system = profile();
   if (!system.mmu) { throw std::runtime_error("Missing MMU fixture state"); }
   system.mmu->domain_access = 1;
-  lead_a1::Arm user(memory, spec, state, system);
+  lead_a1::Arm user(memory, spec, state, system, {.deliver_mmu_aborts = false});
   rejected(user, "status=0xd");
   state.cpsr = cpsr;
   state.registers[1] = virtual_data + 1;
   constexpr std::uint32_t alignment_bit = 2;
   system.control = control_mmu | alignment_bit;
-  lead_a1::Arm unaligned(memory, spec, state, system);
+  lead_a1::Arm unaligned(memory, spec, state, system, {.deliver_mmu_aborts = false});
   rejected(unaligned, "status=0x1");
 }
 
@@ -330,7 +330,7 @@ void cached_store_rollback(const std::filesystem::path &spec, std::span<const st
   auto system = data_profile();
   if (!system.mmu) { throw std::runtime_error("Missing MMU fixture state"); }
   system.mmu->domain_access = 1;
-  lead_a1::Arm cpu(memory, spec, state, system);
+  lead_a1::Arm cpu(memory, spec, state, system, {.deliver_mmu_aborts = false});
   steps(cpu, 1);
   require(cpu.state().registers[3] == 7 && cpu.system_state().data.dirty_halves == 0);
   rejected(cpu, "status=0xf");
@@ -379,7 +379,7 @@ void data_disable_and_buffered_tables(const std::filesystem::path &spec,
   memory.write({.address = target_descriptor, .size = 4}, 0);
   state.registers[2] = physical_data;
   state.registers[9] = 0;
-  lead_a1::Arm invalid_table(memory, spec, state, data_profile());
+  lead_a1::Arm invalid_table(memory, spec, state, data_profile(), {.deliver_mmu_aborts = false});
   steps(invalid_table, 1);
   rejected(invalid_table, "status=0x5");
   require(invalid_table.system_state().buffered_writes == 1);

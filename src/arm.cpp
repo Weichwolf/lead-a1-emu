@@ -5,6 +5,8 @@
 
 #include "address.hh"
 #include "arm_exception.hpp"
+#include "arm_fault.hpp"
+#include "arm_mmu.hpp"
 #include "arm_status.hpp"
 #include "arm_system.hpp"
 #include "emulate.hh"
@@ -466,6 +468,75 @@ public:
     return entry;
   }
 
+  struct Attempt {
+    ArmState after;
+    std::optional<std::uint32_t> opcode;
+    bool native{};
+  };
+
+  ArmStep advance(std::uint32_t pc, const ArmState &before, Attempt &attempt) {
+    auto &after = attempt.after;
+    ArmStep result{.before = pc,
+                   .after = pc,
+                   .assembly = {},
+                   .exception = detail::pending_arm_interrupt(before, interrupt_lines)};
+    if (result.exception) {
+      detail::enter_arm_exception(after, *result.exception, system.exception_vector_base());
+      result.assembly = *result.exception == ArmException::fiq ? "FIQ entry" : "IRQ entry";
+      apply(after);
+      return result;
+    }
+    const auto opcode = system.fetch(pc);
+    attempt.opcode = opcode;
+    const auto &instruction = decode({.address = pc, .word = opcode});
+    result.assembly = instruction.assembly;
+    temporaries->bytes.clear();
+    constexpr std::uint32_t software_mask = 0x0f000000;
+    if ((opcode & software_mask) == software_mask) {
+      if (detail::arm_condition_passes(opcode, before)) {
+        result.exception = ArmException::software_interrupt;
+        detail::enter_arm_exception(after, *result.exception, system.exception_vector_base());
+      } else {
+        after.registers[program_counter_index] =
+            detail::arm_wrapped_address(static_cast<std::uint64_t>(pc) + 4);
+      }
+      apply(after);
+    } else if (detail::execute_arm_exception_return(opcode, after, system) ||
+               detail::execute_arm_status(opcode, after) || system.execute(opcode, after)) {
+      apply(after);
+    } else {
+      attempt.native = true;
+      executor->execute(pc, *instruction.semantics);
+      after = state();
+    }
+    return result;
+  }
+
+  ArmStep handle_fault(std::uint32_t pc,
+                       const detail::MmuFault &fault,
+                       const ArmState &before,
+                       Attempt &attempt) {
+    const auto kind =
+        fault.kind() == AccessKind::fetch ? ArmException::prefetch_abort : ArmException::data_abort;
+    if (attempt.native) { attempt.after = state(); }
+    executor->clear();
+    if (kind == ArmException::data_abort) {
+      if (!attempt.opcode) { throw std::logic_error("Missing data-abort instruction"); }
+      detail::restore_data_abort_registers(*attempt.opcode, before, attempt.after);
+    } else {
+      attempt.after = before;
+    }
+    detail::enter_arm_exception(attempt.after, kind, system.exception_vector_base());
+    system.latch_fault(fault);
+    apply(attempt.after);
+    return {.before = pc,
+            .after = 0,
+            .assembly = std::string(kind == ArmException::data_abort ? "Data Abort: "
+                                                                     : "Prefetch Abort: ") +
+                        fault.what(),
+            .exception = kind};
+  }
+
   ArmStep step() {
     const auto before = state();
     const auto known_pc = before.registers[program_counter_index];
@@ -479,45 +550,21 @@ public:
     bus.begin_instruction();
     system.begin_instruction(before.cpsr);
     try {
-      auto after = before;
-      ArmStep result{.before = pc,
-                     .after = pc,
-                     .assembly = {},
-                     .exception = detail::pending_arm_interrupt(before, interrupt_lines)};
-      if (result.exception) {
-        detail::enter_arm_exception(after, *result.exception, system.exception_vector_base());
-        result.assembly = *result.exception == ArmException::fiq ? "FIQ entry" : "IRQ entry";
-        apply(after);
-      } else {
-        const auto opcode = system.fetch(pc);
-        const auto &instruction = decode({.address = pc, .word = opcode});
-        result.assembly = instruction.assembly;
-        temporaries->bytes.clear();
-        constexpr std::uint32_t software_mask = 0x0f000000;
-        if ((opcode & software_mask) == software_mask) {
-          if (detail::arm_condition_passes(opcode, before)) {
-            result.exception = ArmException::software_interrupt;
-            detail::enter_arm_exception(after, *result.exception, system.exception_vector_base());
-          } else {
-            after.registers[program_counter_index] =
-                detail::arm_wrapped_address(static_cast<std::uint64_t>(pc) + 4);
-          }
-          apply(after);
-        } else if (detail::execute_arm_exception_return(opcode, after, system) ||
-                   detail::execute_arm_status(opcode, after) || system.execute(opcode, after)) {
-          apply(after);
-        } else {
-          executor->execute(pc, *instruction.semantics);
-          after = state();
-        }
+      Attempt attempt{.after = before, .opcode = {}, .native = false};
+      ArmStep result;
+      try {
+        result = advance(pc, before, attempt);
+      } catch (const detail::MmuFault &fault) {
+        if (!execution.deliver_mmu_aborts || !fault.architectural()) { throw; }
+        result = handle_fault(pc, fault, before, attempt);
       }
       if (memory.getValue("TB") != 0) { throw std::runtime_error("Unsupported Thumb transition"); }
-      const auto next_pc = after.registers[program_counter_index];
+      const auto next_pc = attempt.after.registers[program_counter_index];
       if (!next_pc) { throw std::runtime_error("ARM produced an unknown program counter"); }
       result.after = *next_pc;
       bus.commit_instruction();
       system.commit_instruction();
-      banks = after.banks;
+      banks = attempt.after.banks;
       return result;
     } catch (const ghidra::LowlevelError &error) {
       executor->clear();

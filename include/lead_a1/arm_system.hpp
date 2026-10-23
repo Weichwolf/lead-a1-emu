@@ -17,6 +17,19 @@ struct ArmBufferedWrite {
   std::uint64_t value{};
 };
 
+struct ArmFaultStatus {
+  std::uint8_t status{};
+  std::optional<std::uint8_t> domain;
+  bool operator==(const ArmFaultStatus &) const = default;
+};
+
+struct ArmFaultRegisters {
+  std::optional<ArmFaultStatus> data;
+  std::optional<ArmFaultStatus> instruction;
+  std::optional<std::uint32_t> address;
+  bool operator==(const ArmFaultRegisters &) const = default;
+};
+
 // Explicit software-entry inputs, not a detected board or physical-reset claim.
 // TCM regions and cycle-level pipeline behavior remain outside this reference.
 struct ArmSystemInitial {
@@ -30,6 +43,7 @@ struct ArmSystemInitial {
   std::optional<std::vector<ArmBufferedWrite>> write_buffer;
   bool writeback_buffer_empty{};
   std::optional<ArmMmuInitial> mmu;
+  ArmFaultRegisters faults{};
 };
 
 struct ArmSystemState {
@@ -50,6 +64,7 @@ struct ArmSystemState {
   std::uint64_t write_buffer_drains{};
   ArmMmuState mmu;
   ArmDataState data;
+  ArmFaultRegisters faults{};
   bool operator==(const ArmSystemState &) const = default;
 };
 

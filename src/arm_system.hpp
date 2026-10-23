@@ -23,6 +23,7 @@ public:
   [[nodiscard]] ArmSystemState state() const { return state_; }
 
   [[nodiscard]] std::uint32_t exception_vector_base() const;
+  void latch_fault(const MmuFault &fault);
 
   void begin_instruction(std::uint32_t cpsr);
   void commit_instruction();

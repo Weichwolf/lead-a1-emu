@@ -27,6 +27,7 @@ struct MmuRequest {
   std::uint32_t control{};
   bool user{};
   bool retain{true};
+  bool architectural{true};
 };
 
 struct MmuTranslation {
@@ -47,9 +48,18 @@ public:
 
   [[nodiscard]] std::optional<std::uint8_t> domain() const { return domain_; }
 
+  [[nodiscard]] std::uint32_t modified_address() const { return modified_; }
+
+  [[nodiscard]] AccessKind kind() const { return kind_; }
+
+  [[nodiscard]] bool architectural() const { return architectural_; }
+
 private:
   std::uint8_t status_;
   std::optional<std::uint8_t> domain_;
+  std::uint32_t modified_;
+  AccessKind kind_;
+  bool architectural_;
 };
 
 class ArmMmu {
