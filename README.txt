@@ -5,18 +5,22 @@ audio, and reproducible firmware-development tests. The native GTK4 UI presents
 current parameter values in a table for slots A-D. The complete acceptance scope
 is in doc/objective.txt; actual evidence and missing work are in doc/coverage.txt.
 
-Current state: bounded outer/image parsing and native safe LZO decoding, verified local reference
-preparation, strict C++ build gates and a working snapshot viewer. No CPU/DSP
-core, original firmware boot, parameter-state producer, MIDI or audio runtime is
-implemented yet. The UI starts with unknown values and waits for snapshots.
+Current state: native ARM-state reference execution, bounded original ARM0
+software entry, image parsing and safe LZO decoding, verified references, strict
+build gates and a working snapshot viewer. Complete CPU/board boot, DSP, MIDI,
+audio and a parameter-state producer remain pending. The UI starts with unknown
+values and waits for snapshots. See doc/arm-reference.txt.
 
 Build and checks (Linux, regular user)
 Requires LLVM 19 (clang++, clang-tidy, clang-format, sanitizer runtimes),
-llvm-nm/readelf 19, CMake >= 3.25, Ninja and Python >= 3.11. GTK viewer additionally requires Debian
+llvm-nm/readelf/mc/objcopy 19, CMake >= 3.25, Ninja, patch and Python >= 3.11.
+Ghidra 12.1.2 native sources and ARM5_le.sla are required: set GHIDRA_ROOT to an
+existing distribution or prepare the pinned native subset below. No Java runtime
+is used. GTK viewer additionally requires Debian
 packages python3-gi and gir1.2-gtk-4.0. GUI checks use xvfb and dbus-run-session.
 No dependencies are downloaded during configure, build or tests.
 
-  python3 tools/dependencies.py --fetch
+  python3 tools/dependencies.py --fetch --ghidra
   cmake --preset strict
   cmake --build --preset strict
   cmake --build build/strict --target quality

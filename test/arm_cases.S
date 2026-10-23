@@ -1,0 +1,52 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Owned instruction expectations, not extracted firmware. */
+.syntax unified
+.cpu arm926ej-s
+.arm
+.text
+
+/* Offset 0: overflow, little-endian RAM, condition codes and branch. */
+mvn r0, #0x80000000
+adds r1, r0, #1
+mov r2, #0x100
+str r1, [r2]
+ldr r3, [r2]
+cmp r3, r1
+moveq r4, #9
+movne r5, #12
+b 1f
+mov r6, #7
+1: mov r7, #11
+
+.balign 256
+/* Known incomplete status semantics must fail before changing state. */
+mrs r0, cpsr
+
+.balign 256
+/* Unknown operand register. */
+ldr r0, [r1]
+
+.balign 256
+/* Second word is unknown: earlier register effects must roll back. */
+ldmia r1!, {r0, r2}
+
+.balign 256
+/* Unknown second source register: earlier staged RAM write must roll back. */
+stmia r1!, {r0, r2}
+
+.balign 256
+/* An unsupported system operation must fail visibly. */
+mcr p15, 0, r0, c7, c7, 0
+
+.balign 256
+/* Decoder must observe changed RAM at the next instruction. */
+mov r0, #1
+mov r0, #2
+
+.balign 256
+/* Fetch checking must not require bytes after this isolated instruction. */
+mov r0, #13
+
+.balign 256
+/* Interworking: even target stays ARM; odd target must fail before committing. */
+bx r0

@@ -12,6 +12,10 @@
   context. Distinguish observations, hypotheses and hardware-verified behavior.
 - Separate CPU/DSP cores, board/scheduler, host MIDI/audio and UI. Future audio
   callbacks must not allocate or throw. Run as a regular user.
+- SIMD acceleration and multiple host cores are optional design choices; the
+  user explicitly delegated those choices, not mandatory acceptance criteria.
+  Choose from measured guest workloads. Preserve exact arithmetic and causal
+  emulated ordering; validate accelerated/concurrent paths against a reference.
 - The UI is a native parameter table with current values for slots A-D. Values
   must come from observed firmware state. Unknown, missing and stale values must
   remain explicit; do not display guessed defaults as current values. MIDI CC

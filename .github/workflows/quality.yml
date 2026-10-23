@@ -11,12 +11,12 @@ jobs:
       - name: Install native development prerequisites
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends git ca-certificates cmake ninja-build clang-19 clang-tidy-19 clang-format-19 llvm-19 libclang-rt-19-dev python3 python3-gi gir1.2-gtk-4.0 xvfb xauth dbus-x11
+          apt-get install -y --no-install-recommends git ca-certificates cmake ninja-build patch clang-19 clang-tidy-19 clang-format-19 llvm-19 libclang-rt-19-dev python3 python3-gi gir1.2-gtk-4.0 xvfb xauth dbus-x11
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Prepare pinned native dependency sources
-        run: python3 tools/dependencies.py --fetch
+        run: python3 tools/dependencies.py --fetch --ghidra
       - name: Configure, build and check (offline, synthetic inputs)
         run: |
           cmake --preset strict

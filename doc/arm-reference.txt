@@ -1,0 +1,45 @@
+ARM-state native reference execution
+
+Native SLEIGH from pinned Ghidra 12.1.2 executes ARM5_le semantics. No JVM is
+used. reference/ghidra.json pins the release and all consumed files. SLEIGH and
+its static zlib dependency receive native sanitizers/hardening. Adapted public
+executor infrastructure and the byte-memory patch are credited in THIRD_PARTY.txt.
+
+Each step decodes/commits one instruction without fetching the next. Lookahead
+is side-effect-free; executed bytes must be known/executable. RAM code changes
+invalidate translations. Registers/temporaries are unknown until provided or
+written. Caller-supplied CPSR flags synchronize individual flag storage. Explicit
+RAM mappings distinguish unknown from loaded/written bytes. Access errors give
+operation, address, width and PC. Failed instructions roll back register and
+staged RAM writes. Peripheral side effects/interrupt delivery are not implemented.
+
+Evidence
+- Owned assembly tests: overflow/comparison flags, conditions, little-endian
+  loads/stores, PC/branches, even BX, RAM mutation, isolated final instruction.
+- Odd BX is rejected before commit because Thumb is pending. Unknown operands
+  and partial LDM/STM failures preserve prior registers/RAM.
+- Both unchanged original ARM0 entries execute two instructions and transfer to
+  CODE. The fixture supplies only PC and CPSR 0xd3; other registers start unknown.
+  All six decoded section SHA-256 identities are checked before execution.
+
+Current frontier: processor-status transfers fail before execution when their
+condition passes. Upstream MRS CPSR omits control bits, immediate MSR does not
+synchronize all flags, and register banking needs an architectural adapter.
+Running those semantics unchanged would incorrectly advance startup. The fixture
+stops at the first CODE status operation with unchanged state. This is an
+implementation frontier, not successful boot or a firmware defect. CP15,
+interrupts, exceptions, unaligned data access, Thumb/Jazelle, board timing and
+complete core qualification remain pending. Unsupported intrinsics fail visibly.
+
+This is software-entry execution, not physical reset, ROM loading, MMU/cache
+qualification, DSP loading, audio or MIDI. Original instructions/disassembly and
+private reconstruction sources are not embedded in public tests.
+
+  python3 tools/dependencies.py --fetch --ghidra
+  cmake --preset strict
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R 'arm_instructions|reference_memory|original_images|native_build' --output-on-failure
+
+Original checks skip explicitly without local firmware. Owned instruction/RAM
+tests remain mandatory. Native checks audit actual compile commands, all three
+dependency archives' sanitizer hooks and executable PIE/RELRO/NX properties.

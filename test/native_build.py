@@ -21,20 +21,22 @@ def main():
     parser.add_argument("--nm", required=True)
     parser.add_argument("--readelf", required=True)
     parser.add_argument("--binary", required=True)
-    parser.add_argument("--native", required=True)
+    parser.add_argument("--native", action="append", required=True)
     args = parser.parse_args()
     commands = json.loads((args.build / "compile_commands.json").read_text())
     native_count = 0
     for entry in commands:
         flags = shlex.split(entry["command"])
-        native = Path(entry["file"]).name == "minilzo.c"
-        native_count += native
+        source = Path(entry["file"])
+        root = Path(__file__).resolve().parent.parent
+        owned = source.is_relative_to(root / "src") or source.is_relative_to(root / "test")
+        native_count += source.name == "minilzo.c"
         label = entry["file"]
         for flag in ("-fstack-protector-strong", "-fstack-clash-protection", "-Wformat=2",
                      "-Werror=format-security", "-D_FORTIFY_SOURCE=3"):
             require(flag in flags, f"Missing {flag}: {label}")
         require("-fPIC" in flags or "-fPIE" in flags, f"Missing PIC/PIE: {label}")
-        if not native:
+        if owned:
             require("-Werror" in flags and "-std=c++23" in flags, f"Missing project gates: {label}")
         sanitizers = {item for flag in flags if flag.startswith("-fsanitize=")
                       for item in flag.split("=", 1)[1].split(",")}
@@ -46,12 +48,14 @@ def main():
         else:
             require(not sanitizers, f"Unexpected release instrumentation: {label}")
     require(native_count == 1, "Native miniLZO was not built from source exactly once")
-    symbols = subprocess.check_output([args.nm, args.native], text=True)
-    if args.sanitizer == "address-undefined":
-        require("__asan_" in symbols and "__ubsan_" in symbols,
-                "Native dependency lacks ASan/UBSan object hooks")
-    elif args.sanitizer == "thread":
-        require("__tsan_" in symbols, "Native dependency lacks TSan object hooks")
+    require(len(args.native) == 3, "Expected native miniLZO, zlib and SLEIGH archives")
+    for archive in args.native:
+        symbols = subprocess.check_output([args.nm, archive], text=True)
+        if args.sanitizer == "address-undefined":
+            require("__asan_" in symbols and "__ubsan_" in symbols,
+                    f"Native dependency lacks ASan/UBSan object hooks: {archive}")
+        elif args.sanitizer == "thread":
+            require("__tsan_" in symbols, f"Native dependency lacks TSan object hooks: {archive}")
     elf = subprocess.check_output([args.readelf, "--file-header", "--program-headers",
                                    "--dynamic", args.binary], text=True)
     require("Type:                              DYN" in elf and "PIE" in elf, "Non-PIE executable")

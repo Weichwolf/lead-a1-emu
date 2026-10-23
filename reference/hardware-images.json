@@ -1,0 +1,26 @@
+{
+  "retrieved": "2026-10-23",
+  "source": "User-supplied AMS-60261 retailer photo URLs, with original-resolution variants. Photographs remain local references; no redistribution.",
+  "files": [
+    {
+      "url": "https://cdn11.bigcommerce.com/s-pdowf1mync/images/stencil/1280x1280/products/389627/116176/AMS-60261__22208.1642792843.jpg?c=2",
+      "bytes": 96100,
+      "sha256": "6c9b4fbbd7d126293bb415b6be6331c66fc1a68cf7040afa1bc9d3275c91b44c"
+    },
+    {
+      "url": "https://cdn11.bigcommerce.com/s-pdowf1mync/images/stencil/1280x1280/products/389627/116177/AMS-60261_2__02030.1642792846.jpg?c=2",
+      "bytes": 129264,
+      "sha256": "59893f7d9cf089230506f6279d7559c706e5ed5503f3bf78dc9dac9d15ed9c22"
+    },
+    {
+      "url": "https://cdn11.bigcommerce.com/s-pdowf1mync/images/stencil/original/products/389627/116176/AMS-60261__22208.1642792843.jpg?c=2",
+      "bytes": 2502434,
+      "sha256": "a941e7103d17130b4db0a65f09a7baf872ba656aed344cce9d666381e721add5"
+    },
+    {
+      "url": "https://cdn11.bigcommerce.com/s-pdowf1mync/images/stencil/original/products/389627/116177/AMS-60261_2__02030.1642792846.jpg?c=2",
+      "bytes": 3232551,
+      "sha256": "dbecec76b3ea4d59c833b11fa7b3b33a970c32230e47fda0dfcff6240bc569ae"
+    }
+  ]
+}

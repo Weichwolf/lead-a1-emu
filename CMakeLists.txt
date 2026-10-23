@@ -19,17 +19,43 @@ find_program(LEAD_A1_CLANG_TIDY NAMES clang-tidy-19 REQUIRED)
 find_program(LEAD_A1_CLANG_FORMAT NAMES clang-format-19 REQUIRED)
 find_program(LEAD_A1_LLVM_NM NAMES llvm-nm-19 REQUIRED)
 find_program(LEAD_A1_LLVM_READELF NAMES llvm-readelf-19 REQUIRED)
+find_program(LEAD_A1_LLVM_MC NAMES llvm-mc-19 REQUIRED)
+find_program(LEAD_A1_LLVM_OBJCOPY NAMES llvm-objcopy-19 REQUIRED)
 find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
 include(cmake/Dependencies.cmake)
+include(cmake/ArmCore.cmake)
 set(CMAKE_CXX_CLANG_TIDY "${LEAD_A1_CLANG_TIDY};--warnings-as-errors=*")
 
 add_library(lead_a1_core STATIC src/firmware.cpp src/image.cpp)
 target_include_directories(lead_a1_core PUBLIC include)
 target_link_libraries(lead_a1_core PUBLIC lead_a1_quality PRIVATE lead_a1_lzo)
+add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp)
+target_include_directories(lead_a1_arm PUBLIC include)
+target_link_libraries(lead_a1_arm PUBLIC lead_a1_quality PRIVATE lead_a1_sleigh)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cases.bin"
+    COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
+      --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/arm_cases.S"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cases.o"
+    COMMAND "${LEAD_A1_LLVM_OBJCOPY}" -O binary -j .text
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cases.o"
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cases.bin"
+    DEPENDS test/arm_cases.S VERBATIM)
+  add_custom_target(lead-a1-arm-cases DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cases.bin")
+  add_executable(lead-a1-arm-test test/arm_test.cpp)
+  target_link_libraries(lead-a1-arm-test PRIVATE lead_a1_arm)
+  add_dependencies(lead-a1-arm-test lead-a1-arm-cases)
+  add_test(NAME arm_instructions COMMAND lead-a1-arm-test
+    "${CMAKE_CURRENT_BINARY_DIR}/share/ARM5_le.sla"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cases.bin")
+  add_executable(lead-a1-memory-test test/memory_test.cpp)
+  target_link_libraries(lead-a1-memory-test PRIVATE lead_a1_arm)
+  add_test(NAME reference_memory COMMAND lead-a1-memory-test)
+  add_executable(lead-a1-original-arm-test test/original_arm_test.cpp)
+  target_link_libraries(lead-a1-original-arm-test PRIVATE lead_a1_arm)
   add_executable(lead-a1-firmware-test test/firmware_test.cpp)
   target_link_libraries(lead-a1-firmware-test PRIVATE lead_a1_core)
   add_test(NAME firmware_structure COMMAND lead-a1-firmware-test)
@@ -37,13 +63,15 @@ if(BUILD_TESTING)
   target_link_libraries(lead-a1-image-test PRIVATE lead_a1_core)
   add_test(NAME image_sections COMMAND lead-a1-image-test)
   add_test(NAME original_images COMMAND "${Python3_EXECUTABLE}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>)
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>
+    $<TARGET_FILE:lead-a1-original-arm-test> "${CMAKE_CURRENT_BINARY_DIR}/share/ARM5_le.sla")
   set_tests_properties(original_images PROPERTIES SKIP_RETURN_CODE 77)
   add_test(NAME native_build COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/test/native_build.py"
     --build "${CMAKE_CURRENT_BINARY_DIR}" --sanitizer "${LEAD_A1_SANITIZER}"
     --nm "${LEAD_A1_LLVM_NM}" --readelf "${LEAD_A1_LLVM_READELF}"
-    --binary $<TARGET_FILE:lead-a1-emu> --native $<TARGET_FILE:lead_a1_lzo>)
+    --binary $<TARGET_FILE:lead-a1-arm-test> --native $<TARGET_FILE:lead_a1_lzo>
+    --native $<TARGET_FILE:zlibstatic> --native $<TARGET_FILE:lead_a1_sleigh>)
   add_test(NAME bootstrap_python COMMAND "${Python3_EXECUTABLE}" -B -m unittest
     discover -s test -p "test_*.py" -v)
   set_tests_properties(bootstrap_python PROPERTIES
@@ -63,7 +91,8 @@ add_custom_target(format-check
 if(BUILD_TESTING)
   add_custom_target(quality
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
-    DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test VERBATIM)
+    DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
+      lead-a1-arm-test lead-a1-memory-test lead-a1-original-arm-test VERBATIM)
 endif()
 
 install(TARGETS lead-a1-emu RUNTIME DESTINATION bin)

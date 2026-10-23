@@ -8,7 +8,10 @@ The GTK directory watcher follows the same public project's directory identity
 and replacement-monitoring approach. The implementation is adapted for this
 project's versioned parameter snapshot contract.
 Source: https://github.com/Weichwolf/blofeld-emu
-No Blofeld firmware, CPU adapter, board model or manufacturer assets are copied.
+The one-instruction executor in src/arm.cpp adapts that public project's generic
+SLEIGH execution/ownership approach. patches/ghidra-byte-memory.patch retains its
+correction for byte-backed memory. No HCS12 semantics or board behavior is reused.
+No Blofeld firmware or manufacturer assets are copied.
 
 LZO 2.10 / miniLZO, Markus F. X. J. Oberhumer, GPL-2.0-or-later:
   https://www.oberhumer.com/opensource/lzo/
@@ -18,9 +21,21 @@ LZO 2.10 / miniLZO, Markus F. X. J. Oberhumer, GPL-2.0-or-later:
   checks. No system-library fallback. Corresponding native source must accompany
   redistributable binary packages as required by its license.
 
-Python and native GTK4/PyGObject are host runtime prerequisites, not vendored
-source. Preserve their upstream licenses when packaging them. No CPU/DSP/audio
-dependency is integrated yet; architecture and backend work remain partial.
+Native SLEIGH / ARM5 specification, Ghidra 12.1.2, NSA and contributors:
+  https://github.com/NationalSecurityAgency/ghidra
+  Apache-2.0; notice: LICENSES/Apache-2.0.txt.
+  reference/ghidra.json pins the release and consumed files. The byte-memory
+  patch applies only to build copies. Native exceptions are its error interface
+  and must stay outside future real-time audio callbacks. Retain corresponding
+  source and notices when redistributing binaries as required by its license.
+
+zlib 1.3.2, Jean-loup Gailly and Mark Adler:
+  https://zlib.net/ ; Zlib license in LICENSES/Zlib.txt.
+  Static SLEIGH dependency, pinned in doc/dependencies.json, built under native
+  sanitizers/hardening with no system-library fallback.
+
+Python and GTK4/PyGObject are host prerequisites, not vendored sources. Preserve
+their licenses when packaging them. No DSP/audio dependency is integrated yet.
 
 reference/1.36.json contains factual official download identities also recorded
 by the private lead-a1-src reconstruction project; it contains no program bytes.

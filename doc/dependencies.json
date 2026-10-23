@@ -8,5 +8,15 @@
     "directory": "lzo-2.10",
     "license": "GPL-2.0-or-later",
     "integration": "Static miniLZO safe LZO1X decompression; instrumented native source, no system-library fallback."
+  },
+  "zlib": {
+    "version": "1.3.2",
+    "file": "zlib-1.3.2.tar.gz",
+    "bytes": 1502830,
+    "sha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16",
+    "license": "Zlib",
+    "integration": "Static native dependency of SLEIGH; instrumented source, no system fallback.",
+    "url": "https://zlib.net/zlib-1.3.2.tar.gz",
+    "directory": "zlib-1.3.2"
   }
 }

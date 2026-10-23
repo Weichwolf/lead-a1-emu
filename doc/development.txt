@@ -26,7 +26,7 @@ First integration sequence
    qualify complete functions, ordinary host playback and hardware comparisons.
 
 Quality commands
-  python3 tools/dependencies.py --fetch
+  python3 tools/dependencies.py --fetch --ghidra
   cmake --preset strict
   cmake --build --preset strict
   cmake --build build/strict --target quality
@@ -38,6 +38,17 @@ reference identity checks skip explicitly if local originals are absent.
 GTK integration runs separately and requires GTK4 plus an isolated display.
 release retains strict checks; thread is for future separate concurrency testing.
 miniLZO is built from pinned upstream source for safe container decoding, with
-native sanitizers/hardening. CPU backend selection is pending ARM-state evidence
-review; no Blofeld CPU model has been imported. Future fuzz harnesses run only
+native sanitizers/hardening. Native SLEIGH executes an ARM-state reference
+fixture; banking/system/interrupt/board qualification remains pending. No Blofeld
+CPU model is imported. Future fuzz harnesses run only
 on explicit user request.
+
+Performance choices
+SSE4/AVX2/AVX-512 mapping and execution across multiple host cores are options delegated
+to implementation judgment, not additional user requirements. First identify
+actual DSP programs, numerical modes and communication boundaries. Profile
+guest workloads and a faithful reference before choosing SIMD/JIT or parallel
+workers. Preserve guest rounding/saturation/extended precision and causal
+emulated-time ordering; compare accelerated paths with the reference and use
+separate TSan once concurrent native code exists. Do not infer real-time
+performance from a vendor clock rating or a synthetic instruction benchmark.
