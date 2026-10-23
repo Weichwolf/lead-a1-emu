@@ -45,6 +45,11 @@ Architecture handoff: little-endian ARM-state instructions are established in
 SRAM/ARM0 and CODE startup. Several MMIO addresses support a TI DA8xx-family
 hypothesis; exact SoC, silicon/DSP identities, reset/vector/MMU setup and board
 timing remain unresolved. Physical reset is not established by a software entry.
+reference/ti-family.json pins official AM1808/AM1810 documentation matching the
+three observed RAM bases and the reconstructed EDMA3CC/McASP maps. That candidate
+has 16 KiB I/D caches, 8 KiB local RAM, a 64 KiB internal boot ROM and high reset
+vectors. Exact Nord part/package, ROM/loader inputs and software-entry state
+remain unresolved; candidate reset values do not replace explicit test inputs.
 Keep detailed instruction/address analysis in ignored doc/local/ and private
 coordination issues. Native ARM reference execution completes BSS initialization
 under explicit reference control/cache/buffer inputs (arm-reference.txt).

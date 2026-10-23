@@ -210,12 +210,20 @@ void capture_arm_banks(ArmState &state) {
 bool execute_arm_status(std::uint32_t opcode, ArmState &state) {
   constexpr std::uint32_t instruction_mask = 0x0fffffff;
   constexpr std::uint32_t nop = 0x01a00000;
-  if ((opcode & instruction_mask) == nop) {
-    static_cast<void>(condition_passes(opcode, state));
+  constexpr std::uint32_t copy_pc_to_lr = 0x01a0e00f;
+  const auto pc_operation = opcode & instruction_mask;
+  if (pc_operation == nop || pc_operation == copy_pc_to_lr) {
+    const bool executed = condition_passes(opcode, state);
     const auto pc = state.registers[pc_index];
-    if (!pc) { throw std::runtime_error("Unknown ARM NOP PC"); }
-    state.registers[pc_index] = static_cast<std::uint32_t>(
-        (static_cast<std::uint64_t>(*pc) + 4) & std::numeric_limits<std::uint32_t>::max());
+    if (!pc) { throw std::runtime_error("Unknown ARM PC-copy instruction address"); }
+    constexpr auto address_mask = std::numeric_limits<std::uint32_t>::max();
+    if (pc_operation == copy_pc_to_lr && executed) {
+      constexpr unsigned int lr_index = 14;
+      state.registers[lr_index] =
+          static_cast<std::uint32_t>((static_cast<std::uint64_t>(*pc) + 8) & address_mask);
+    }
+    state.registers[pc_index] =
+        static_cast<std::uint32_t>((static_cast<std::uint64_t>(*pc) + 4) & address_mask);
     return true;
   }
   const auto decoded = decode_status(opcode);

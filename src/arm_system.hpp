@@ -64,6 +64,9 @@ private:
   [[nodiscard]] std::size_t set_index(std::uint32_t address) const;
   [[nodiscard]] std::uint32_t fetch_instruction(std::uint32_t pc);
   [[nodiscard]] Fill fill(const MmuTranslation &translation);
+  [[nodiscard]] const Line &instruction_line(std::size_t slot) const;
+  void stage_instruction_line(std::size_t slot, const Line &value);
+  void invalidate_instruction_entry(const Transfer &transfer, std::uint32_t value);
   [[nodiscard]] MmuRequest request(MemoryAccess access, AccessKind kind) const;
   void write_control(std::uint32_t value, const ArmState &cpu);
   void verify_transition(std::uint32_t value, const ArmState &cpu);
@@ -79,7 +82,8 @@ private:
   ArmSystemState state_;
   ArmSystemState pending_;
   std::vector<Line> lines_;
-  std::optional<Fill> fill_;
+  std::array<Fill, 2> instruction_changes_{};
+  std::size_t instruction_changed_{};
   bool invalidate_instruction_{};
   bool active_{};
   bool user_{};

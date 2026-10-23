@@ -1,0 +1,47 @@
+{
+  "status": "Candidate-family corroboration, not exact physical SoC identification or reset/clock qualification",
+  "documents": [
+    {
+      "author": "Texas Instruments",
+      "title": "AM1808/AM1810 ARM Microprocessor Technical Reference Manual, SPRUH82C",
+      "url": "https://www.ti.com/lit/ug/spruh82c/spruh82c.pdf",
+      "bytes": 10393534,
+      "sha256": "296965370f924932f03213f32ade3ca2b1026a8dac0dab9a22c8e153194709ec",
+      "sections": "Chapter 2 ARM subsystem/caches/vectors; EDMA3CC and McASP register semantics"
+    },
+    {
+      "author": "Texas Instruments",
+      "title": "AM1808 ARM Microprocessor Data Manual, SPRS653E",
+      "url": "https://www.ti.com/lit/ds/symlink/am1808.pdf",
+      "bytes": 2167667,
+      "sha256": "84b0e0ea7a9e5530918e72d7182a159703dea76cf5258fb93896f4c8c5e0f131",
+      "sections": "3.1 memory map: EDMA3CC/McASP, on-chip RAM, DDR2/mDDR and ARM local ROM/RAM"
+    }
+  ],
+  "observations": {
+    "provenance": "Original mapping-constructor operands and private reconstruction cb96574 SRAM-services/CODE constructor evidence; register-map observations are not host emulator MMIO/IRQ qualification",
+    "ddr_base": "0xc0000000",
+    "shared_ram_base": "0x80000000",
+    "arm_local_ram_base": "0xffff0000",
+    "edma3cc_base": "0x01c00000",
+    "mcasp_instance_zero_base": "0x01d00000"
+  },
+  "candidate_facts": {
+    "core": "ARM926EJ-S",
+    "instruction_cache_bytes": 16384,
+    "data_cache_bytes": 16384,
+    "arm_local_ram_bytes": 8192,
+    "arm_internal_rom_bytes": 65536,
+    "arm_internal_rom_base": "0xfffd0000",
+    "reset_vector": "SPRUH82C section 2.4 documents VINITHI=1 and high vectors; this is a candidate-device reset fact, not proof of the Nord software-entry state",
+    "tcm": "SPRUH82C section 2.1 specifies no TCM memory/interface"
+  },
+  "unresolved": [
+    "Exact Nord SoC/package and silicon revision",
+    "Board wiring, clocks and reset-to-software-entry path",
+    "Boot ROM/loader input and execution requirements",
+    "Inherited TLB/control/cache/write-buffer state",
+    "Original clear descriptor bit 4 and reserved control-bit writes"
+  ],
+  "use": "Analysis-only primary reference; no manufacturer PDF or private source is redistributed or used as a build input"
+}

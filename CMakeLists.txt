@@ -36,6 +36,18 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cache-call.bin"
+    COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
+      --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/arm_cache_call.S"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cache-call.o"
+    COMMAND "${LEAD_A1_LLVM_OBJCOPY}" -O binary -j .text
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cache-call.o"
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cache-call.bin"
+    DEPENDS test/arm_cache_call.S VERBATIM)
+  add_custom_target(lead-a1-arm-cache-call DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cache-call.bin")
+  add_executable(lead-a1-original-cache-test test/original_cache_test.cpp)
+  target_link_libraries(lead-a1-original-cache-test PRIVATE lead_a1_arm)
+  add_dependencies(lead-a1-original-cache-test lead-a1-arm-cache-call)
   add_executable(lead-a1-arm-data-test test/arm_data_test.cpp)
   target_include_directories(lead-a1-arm-data-test PRIVATE src)
   target_link_libraries(lead-a1-arm-data-test PRIVATE lead_a1_arm)
@@ -117,7 +129,8 @@ if(BUILD_TESTING)
   add_test(NAME image_sections COMMAND lead-a1-image-test)
   add_test(NAME original_images COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>
-    $<TARGET_FILE:lead-a1-original-arm-test> "${CMAKE_CURRENT_BINARY_DIR}/share/ARM5_le.sla")
+    $<TARGET_FILE:lead-a1-original-arm-test> "${CMAKE_CURRENT_BINARY_DIR}/share/ARM5_le.sla"
+    $<TARGET_FILE:lead-a1-original-cache-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cache-call.bin")
   set_tests_properties(original_images PROPERTIES SKIP_RETURN_CODE 77)
   add_test(NAME native_build COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/test/native_build.py"
@@ -147,7 +160,7 @@ if(BUILD_TESTING)
     DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
       lead-a1-memory-test lead-a1-original-arm-test lead-a1-mmu-walk-test
-      lead-a1-mmu-cpu-test lead-a1-arm-data-test VERBATIM)
+      lead-a1-mmu-cpu-test lead-a1-arm-data-test lead-a1-original-cache-test VERBATIM)
 endif()
 
 install(TARGETS lead-a1-emu RUNTIME DESTINATION bin)

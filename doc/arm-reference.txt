@@ -58,6 +58,13 @@ execution-state changes, invalid modes, PC status operands/destinations, excepti
 returns and user-bank block transfers stop without committing side effects.
 Independent expectations follow the ARM references in arm-architecture.json.
 
+The adapter also handles canonical NOP and MOV LR,PC. The latter copies PC+8
+with 32-bit wrap, advances PC by four and preserves flags; an untaken condition
+preserves unknown LR. This avoids SLEIGH's special MOV LR,PC constructor reading
+an unused shift-carry temporary before any earlier instruction initialized it.
+Owned tests start directly on the instruction across all NZCV combinations and
+at the address-space end. Unrelated registers remain unknown.
+
 Owned assembly covers every bank, User/System aliasing and privilege, immediate
 rotations, Q flag set/clear, masked/conditional writes, incomplete saved state
 and invalid forms. Literal truth masks check all 15 ARM conditions over all 16
@@ -101,6 +108,16 @@ inputs, SBO/reserved fields, protected stale lines, deterministic eviction and
 the all-locked fallback have independent expectations. Conflicting sets with
 multiple eligible ways fail unchanged. These are bounded reference semantics,
 not hardware cache qualification.
+
+I-cache single-line invalidation accepts MVA and Set/Way c7 forms, including
+when I-cache is disabled. It checks word/SBZ/index bits and uses already modified
+addresses without translation/PID adjustment. A two-entry instruction journal
+commits a new fetch line together with invalidation of another line; invalidating
+the just-fetched line discards that fill. Misses do not fetch the operand address.
+Whole invalidation still discards every line. Instruction linefill requests start
+at the critical word and wrap; full known-line commit has no early restart/timing
+claim. Owned programs cover stale opcodes, current/new/other lines, nonzero sets,
+unknown/invalid inputs, conditional skips and rollback. Prefetch is pending.
 
 MMU reference
 ArmMmuInitial supplies known or explicitly unknown TTBR, domain access, FCSE PID,

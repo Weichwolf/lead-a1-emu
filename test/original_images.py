@@ -29,10 +29,12 @@ def main():
                 if (len(data) != section["decoded_bytes"]
                         or hashlib.sha256(data).hexdigest() != section["decoded_sha256"]):
                     raise ValueError(f"Decoded section identity mismatch: {name}")
-        if len(sys.argv) == 4:
+        if len(sys.argv) >= 4:
             for part in specs["parts"]:
                 subprocess.run([sys.argv[2], sys.argv[3], directory, str(part["index"])],
                                check=True)
+        if len(sys.argv) == 6:
+            subprocess.run([sys.argv[4], sys.argv[3], directory, sys.argv[5]], check=True)
     print("All six native decoded sections match independent pinned hashes")
     return 0
 

@@ -123,3 +123,54 @@ cmp r9, #0
 bne locked_third_line
 bx r7
 .balign 32
+
+.balign 256
+/* 25: invalidate the current instruction line by MVA. */
+mov r0, #1
+mcr p15, 0, r1, c7, c5, 1
+mov r2, #2
+.balign 256
+/* 26: skipped entry maintenance must not inspect an unknown operand. */
+mov r0, #1
+mcreq p15, 0, r1, c7, c5, 1
+mov r2, #2
+.balign 256
+/* 27: invalidate the line filled by this very instruction, by Set/Way. */
+mcr p15, 0, r1, c7, c5, 2
+mov r2, #2
+.balign 256
+/* 28/29: a fetched new line and an invalidated old line commit together. */
+mov r0, #1
+bx r8
+.balign 256
+mcr p15, 0, r1, c7, c5, 1
+mov r2, #2
+bx r9
+.balign 256
+/* 30/31: reject nonzero word/SBZ and unused index bits. */
+mcr p15, 0, r1, c7, c5, 1
+.balign 256
+mcr p15, 0, r1, c7, c5, 2
+.balign 256
+/* 32: entry invalidation with an unresolved operand. */
+mcr p15, 0, r1, c7, c5, 1
+.balign 256
+/* 33: a maintenance miss must not fetch an unmapped target. */
+mcr p15, 0, r1, c7, c5, 1
+mov r2, #2
+.balign 256
+/* 34: nonzero Set field, retaining a different set. */
+mov r0, #1
+bx r8
+.balign 32
+mov r2, #2
+mcr p15, 0, r1, c7, c5, 2
+mov r3, #3
+.balign 32
+
+.balign 256
+/* 35/36: a first PC-to-LR copy must not depend on decoder scratch history. */
+mov lr, pc
+.balign 256
+moveq lr, pc
+.balign 32

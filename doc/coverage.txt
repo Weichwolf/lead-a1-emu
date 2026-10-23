@@ -7,6 +7,8 @@ ID  State    Evidence / remaining work
              English manual pinned in reference/manual.json. ARM-state startup
              evidence received; exact SoC/DSP, roles, board/clock identity and
              required factory/storage inputs remain unresolved (firmware-format.txt).
+             Candidate TI AM18xx primary documentation is pinned and corroborates
+             observed RAM/peripheral bases; exact SoC/loader state is unproven.
 2   partial  Native SLEIGH ARM-state reference, explicit known/unknown RAM and
              instruction rollback. Independent arithmetic/condition/load/store/
              BX/mutation/status/bank tests pass, including all ARM conditions and
@@ -20,6 +22,8 @@ ID  State    Evidence / remaining work
              have independent tests. Functional D-cache/write-through/write-back,
              half-line dirty state, buffered stores, physical table-read coherence
              and c7 MVA/Set-Way maintenance have owned CPU and literal tests.
+             I-cache entry invalidation/journaling and critical-word-first requests
+             pass; MOV LR,PC flags/conditional/wrap/unknown-register tests pass.
              Hardware buffer packing/bus retirement timing, cache test-and-clean,
              abort delivery/fault-register latching, nonidentity MMU
              transitions, hardware TLB replacement, TCM, exception return,
@@ -37,6 +41,9 @@ ID  State    Evidence / remaining work
              original high vectors and every MMU table/pool word match
              independent expectations. Descriptor bit-4 and inherited TLB/V
              constraints remain explicit (arm-reference.txt).
+             Separately, both original indexed cache sweeps issue all 512 expected
+             operands in 2578 instructions and drain two dirty half-lines through
+             original helpers with owned MMU/caller inputs (arm-data.txt).
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.

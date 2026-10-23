@@ -98,12 +98,12 @@ void ArmSystem::begin_instruction(std::uint32_t cpsr) {
   data_user_ = user_;
   data_.begin_instruction();
   mmu_.begin_instruction();
-  fill_.reset();
+  instruction_changed_ = 0;
   invalidate_instruction_ = false;
 }
 
 void ArmSystem::abort_instruction() {
-  fill_.reset();
+  instruction_changed_ = 0;
   mmu_.abort_instruction();
   data_.abort_instruction();
   active_ = false;
@@ -113,21 +113,46 @@ void ArmSystem::commit_instruction() {
   if (!active_) { throw std::logic_error("No ARM system instruction to commit"); }
   if (invalidate_instruction_) {
     for (auto &line : lines_) { line.valid = false; }
-  } else if (fill_) {
-    lines_[fill_->slot] = fill_->line;
+  }
+  for (std::size_t index = 0; index < instruction_changed_; ++index) {
+    const auto &change = instruction_changes_[index];
+    lines_[change.slot] = change.line;
   }
   mmu_.commit_instruction();
   data_.commit_instruction();
   summarize_data(pending_);
   pending_.mmu = mmu_.state();
   state_ = pending_;
-  fill_.reset();
+  instruction_changed_ = 0;
   active_ = false;
 }
 
 std::size_t ArmSystem::set_index(std::uint32_t address) const {
   if (lines_.empty()) { throw std::runtime_error("Unknown ARM instruction cache geometry"); }
   return (address / line_bytes) % (lines_.size() / ways);
+}
+
+const ArmSystem::Line &ArmSystem::instruction_line(std::size_t slot) const {
+  for (std::size_t index = 0; index < instruction_changed_; ++index) {
+    if (instruction_changes_[index].slot == slot) { return instruction_changes_[index].line; }
+  }
+  static constexpr Line invalid;
+  return invalidate_instruction_ ? invalid : lines_.at(slot);
+}
+
+void ArmSystem::stage_instruction_line(std::size_t slot, const Line &value) {
+  pending_.cached_lines -= static_cast<std::size_t>(instruction_line(slot).valid);
+  pending_.cached_lines += static_cast<std::size_t>(value.valid);
+  for (std::size_t index = 0; index < instruction_changed_; ++index) {
+    if (instruction_changes_[index].slot == slot) {
+      instruction_changes_[index].line = value;
+      return;
+    }
+  }
+  if (instruction_changed_ == instruction_changes_.size()) {
+    throw std::runtime_error("ARM instruction-cache transaction journal exhausted");
+  }
+  instruction_changes_[instruction_changed_++] = {.slot = slot, .line = value};
 }
 
 void ArmSystem::validate_lockdown(std::uint32_t value) {
@@ -154,7 +179,7 @@ std::size_t ArmSystem::allocation_slot(std::size_t set) const {
   for (std::size_t way = 0; way < ways; ++way) {
     if ((available & (std::uint32_t{1} << way)) == 0) { continue; }
     last_slot = (set * ways) + way;
-    if (!lines_[last_slot].valid) { return last_slot; }
+    if (!instruction_line(last_slot).valid) { return last_slot; }
   }
   if (std::has_single_bit(available)) { return last_slot; }
   if ((control() & round_robin) == 0) {
@@ -169,7 +194,9 @@ ArmSystem::Fill ArmSystem::fill(const MmuTranslation &translation) {
   const auto physical = translation.physical.address & ~offset_mask;
   const auto slot = allocation_slot(set_index(address));
   Fill result{.slot = slot, .line = {.address = address, .bytes = {}, .valid = true}};
-  for (std::size_t offset = 0; offset < line_bytes; offset += word_bytes) {
+  const auto critical = translation.physical.address & offset_mask;
+  for (std::size_t progress = 0; progress < line_bytes; progress += word_bytes) {
+    const auto offset = (critical + progress) & offset_mask;
     const auto word = data_.physical_read(
         {.address = physical + static_cast<std::uint32_t>(offset), .size = word_bytes},
         AccessKind::fetch);
@@ -212,22 +239,21 @@ std::uint32_t ArmSystem::fetch_instruction(std::uint32_t pc) {
   const auto set = set_index(address);
   const Line *selected = nullptr;
   for (auto slot = set * ways; slot < (set + 1) * ways; ++slot) {
-    if (lines_[slot].valid && lines_[slot].address == address) {
-      selected = &lines_[slot];
+    const auto &line = instruction_line(slot);
+    if (line.valid && line.address == address) {
+      selected = &line;
       break;
     }
   }
   if (selected != nullptr) {
     ++pending_.instruction_hits;
   } else {
-    fill_ = fill(translation);
-    selected = &fill_->line;
+    const auto fetched = fill(translation);
+    const auto evicted = instruction_line(fetched.slot).valid;
+    stage_instruction_line(fetched.slot, fetched.line);
+    selected = &instruction_line(fetched.slot);
     ++pending_.instruction_misses;
-    if (lines_[fill_->slot].valid) {
-      ++pending_.instruction_evictions;
-    } else {
-      ++pending_.cached_lines;
-    }
+    if (evicted) { ++pending_.instruction_evictions; }
   }
   std::uint32_t word{};
   const auto offset = pc & offset_mask;
@@ -330,11 +356,16 @@ void ArmSystem::maintenance(const Transfer &transfer, std::uint32_t value) {
     if (value != 0) { throw std::runtime_error("ARM cache operation requires a zero operand"); }
     if (transfer.crm != 6) {
       invalidate_instruction_ = true;
+      instruction_changed_ = 0;
       pending_.instruction_cache_known = true;
       pending_.cached_lines = 0;
       ++pending_.instruction_invalidations;
     }
     if (transfer.crm != 5) { data_.invalidate_all(); }
+    return;
+  }
+  if (transfer.crm == 5 && (transfer.selector == 1 || transfer.selector == 2)) {
+    invalidate_instruction_entry(transfer, value);
     return;
   }
   constexpr unsigned int drain_crm = 10;
@@ -348,6 +379,39 @@ void ArmSystem::maintenance(const Transfer &transfer, std::uint32_t value) {
     return;
   }
   throw std::runtime_error("Unsupported ARM cache operation");
+}
+
+void ArmSystem::invalidate_instruction_entry(const Transfer &transfer, std::uint32_t value) {
+  if (!pending_.instruction_cache_known) {
+    throw std::runtime_error("Unknown ARM instruction cache validity for invalidation");
+  }
+  constexpr std::uint32_t offset_mask = line_bytes - 1;
+  if ((value & offset_mask) != 0) {
+    throw std::runtime_error("Invalid ARM instruction-cache maintenance word/SBZ bits");
+  }
+  if (transfer.selector == 1) {
+    const auto set = set_index(value);
+    for (auto slot = set * ways; slot < (set + 1) * ways; ++slot) {
+      const auto &line = instruction_line(slot);
+      if (line.valid && line.address == value) {
+        stage_instruction_line(slot, {});
+        break;
+      }
+    }
+  } else {
+    static_cast<void>(set_index(0));
+    const auto sets = lines_.size() / ways;
+    const auto index_mask = static_cast<std::uint32_t>((sets - 1) * line_bytes);
+    constexpr std::uint32_t way_mask = 0xc0000000;
+    if ((value & ~(way_mask | index_mask)) != 0) {
+      throw std::runtime_error("Invalid ARM instruction-cache maintenance Set/Way bits");
+    }
+    constexpr unsigned int way_shift = 30;
+    const auto slot =
+        (static_cast<std::size_t>((value & index_mask) / line_bytes) * ways) + (value >> way_shift);
+    stage_instruction_line(slot, {});
+  }
+  ++pending_.instruction_invalidations;
 }
 
 std::string ArmSystem::diagnostic(const Transfer &transfer) {

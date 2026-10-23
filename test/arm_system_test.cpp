@@ -382,12 +382,183 @@ void locked_line_preservation(const std::filesystem::path &spec, std::span<const
   }
 }
 
+void instruction_entry_invalidation(const std::filesystem::path &spec,
+                                    std::span<const std::byte> bytes) {
+  constexpr std::uint32_t changed_r2 = 0xe3a02009;
+  constexpr unsigned int mva_case = 25;
+  constexpr unsigned int skipped_case = 26;
+  constexpr unsigned int index_case = 27;
+  for (const auto index : {mva_case, skipped_case, index_case}) {
+    lead_a1::Memory memory;
+    map_program(memory, bytes);
+    const auto base = code_base + (index * case_spacing);
+    auto state = initial(index);
+    if (index != skipped_case) { state.registers[1] = index == index_case ? 0 : base; }
+    auto system = profile();
+    system.control = control_cached;
+    lead_a1::Arm cpu(memory, spec, state, system);
+    steps(cpu, 1);
+    const auto offset = index == index_case ? 4U : 8U;
+    memory.write({.address = base + offset, .size = 4}, changed_r2);
+    if (index != index_case) { steps(cpu, 1); }
+    require(cpu.system_state().cached_lines == (index == skipped_case ? 1 : 0));
+    steps(cpu, 1);
+    require(cpu.state().registers[2] == (index == skipped_case ? 2 : 9));
+    require(cpu.state().cpsr == initial_cpsr);
+    require(cpu.system_state().instruction_invalidations == (index == skipped_case ? 0 : 1));
+  }
+}
+
+void instruction_entry_journal(const std::filesystem::path &spec,
+                               std::span<const std::byte> bytes) {
+  lead_a1::Memory memory;
+  map_program(memory, bytes);
+  constexpr unsigned int first_case = 28;
+  constexpr auto first = code_base + (first_case * case_spacing);
+  constexpr auto second = code_base + (29 * case_spacing);
+  auto state = initial(first_case);
+  state.registers[1] = first;
+  state.registers[8] = second;
+  state.registers[9] = first;
+  auto system = profile();
+  system.control = control_cached;
+  lead_a1::Arm cpu(memory, spec, state, system);
+  steps(cpu, 1);
+  constexpr std::uint32_t changed_r0 = 0xe3a00007;
+  memory.write({.address = first, .size = 4}, changed_r0);
+  steps(cpu, 2);
+  require(cpu.system_state().cached_lines == 1);
+  constexpr std::uint32_t changed_r2 = 0xe3a02009;
+  memory.write({.address = second + 4, .size = 4}, changed_r2);
+  steps(cpu, 3);
+  require(cpu.state().registers[0] == 7 && cpu.state().registers[2] == 2);
+  require(cpu.system_state().cached_lines == 2);
+  require(cpu.system_state().instruction_misses == 3 && cpu.system_state().instruction_hits == 3);
+  require(cpu.system_state().instruction_invalidations == 1);
+}
+
+void instruction_entry_inputs(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
+  lead_a1::Memory memory;
+  map_program(memory, bytes);
+  auto system = profile();
+  system.control = control_cached;
+  constexpr unsigned int word_case = 30;
+  constexpr unsigned int index_case = 31;
+  constexpr unsigned int missing_case = 32;
+  constexpr unsigned int miss_case = 33;
+  auto state = initial(word_case);
+  state.registers[1] = code_base + 4;
+  lead_a1::Arm word(memory, spec, state, system);
+  rejected(word, "word/SBZ");
+  state = initial(index_case);
+  state.registers[1] = 32;
+  lead_a1::Arm index(memory, spec, state, system);
+  rejected(index, "Set/Way");
+  lead_a1::Arm operand(memory, spec, initial(missing_case), system);
+  rejected(operand, "Unknown CP15 operand");
+  system.control = control_reset;
+  system.instruction_cache_invalid = false;
+  state = initial(missing_case);
+  state.registers[1] = code_base;
+  lead_a1::Arm validity(memory, spec, state, system);
+  rejected(validity, "cache validity");
+  system.instruction_cache_invalid = true;
+  system.instruction_cache_bytes.reset();
+  lead_a1::Arm geometry(memory, spec, state, system);
+  rejected(geometry, "cache geometry");
+  system = profile();
+  system.control = control_cached;
+  state = initial(miss_case);
+  constexpr std::uint32_t unmapped = 0xdeadbee0;
+  state.registers[1] = unmapped;
+  lead_a1::Arm miss(memory, spec, state, system);
+  steps(miss, 2);
+  require(miss.state().registers[2] == 2 && miss.system_state().cached_lines == 1);
+}
+
+void instruction_set_and_critical_word(const std::filesystem::path &spec,
+                                       std::span<const std::byte> bytes) {
+  lead_a1::Memory memory;
+  map_program(memory, bytes);
+  constexpr unsigned int set_case = 34;
+  constexpr auto base = code_base + (set_case * case_spacing);
+  auto state = initial(set_case);
+  state.registers[1] = 32;
+  state.registers[8] = base + 32;
+  auto system = profile();
+  system.control = control_cached;
+  system.instruction_cache_bytes = 256;
+  lead_a1::Arm cpu(memory, spec, state, system);
+  steps(cpu, 3);
+  constexpr std::uint32_t changed_r3 = 0xe3a03009;
+  constexpr std::uint32_t changed_offset = 40;
+  memory.write({.address = base + changed_offset, .size = 4}, changed_r3);
+  steps(cpu, 1);
+  require(cpu.system_state().cached_lines == 1);
+  steps(cpu, 1);
+  require(cpu.state().registers[3] == 9 && cpu.system_state().cached_lines == 2);
+  lead_a1::Memory unknown;
+  unknown.map({.address = code_base, .size = 32, .name = "owned unknown instruction line"});
+  state = initial(0);
+  constexpr unsigned int critical_offset = 20;
+  state.registers[pc_index] = code_base + critical_offset;
+  lead_a1::Arm critical(unknown, spec, state, system);
+  rejected(critical, "address=0x1014");
+}
+
+void pc_to_lr_copy(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
+  constexpr unsigned int always_case = 35;
+  constexpr unsigned int equal_case = 36;
+  constexpr unsigned int flags_shift = 28;
+  constexpr unsigned int lr_index = 14;
+  for (const auto index : {always_case, equal_case}) {
+    for (std::uint32_t flags = 0; flags < 16; ++flags) {
+      lead_a1::Memory memory;
+      map_program(memory, bytes);
+      auto state = initial(index);
+      state.cpsr |= flags << flags_shift;
+      lead_a1::Arm cpu(memory, spec, state);
+      steps(cpu, 1);
+      const auto after = cpu.state();
+      const auto pc = code_base + (index * case_spacing);
+      require(after.cpsr == state.cpsr && after.registers[pc_index] == pc + 4);
+      if (index == always_case || (flags & 4) != 0) {
+        require(after.registers[lr_index] == pc + 8);
+      } else {
+        require(!after.registers[lr_index]);
+      }
+      for (unsigned int reg = 0; reg < lr_index; ++reg) { require(!after.registers[reg]); }
+    }
+  }
+  for (const unsigned int offset : {8U, 12U}) {
+    lead_a1::Memory memory;
+    constexpr std::uint32_t end_base = 0xfffffff0;
+    const auto instruction = bytes.subspan(static_cast<std::size_t>(always_case) * case_spacing, 4);
+    memory.map(
+        {.address = end_base, .size = 16, .name = "owned wrapping PC copy"}, instruction, offset);
+    auto state = initial(0);
+    const auto pc = end_base + offset;
+    state.registers[pc_index] = pc;
+    lead_a1::Arm cpu(memory, spec, state);
+    steps(cpu, 1);
+    require(cpu.state().registers[lr_index] == (offset == 8 ? 0 : 4));
+    constexpr std::uint32_t last_word = 0xfffffffc;
+    require(cpu.state().registers[pc_index] == (offset == 8 ? last_word : 0));
+    require(cpu.state().cpsr == initial_cpsr);
+  }
+}
+
 }
 
 int main(int argc, char **argv) {
   if (argc != 3) { return 1; }
   try {
     const auto bytes = read_program(argv[2]);
+    instruction_entry_invalidation(argv[1], bytes);
+    instruction_entry_journal(argv[1], bytes);
+    instruction_entry_inputs(argv[1], bytes);
+    instruction_set_and_critical_word(argv[1], bytes);
+    pc_to_lr_copy(argv[1], bytes);
     startup(argv[1], bytes);
     stale_instructions(argv[1], bytes);
     unsupported(argv[1], bytes);

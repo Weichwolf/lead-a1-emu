@@ -32,8 +32,8 @@ invalidate by MVA or Set/Way. MVA operands are already modified addresses; no
 translation/PID is added. Word/SBZ and unused index bits are checked. Cleaning
 queues only dirty halves using the stored PA tag, clears dirty state and retains
 validity unless invalidation is requested. Invalidation discards dirty cache
-data but preserves previously queued writes. Test-and-clean MRC, I-cache single
-entry operations/prefetch and WFI remain unsupported. No successful substitute
+data but preserves previously queued writes. Test-and-clean MRC, I-cache
+prefetch and WFI remain unsupported. No successful substitute
 for their unqualified scan/result flags is supplied.
 
 Buffers and ordering
@@ -71,3 +71,14 @@ Executed ARM programs check write-back visibility/maintenance, disable/re-enable
 retention and cached partial-STM rollback. Buffered page-table tests check both
 successful walks and failed-walk rollback, including the queued store's survival.
 Run through the normal strict build/quality target; originals remain optional.
+
+The optional original-images check also calls each image's unchanged indexed
+clean/invalidate sweep and drain helper through an owned ARM caller and valid
+owned MMU table. It supplies an empty 16 KiB cache/buffers, then loads/modifies two
+lines sharing a set in separate ways. Every one of 512 original Set/Way operands
+matches the expected order; the sweep takes 2578 instructions and the drain
+takes three. RAM visibility is checked between calls and after drain, including
+the remaining queued half-line. CODE and preserved registers remain unchanged.
+These are isolated original routines under explicit reference inputs. They do
+not execute the original MMU tables, infer hardware size from sweep geometry,
+resolve software-entry state, or establish reset/boot.
