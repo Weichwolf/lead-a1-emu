@@ -15,7 +15,7 @@
       "url": "https://www.ti.com/lit/ds/symlink/am1808.pdf",
       "bytes": 2167667,
       "sha256": "84b0e0ea7a9e5530918e72d7182a159703dea76cf5258fb93896f4c8c5e0f131",
-      "sections": "3.1 memory map: EDMA3CC/McASP, on-chip RAM, DDR2/mDDR and ARM local ROM/RAM"
+      "sections": "3.4, Table 3-2 memory map: EDMA3CC/McASP, on-chip RAM, DDR2/mDDR and ARM local ROM/RAM"
     }
   ],
   "observations": {
