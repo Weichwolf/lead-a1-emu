@@ -10,9 +10,11 @@ ID  State    Evidence / remaining work
 2   partial  Native SLEIGH ARM-state reference, explicit known/unknown RAM and
              instruction rollback. Independent arithmetic/condition/load/store/
              BX/mutation/status/bank tests pass, including all ARM conditions and
-             modes. Explicit ARM926 reference CP15 c1/c7 and transactional I-cache
+             modes. Explicit ARM926 reference CP15 c1/c7/c9 and transactional I-cache
              tests pass. Bounded PC/opcode translation cache agrees with the
              uncached path; PC-relative/indirect-call/eviction cases pass.
+             All lockdown masks, preserved locked lines and single-way eviction
+             checked. General random/round-robin replacement remains unresolved.
              MMU/TCM, other CP15 operations, exception return,
              interrupts, board and scheduler remain pending. No Blofeld behavior
              imported; reference inputs do not establish physical entry state.
@@ -22,7 +24,10 @@ ID  State    Evidence / remaining work
              With explicit caller markers and extended reference RAM, both
              original initializers clear BSS and reach CODE +0x298, preserving
              CODE/tail guard and checking the stack frame/flags. Unconfigured
-             CP15 stops unchanged at CODE +0x10. No cold boot or
+             CP15 stops unchanged at CODE +0x10. Part 1's additional single-way
+             cache-lockdown fixture reaches c2/MMU setup after 88521 runtime
+             steps; eight original high vectors match independent targets.
+             All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
 5   pending  No firmware audio, serial/DMA model, host audio or timing evidence.

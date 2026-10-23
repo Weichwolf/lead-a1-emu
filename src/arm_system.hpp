@@ -52,6 +52,11 @@ private:
 
   [[nodiscard]] std::uint32_t control() const;
   static void validate_control(std::uint32_t value);
+  static void validate_lockdown(std::uint32_t value);
+  [[nodiscard]] std::uint32_t allocation_mask() const;
+  [[nodiscard]] std::size_t allocation_slot(std::size_t set) const;
+  [[nodiscard]] std::uint32_t read_lockdown(const Transfer &transfer) const;
+  void write_lockdown(const Transfer &transfer, std::uint32_t value);
   [[nodiscard]] std::size_t set_index(std::uint32_t address) const;
   [[nodiscard]] std::uint32_t fetch_instruction(std::uint32_t pc);
   [[nodiscard]] Fill fill(std::uint32_t address);

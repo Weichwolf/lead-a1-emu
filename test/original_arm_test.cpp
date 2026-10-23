@@ -4,6 +4,7 @@
 #include "lead_a1/memory.hpp"
 
 #include <array>
+#include <charconv>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -11,10 +12,13 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -37,6 +41,11 @@ constexpr char guard_value = static_cast<char>(0xa5);
 constexpr std::array<std::uint32_t, 3> saved_register_values{0x33445566, 0x778899aa, 0xbbccddee};
 constexpr std::uint32_t preserved_r9 = 0x99aabbcc;
 constexpr std::uint32_t preserved_r10 = 0xaabbccdd;
+
+struct RuntimeProbe {
+  unsigned int limit{};
+  bool single_cache_way{};
+};
 
 std::vector<char> read_section(const std::filesystem::path &path) {
   std::ifstream stream(path, std::ios::binary | std::ios::ate);
@@ -166,8 +175,68 @@ void run_part(const std::filesystem::path &spec,
       << ": original ARM0/CODE entry executes status updates; CP15 frontier remains explicit\n";
 }
 
-void probe_runtime(lead_a1::Arm &cpu) {
-  constexpr unsigned int instruction_limit = 4096;
+unsigned int parse_probe_limit(std::string_view text) {
+  unsigned int result{};
+  const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result);
+  constexpr unsigned int maximum_instructions = 3000000;
+  if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size() || result == 0 ||
+      result > maximum_instructions) {
+    throw std::invalid_argument("Runtime probe limit must be an integer in 1..3000000");
+  }
+  return result;
+}
+
+void print_probe_state(const lead_a1::ArmState &state) {
+  for (std::size_t index = 0; index < state.registers.size(); ++index) {
+    std::cout << " r" << index << '=';
+    if (const auto value = state.registers[index]) {
+      std::cout << "0x" << std::hex << *value << std::dec;
+    } else {
+      std::cout << "unknown";
+    }
+  }
+  std::cout << " cpsr=0x" << std::hex << state.cpsr << std::dec << '\n' << std::flush;
+}
+
+void check_available_vectors(const lead_a1::Memory &memory) {
+  constexpr std::array<std::uint32_t, 8> targets{0xffff0020,
+                                                 0xffff0128,
+                                                 0xffff002c,
+                                                 0xffff0130,
+                                                 0xffff012c,
+                                                 0xffff0014,
+                                                 0xffff008c,
+                                                 0xffff0060};
+  constexpr unsigned int word_bytes = 4;
+  for (std::uint32_t offset = 0; offset < targets.size() * word_bytes; ++offset) {
+    if (!memory.peek(local_base + offset)) {
+      std::cout << "High-vector table not fully initialized at this checkpoint\n";
+      return;
+    }
+  }
+  for (std::size_t index = 0; index < targets.size(); ++index) {
+    const auto pc = local_base + static_cast<std::uint32_t>(index * word_bytes);
+    const auto word = static_cast<std::uint32_t>(memory.read({.address = pc, .size = word_bytes}));
+    constexpr std::uint32_t branch_opcode = 0xea000000;
+    constexpr std::uint32_t opcode_mask = 0xff000000;
+    require((word & opcode_mask) == branch_opcode);
+    constexpr std::uint32_t immediate_mask = 0x00ffffff;
+    const auto encoded = (word & immediate_mask) << 2;
+    constexpr std::uint32_t negative_displacement = 0x02000000;
+    constexpr std::uint32_t displacement_range = 0x04000000;
+    const auto displacement = (encoded & negative_displacement) == 0
+                                  ? static_cast<std::int64_t>(encoded)
+                                  : static_cast<std::int64_t>(encoded) - displacement_range;
+    const auto destination =
+        static_cast<std::uint64_t>(static_cast<std::int64_t>(pc) + 8 + displacement);
+    require((destination & std::numeric_limits<std::uint32_t>::max()) == targets[index]);
+  }
+  std::cout << "All eight original high vectors match independent branch targets\n";
+}
+
+void probe_runtime(lead_a1::Arm &cpu,
+                   const lead_a1::Memory &memory,
+                   unsigned int instruction_limit) {
   for (unsigned int index = 0; index < instruction_limit; ++index) {
     const auto before = cpu.state();
     const auto system = cpu.system_state();
@@ -177,11 +246,16 @@ void probe_runtime(lead_a1::Arm &cpu) {
                 << std::dec << '\n';
     } catch (const std::runtime_error &error) {
       require(cpu.state() == before && cpu.system_state() == system);
-      std::cout << "Runtime probe stopped: " << error.what() << '\n' << std::flush;
+      std::cout << "Runtime probe stopped after " << index
+                << " committed instructions: " << error.what() << '\n';
+      print_probe_state(before);
+      check_available_vectors(memory);
       return;
     }
   }
   std::cout << "Runtime probe instruction budget reached; no boot claim\n" << std::flush;
+  print_probe_state(cpu.state());
+  check_available_vectors(memory);
 }
 
 void check_saved_frame(const lead_a1::Memory &memory,
@@ -202,7 +276,7 @@ void check_saved_frame(const lead_a1::Memory &memory,
 void configured_startup(const std::filesystem::path &spec,
                         unsigned int part,
                         const std::filesystem::path &directory,
-                        bool probe) {
+                        const RuntimeProbe &probe) {
   lead_a1::Memory memory;
   const auto code = map_reference_ram(memory, part, directory);
   lead_a1::ArmState initial;
@@ -211,11 +285,18 @@ void configured_startup(const std::filesystem::path &spec,
   // Explicit reference inputs, not a claim about the physical software-entry state.
   constexpr std::uint32_t reference_control = 0x50078;
   constexpr std::size_t reference_icache_bytes = std::size_t{16} * 1024;
-  const lead_a1::ArmSystemInitial system{.control = reference_control,
-                                         .instruction_cache_bytes = reference_icache_bytes,
-                                         .instruction_cache_invalid = false,
-                                         .data_cache_invalid = false,
-                                         .write_buffer = std::vector<lead_a1::ArmBufferedWrite>{}};
+  constexpr std::uint32_t all_ways_available = 0xfff0;
+  constexpr std::uint32_t way_zero_available = 0xfffe;
+  const lead_a1::ArmSystemInitial system{
+      .control = reference_control,
+      .instruction_cache_bytes = reference_icache_bytes,
+      .instruction_cache_invalid = false,
+      .data_cache_invalid = false,
+      .instruction_lockdown = probe.single_cache_way ? way_zero_available : all_ways_available,
+      .data_lockdown = all_ways_available,
+      .write_buffer = std::vector<lead_a1::ArmBufferedWrite>{}};
+  std::cout << "Explicit reference I-cache lockdown=0x" << std::hex << *system.instruction_lockdown
+            << std::dec << '\n';
   lead_a1::Arm cpu(memory, spec, initial, system);
   constexpr std::uint32_t memory_initializer = code_base + 0x158;
   constexpr unsigned int instruction_limit = 256;
@@ -271,21 +352,25 @@ void configured_startup(const std::filesystem::path &spec,
   std::cout << "Part " << part << ": original BSS clearing preserves CODE and tail guard; " << total
             << " instructions reach CODE+0x298\n"
             << std::flush;
-  if (probe) { probe_runtime(concrete); }
+  if (probe.limit != 0) { probe_runtime(concrete, memory, probe.limit); }
 }
 
 }
 
 int main(int argc, char **argv) {
-  if (argc != 4 && argc != 5) { return 1; }
+  if (argc < 4 || argc > 7) { return 1; }
   const std::string selection = argv[3];
   if (selection != "0" && selection != "1") { return 1; }
   const auto part = selection == "0" ? 0U : 1U;
-  const bool probe = argc == 5;
+  const bool probe = argc >= 5;
   if (probe && std::string(argv[4]) != "--probe-runtime") { return 1; }
   try {
+    constexpr unsigned int default_probe_limit = 4096;
+    RuntimeProbe options{.limit = 0, .single_cache_way = argc == 7};
+    if (probe) { options.limit = argc >= 6 ? parse_probe_limit(argv[5]) : default_probe_limit; }
+    if (options.single_cache_way && std::string(argv[6]) != "--single-cache-way") { return 1; }
     run_part(argv[1], part, argv[2]);
-    configured_startup(argv[1], part, argv[2], probe);
+    configured_startup(argv[1], part, argv[2], options);
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

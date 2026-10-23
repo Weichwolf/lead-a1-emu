@@ -67,12 +67,13 @@ unknown operands.
 
 Bounded ARM926 system reference
 This flat-memory profile assumes disabled MMU and TCM regions.
-An optional explicit system profile adds CP15 control c1 and whole I/D-cache
-invalidation plus write-buffer drain through c7. The ARM926 TRM is pinned in
+An optional explicit system profile adds CP15 control c1, I/D cache-lockdown
+registers c9, whole I/D-cache invalidation and write-buffer drain through c7.
+The ARM926 TRM is pinned in
 arm-architecture.json. Control SBO bits are 0x00050078; V and B depend on reset
 inputs and the actual software-entry state is not established. No profile means
 executed CP15 access fails, preserving the earlier flat instruction reference.
-Unknown supplied control, cache validity/geometry or write-buffer contents fail
+Unknown supplied control, cache validity/geometry/lockdown or write-buffer contents fail
 when needed. Conditional CP15 operations do not inspect untaken operands.
 
 Enabled instruction fetch uses 32-byte, four-way cache lines. Guest data writes
@@ -82,20 +83,28 @@ regardless of C, as documented by the TRM. Supplied pending buffer writes drain
 through the real memory transaction; partial failures roll back CPU, RAM and
 system state. Cache fills/invalidation/counters also commit only on success.
 The profile deliberately supplies cache size; it does not fabricate a CPU/cache
-ID. Replacing a valid line stops until random/round-robin internal replacement
-state is qualified. MMU, TCM, big endian, legacy PC loads, WFI and other CP15
+ID. Each c9 L bit prevents allocation into its way, preserving hits on existing
+lines. Writes do not invalidate lines. If exactly one way is available, linefills
+and eviction are deterministic; all four L bits set selects way 3 as documented.
+With multiple available ways, replacing a valid line still stops until random/
+round-robin internal replacement state is qualified. MMU, TCM, big endian,
+legacy PC loads, WFI and other CP15
 operations remain unsupported. Exception delivery and cycle timing are pending.
 
 Owned assembly verifies stale instructions, Harvard data visibility, invalidation,
 disable/re-enable retention, control masks/privilege, NZCV reads to PC, unknown
 fetch inputs, incomplete lines, conditional skips and transactional buffer faults.
-Conflicting cache sets fail unchanged rather than using invented replacement
-state. These are bounded reference semantics, not hardware cache qualification.
+All sixteen lockdown masks are tested. Separate I/D read-modify-write, unknown
+inputs, SBO/reserved fields, protected stale lines, deterministic eviction and
+the all-locked fallback have independent expectations. Conflicting sets with
+multiple eligible ways fail unchanged. These are bounded reference semantics,
+not hardware cache qualification.
 
 Current original checkpoint
 Without a system profile, both originals stop unchanged at CODE +0x10 with a
 complete CP15 diagnostic. With explicit reference inputs (control 0x00050078,
-16 KiB instruction cache, initially unresolved cache validity and known-empty
+16 KiB instruction cache, c9 I/D=0xfff0 (all ways available), initially unresolved
+cache validity and known-empty
 write buffer), both unchanged ARM0/CODE paths reach CODE +0x158 after 46 guest
 instructions. Original invalidation resolves cache validity before enabling it.
 All six banked stack tops and System mode with IRQ/FIQ masked match independent
@@ -133,7 +142,20 @@ dependency archives' sanitizer hooks and executable PIE/RELRO/NX properties.
 With verified extracted images, an optional bounded continuation probe writes
 its raw trace only to ignored local storage (part 0 is the longer BSS test):
 
-  build/strict/lead-a1-original-arm-test build/strict/share/ARM5_le.sla doc/local/images 1 --probe-runtime >doc/local/arm-runtime.log 2>&1
+  build/strict/lead-a1-original-arm-test build/strict/share/ARM5_le.sla doc/local/images 1 --probe-runtime 250000 >doc/local/arm-runtime.log 2>&1
 
-The probe stops visibly on an unsupported operation or its instruction budget;
-it is diagnostic evidence, not an additional boot acceptance result.
+The optional numeric budget is 1..3000000; default 4096. A stop reports committed
+steps, registers and CPSR. With all ways available, part 1 stops after 42838
+additional steps at 0xc005b24c on unresolved random cache replacement.
+
+An additional --single-cache-way argument supplies entry I-lockdown=0xfffe,
+restricting allocation to way 0. This is a documented ARM926 mode selected as a
+separate software-entry experiment; it does not establish the physical loader's
+cache state. It retains the same firmware, RAM sizes, c1 and caller inputs.
+Part 1 reaches the MMU setup after 88521 additional steps: CP15 c2 write at
+0xc002e148, operand r0=0xc00a0000. That operation is unsupported and preserves
+CPU/system state. All eight guest-generated high vectors match the independently
+reconstructed ARM0 handler targets. Raw disassembly/traces stay ignored locally.
+
+The probe stops visibly on an unsupported operation or its instruction budget.
+Its checkpoints do not establish physical reset, complete boot or device equivalence.

@@ -22,6 +22,8 @@ struct ArmSystemInitial {
   std::optional<std::size_t> instruction_cache_bytes;
   bool instruction_cache_invalid{};
   bool data_cache_invalid{};
+  std::optional<std::uint32_t> instruction_lockdown;
+  std::optional<std::uint32_t> data_lockdown;
   std::optional<std::vector<ArmBufferedWrite>> write_buffer;
 };
 
@@ -30,11 +32,14 @@ struct ArmSystemState {
   std::optional<std::uint32_t> control;
   bool instruction_cache_known{};
   bool data_cache_invalid{};
+  std::optional<std::uint32_t> instruction_lockdown;
+  std::optional<std::uint32_t> data_lockdown;
   bool write_buffer_known{};
   std::size_t cached_lines{};
   std::size_t buffered_writes{};
   std::uint64_t instruction_hits{};
   std::uint64_t instruction_misses{};
+  std::uint64_t instruction_evictions{};
   std::uint64_t instruction_invalidations{};
   std::uint64_t data_invalidations{};
   std::uint64_t write_buffer_drains{};

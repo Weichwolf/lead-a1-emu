@@ -76,3 +76,50 @@ next14: b next15
 next15: mov r0, #15
 b next11
 .balign 32
+
+.balign 256
+/* 16: distinct I/D lockdown registers, changed through read-modify-write. */
+mrc p15, 0, r0, c9, c0, 1
+mrc p15, 0, r1, c9, c0, 0
+orr r0, r0, #1
+mcr p15, 0, r0, c9, c0, 1
+mrc p15, 0, r2, c9, c0, 1
+orr r1, r1, #2
+mcr p15, 0, r1, c9, c0, 0
+mrc p15, 0, r3, c9, c0, 0
+
+.balign 256
+/* 17: invalid/unknown lockdown write operands. */
+mcr p15, 0, r0, c9, c0, 1
+
+.balign 256
+/* 18: TCM region control is a different c9 encoding, still unsupported. */
+mrc p15, 0, r0, c9, c1, 1
+
+.balign 256
+/* 19: unknown instruction lockdown read. */
+mrc p15, 0, r0, c9, c0, 1
+
+.balign 256
+/* 20: unknown data lockdown read. */
+mrc p15, 0, r0, c9, c0, 0
+
+.balign 256
+/* 21-24: changing allocation ways preserves existing locked cache lines. */
+mov r0, #1
+mcr p15, 0, r1, c9, c0, 1
+bx r2
+.balign 256
+mrc p15, 0, r3, c9, c0, 1
+bx r4
+.balign 256
+locked_third_line:
+mcr p15, 0, r5, c9, c0, 1
+bx r6
+.balign 256
+mov r0, #4
+sub r9, r9, #1
+cmp r9, #0
+bne locked_third_line
+bx r7
+.balign 32

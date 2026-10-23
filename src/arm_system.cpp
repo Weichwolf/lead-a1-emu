@@ -31,6 +31,8 @@ constexpr unsigned int pc_index = 15;
 constexpr unsigned int byte_bits = 8;
 constexpr unsigned int word_bytes = 4;
 constexpr std::uint32_t condition_flags = 0xf0000000;
+constexpr std::uint32_t lockdown_sbo = 0xfff0;
+constexpr std::uint32_t lockdown_reserved = 0xffff0000;
 
 }
 
@@ -50,6 +52,10 @@ ArmSystem::ArmSystem(Memory &memory, const std::optional<ArmSystemInitial> &init
   }
   state_.instruction_cache_known = initial->instruction_cache_invalid;
   state_.data_cache_invalid = initial->data_cache_invalid;
+  state_.instruction_lockdown = initial->instruction_lockdown;
+  state_.data_lockdown = initial->data_lockdown;
+  if (initial->instruction_lockdown) { validate_lockdown(*initial->instruction_lockdown); }
+  if (initial->data_lockdown) { validate_lockdown(*initial->data_lockdown); }
   if (initial->write_buffer) {
     constexpr std::size_t maximum_buffer_entries = 16;
     if (initial->write_buffer->size() > maximum_buffer_entries) {
@@ -113,18 +119,41 @@ std::size_t ArmSystem::set_index(std::uint32_t address) const {
   return (address / line_bytes) % (lines_.size() / ways);
 }
 
+void ArmSystem::validate_lockdown(std::uint32_t value) {
+  if ((value & lockdown_sbo) != lockdown_sbo || (value & lockdown_reserved) != 0) {
+    throw std::runtime_error("Invalid ARM cache lockdown SBO/reserved bits");
+  }
+}
+
+std::uint32_t ArmSystem::allocation_mask() const {
+  const auto value = pending_.instruction_lockdown;
+  if (!value) {
+    throw std::runtime_error("Unknown initial ARM instruction-cache lockdown register");
+  }
+  constexpr std::uint32_t way_mask = 15;
+  const auto available = ~*value & way_mask;
+  // ARM926 c9 explicitly uses way 3 when all four L bits are set.
+  constexpr std::uint32_t fallback_way = 8;
+  return available == 0 ? fallback_way : available;
+}
+
+std::size_t ArmSystem::allocation_slot(std::size_t set) const {
+  const auto available = allocation_mask();
+  std::size_t last_slot{};
+  for (std::size_t way = 0; way < ways; ++way) {
+    if ((available & (std::uint32_t{1} << way)) == 0) { continue; }
+    last_slot = (set * ways) + way;
+    if (!lines_[last_slot].valid) { return last_slot; }
+  }
+  if (std::has_single_bit(available)) { return last_slot; }
+  if ((control() & round_robin) == 0) {
+    throw std::runtime_error("Unknown ARM random cache replacement state");
+  }
+  throw std::runtime_error("Unqualified ARM round-robin cache replacement state");
+}
+
 ArmSystem::Fill ArmSystem::fill(std::uint32_t address) {
-  const auto set = set_index(address);
-  auto slot = set * ways;
-  for (; slot < (set + 1) * ways; ++slot) {
-    if (!lines_[slot].valid) { break; }
-  }
-  if (slot == (set + 1) * ways) {
-    if ((control() & round_robin) == 0) {
-      throw std::runtime_error("Unknown ARM random cache replacement state");
-    }
-    throw std::runtime_error("Unqualified ARM round-robin cache replacement state");
-  }
+  const auto slot = allocation_slot(set_index(address));
   Fill result{.slot = slot, .line = {.address = address, .bytes = {}, .valid = true}};
   for (std::size_t offset = 0; offset < line_bytes; offset += word_bytes) {
     const auto word =
@@ -175,7 +204,11 @@ std::uint32_t ArmSystem::fetch_instruction(std::uint32_t pc) {
     fill_ = fill(address);
     selected = &fill_->line;
     ++pending_.instruction_misses;
-    if (!lines_[fill_->slot].valid) { ++pending_.cached_lines; }
+    if (lines_[fill_->slot].valid) {
+      ++pending_.instruction_evictions;
+    } else {
+      ++pending_.cached_lines;
+    }
   }
   std::uint32_t word{};
   const auto offset = pc & offset_mask;
@@ -237,14 +270,38 @@ std::string ArmSystem::diagnostic(const Transfer &transfer) {
   return text.str();
 }
 
-void ArmSystem::read_register(const Transfer &transfer, ArmState &cpu) const {
-  if (transfer.crn != 1 || transfer.crm != 0 || transfer.selector != 0) {
-    throw std::runtime_error("Unsupported CP15 register read");
+std::uint32_t ArmSystem::read_lockdown(const Transfer &transfer) const {
+  if (transfer.crm != 0 || transfer.selector > 1) {
+    throw std::runtime_error("Unsupported CP15 cache-lockdown selector");
   }
-  if (transfer.reg == pc_index) {
-    cpu.cpsr = (cpu.cpsr & ~condition_flags) | (control() & condition_flags);
+  const auto value =
+      transfer.selector == 1 ? pending_.instruction_lockdown : pending_.data_lockdown;
+  if (!value) { throw std::runtime_error("Unknown initial ARM cache-lockdown register"); }
+  return *value;
+}
+
+void ArmSystem::write_lockdown(const Transfer &transfer, std::uint32_t value) {
+  if (transfer.crm != 0 || transfer.selector > 1) {
+    throw std::runtime_error("Unsupported CP15 cache-lockdown selector");
+  }
+  validate_lockdown(value);
+  if (transfer.selector == 1) {
+    pending_.instruction_lockdown = value;
   } else {
-    cpu.registers[transfer.reg] = control();
+    pending_.data_lockdown = value;
+  }
+}
+
+void ArmSystem::read_register(const Transfer &transfer, ArmState &cpu) const {
+  const auto value = [&] {
+    if (transfer.crn == 1 && transfer.crm == 0 && transfer.selector == 0) { return control(); }
+    if (transfer.crn == 9) { return read_lockdown(transfer); }
+    throw std::runtime_error("Unsupported CP15 register read");
+  }();
+  if (transfer.reg == pc_index) {
+    cpu.cpsr = (cpu.cpsr & ~condition_flags) | (value & condition_flags);
+  } else {
+    cpu.registers[transfer.reg] = value;
   }
 }
 
@@ -256,6 +313,8 @@ void ArmSystem::write_register(const Transfer &transfer, const ArmState &cpu) {
     write_control(*value);
   } else if (transfer.crn == 7) {
     maintenance(transfer, *value);
+  } else if (transfer.crn == 9) {
+    write_lockdown(transfer, *value);
   } else {
     throw std::runtime_error("Unsupported CP15 register write");
   }
