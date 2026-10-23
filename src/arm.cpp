@@ -4,6 +4,7 @@
 #include "lead_a1/arm.hpp"
 
 #include "address.hh"
+#include "arm_status.hpp"
 #include "emulate.hh"
 #include "error.hh"
 #include "globalcontext.hh"
@@ -61,7 +62,6 @@ constexpr std::array<const char *, 5> flag_names{"NG", "ZR", "CY", "OV", "Q"};
 constexpr std::array<unsigned int, 5> flag_bits{31, 30, 29, 28, 27};
 constexpr auto flags_mask = std::uint32_t{0xf8000000};
 constexpr unsigned int program_counter_index = 15;
-constexpr unsigned int condition_shift = 28;
 constexpr std::uint32_t thumb_jazelle_mask = 0x01000020;
 
 std::string fault_context(std::uint32_t pc, const std::string &reason) {
@@ -333,46 +333,6 @@ private:
   bool finished_{true};
 };
 
-bool condition_passes(std::uint32_t opcode, const ArmState &state) {
-  const auto cpsr = state.cpsr;
-  constexpr unsigned int negative_bit = 31;
-  constexpr unsigned int zero_bit = 30;
-  constexpr unsigned int carry_bit = 29;
-  constexpr unsigned int overflow_bit = 28;
-  const bool negative = ((cpsr >> negative_bit) & 1U) != 0;
-  const bool zero = ((cpsr >> zero_bit) & 1U) != 0;
-  const bool carry = ((cpsr >> carry_bit) & 1U) != 0;
-  const bool overflow = ((cpsr >> overflow_bit) & 1U) != 0;
-  const std::array<bool, 16> outcomes{zero,
-                                      !zero,
-                                      carry,
-                                      !carry,
-                                      negative,
-                                      !negative,
-                                      overflow,
-                                      !overflow,
-                                      carry && !zero,
-                                      !carry || zero,
-                                      negative == overflow,
-                                      negative != overflow,
-                                      !zero && negative == overflow,
-                                      zero || negative != overflow,
-                                      true,
-                                      true};
-  return outcomes[opcode >> condition_shift];
-}
-
-bool status_transfer(std::uint32_t opcode) {
-  constexpr std::uint32_t mrs_mask = 0x0fbf0fff;
-  constexpr std::uint32_t mrs_value = 0x010f0000;
-  constexpr std::uint32_t register_msr_mask = 0x0fb0fff0;
-  constexpr std::uint32_t register_msr_value = 0x0120f000;
-  constexpr std::uint32_t immediate_msr_mask = 0x0fb0f000;
-  constexpr std::uint32_t immediate_msr_value = 0x0320f000;
-  return (opcode & mrs_mask) == mrs_value || (opcode & register_msr_mask) == register_msr_value ||
-         (opcode & immediate_msr_mask) == immediate_msr_value;
-}
-
 }
 
 class Arm::Impl {
@@ -392,15 +352,22 @@ public:
     if (!initial.registers[program_counter_index] || (initial.cpsr & thumb_jazelle_mask) != 0) {
       throw std::invalid_argument("ARM-state reference requires a known PC and ARM-state CPSR");
     }
-    for (std::size_t index = 0; index < initial.registers.size(); ++index) {
-      const auto value = initial.registers[index];
+    static_cast<void>(detail::arm_bank_index(initial.cpsr));
+    apply(initial);
+  }
+
+  void apply(const ArmState &state) {
+    registers->bytes.clear();
+    for (std::size_t index = 0; index < state.registers.size(); ++index) {
+      const auto value = state.registers[index];
       if (value) { memory.setValue(register_names[index], *value); }
     }
-    memory.setValue("cpsr", initial.cpsr);
+    memory.setValue("cpsr", state.cpsr);
     for (std::size_t index = 0; index < flag_names.size(); ++index) {
-      memory.setValue(flag_names[index], (initial.cpsr >> flag_bits[index]) & 1U);
+      memory.setValue(flag_names[index], (state.cpsr >> flag_bits[index]) & 1U);
     }
     memory.setValue("TB", 0);
+    banks = state.banks;
   }
 
   ArmState state() const {
@@ -416,6 +383,8 @@ public:
       result.cpsr |= static_cast<std::uint32_t>(memory.getValue(flag_names[index]))
                      << flag_bits[index];
     }
+    result.banks = banks;
+    detail::capture_arm_banks(result);
     return result;
   }
 
@@ -430,10 +399,6 @@ public:
     }
     const auto opcode = static_cast<std::uint32_t>(
         bus.read({.address = pc, .size = instruction_bytes}, AccessKind::fetch));
-    if (status_transfer(opcode) && condition_passes(opcode, before)) {
-      throw std::runtime_error(
-          fault_context(pc, "Unsupported ARM processor-status transfer/banking"));
-    }
     auto saved_registers = registers->bytes;
     bus.begin_instruction();
     try {
@@ -444,24 +409,33 @@ public:
       Assembly assembly;
       const ghidra::Address address(translator.getDefaultCodeSpace(), pc);
       translator.printAssembly(assembly, address);
-      executor->execute(pc);
+      auto after = before;
+      if (detail::execute_arm_status(opcode, after)) {
+        apply(after);
+      } else {
+        executor->execute(pc);
+        after = state();
+      }
       if (memory.getValue("TB") != 0) { throw std::runtime_error("Unsupported Thumb transition"); }
-      const auto after = state();
       const auto next_pc = after.registers[program_counter_index];
       if (!next_pc) { throw std::runtime_error("ARM produced an unknown program counter"); }
       bus.commit_instruction();
+      banks = after.banks;
       return {.before = pc, .after = *next_pc, .assembly = std::move(assembly.text)};
     } catch (const ghidra::LowlevelError &error) {
       registers->bytes = std::move(saved_registers);
+      banks = before.banks;
       bus.abort_instruction();
       throw std::runtime_error(fault_context(pc, error.explain));
     } catch (const std::exception &error) {
       registers->bytes = std::move(saved_registers);
+      banks = before.banks;
       bus.abort_instruction();
       throw std::runtime_error(fault_context(pc, error.what()));
     }
   }
 
+  ArmBanks banks;
   Memory &bus;
   CodeImage image;
   ghidra::ContextInternal context;

@@ -1,0 +1,20 @@
+{
+  "author": "ARM Limited",
+  "use": "Independent ARMv5 status, bank and instruction expectations; manuals remain local references, never build inputs or redistributed assets.",
+  "documents": [
+    {
+      "title": "ARM Architecture Reference Manual, ARM DDI 0100E",
+      "url": "https://kib.kiev.ua/x86docs/ARM/ARMARMv5/DDI0100E.pdf",
+      "bytes": 13299945,
+      "sha256": "cab3e59387b14968a10b05098fe883bca70a6b3db53bcbcde5896afcd78ec87b",
+      "sections": "A2 processor modes/registers/status; A4 MRS/MSR and restrictions"
+    },
+    {
+      "title": "ARM Architecture Reference Manual, ARM DDI 0100I",
+      "url": "https://kib.kiev.ua/x86docs/ARM/ARMARMv5/DDI0100I.pdf",
+      "bytes": 5740865,
+      "sha256": "c441eb7f981f3beb5ad901716808cd54d86e9b41aa68b42a2ce9701831b0b7ea",
+      "sections": "Supplementary PSR fields and conditional-instruction review"
+    }
+  ]
+}

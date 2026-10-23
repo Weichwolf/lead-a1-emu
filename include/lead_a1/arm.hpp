@@ -12,9 +12,32 @@ namespace lead_a1 {
 
 class Memory;
 
+struct ArmSavedStatus {
+  std::uint32_t bits{};
+  std::uint32_t known_mask{};
+  bool operator==(const ArmSavedStatus &) const = default;
+};
+
+struct ArmExceptionBank {
+  std::optional<std::uint32_t> sp;
+  std::optional<std::uint32_t> lr;
+  ArmSavedStatus saved;
+  bool operator==(const ArmExceptionBank &) const = default;
+};
+
+struct ArmBanks {
+  // High registers: common r8-r12, then FIQ r8-r12.
+  std::array<std::array<std::optional<std::uint32_t>, 5>, 2> high;
+  // SP/LR: User+System, FIQ, IRQ, Supervisor, Abort, Undefined. No SPSR in bank 0.
+  std::array<ArmExceptionBank, 6> modes;
+  bool operator==(const ArmBanks &) const = default;
+};
+
 struct ArmState {
   std::array<std::optional<std::uint32_t>, 16> registers;
   std::uint32_t cpsr{};
+  ArmBanks banks;
+  bool operator==(const ArmState &) const = default;
 };
 
 struct ArmStep {

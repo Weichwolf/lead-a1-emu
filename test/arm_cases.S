@@ -19,7 +19,7 @@ mov r6, #7
 1: mov r7, #11
 
 .balign 256
-/* Known incomplete status semantics must fail before changing state. */
+/* Full CPSR read, including processor mode and interrupt masks. */
 mrs r0, cpsr
 
 .balign 256

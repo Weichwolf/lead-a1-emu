@@ -92,14 +92,14 @@ void arithmetic(const std::filesystem::path &spec, std::span<const std::byte> by
 void rollback(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
   lead_a1::Memory memory;
   map_program(memory, bytes);
-  for (const auto index : std::array{1U, 2U, 3U, 4U, 5U}) {
+  for (const auto index : std::array{2U, 3U, 4U, 5U}) {
     auto state = initial(index);
     state.registers[0] = 7;
     if (index == 3 || index == 4) { state.registers[1] = data_base; }
     if (index == 3) { memory.write({.address = data_base, .size = 4}, 11); }
     lead_a1::Arm cpu(memory, spec, state);
     constexpr std::array<const char *, 6> messages{
-        "", "processor-status", "uninitialized", "uninitialized", "uninitialized", "intrinsic"};
+        "", "", "uninitialized", "uninitialized", "uninitialized", "intrinsic"};
     const std::string message = messages[index];
     rejected([&cpu] { static_cast<void>(cpu.step()); }, message);
     require(cpu.state().registers == state.registers && cpu.state().cpsr == state.cpsr);

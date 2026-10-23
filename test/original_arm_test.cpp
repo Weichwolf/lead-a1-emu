@@ -23,6 +23,7 @@ constexpr std::uint32_t entry = 0xffff0020;
 constexpr std::uint32_t reference_cpsr = 0xd3;
 constexpr std::size_t maximum_section_bytes = std::size_t{16} * 1024 * 1024;
 constexpr unsigned int pc_index = 15;
+constexpr std::uint32_t maintenance_frontier_offset = 0x10;
 
 std::vector<char> read_section(const std::filesystem::path &path) {
   std::ifstream stream(path, std::ios::binary | std::ios::ate);
@@ -66,21 +67,26 @@ void run_part(const std::filesystem::path &spec,
   require(second.before == entry + 4 && second.after == code_base);
   require(cpu.state().cpsr == reference_cpsr);
   require(!cpu.state().registers[13]);
+  // Original MRS, mask update, MSR and operand initialization precede CP15.
+  for (unsigned int index = 0; index < 4; ++index) { static_cast<void>(cpu.step()); }
+  require(cpu.state().registers[0] == 0);
+  require(cpu.state().registers[pc_index] == code_base + maintenance_frontier_offset);
+  require(cpu.state().cpsr == reference_cpsr);
   const auto before = cpu.state();
   bool stopped = false;
   try {
     static_cast<void>(cpu.step());
   } catch (const std::runtime_error &error) {
     const std::string message = error.what();
-    require(message.find("pc=0xc0000000 width=4") != std::string::npos);
-    require(message.find("processor-status") != std::string::npos);
+    require(message.find("pc=0xc0000010 width=4") != std::string::npos);
+    require(message.find("coprocessor_moveto") != std::string::npos);
     stopped = true;
   }
   require(stopped);
-  require(cpu.state().registers == before.registers && cpu.state().cpsr == before.cpsr);
+  require(cpu.state() == before);
   std::cout
       << "Part " << part
-      << ": original ARM0 software entry reaches CODE; status/banking frontier remains explicit\n";
+      << ": original ARM0/CODE entry executes status updates; CP15 frontier remains explicit\n";
 }
 
 }

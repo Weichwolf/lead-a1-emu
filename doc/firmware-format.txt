@@ -46,5 +46,6 @@ SRAM/ARM0 and CODE startup. Several MMIO addresses support a TI DA8xx-family
 hypothesis; exact SoC, silicon/DSP identities, reset/vector/MMU setup and board
 timing remain unresolved. Physical reset is not established by a software entry.
 Keep detailed instruction/address analysis in ignored doc/local/ and private
-coordination issues. CPU backend selection/integration and parameter-state
-locations are still pending; no original execution or audio is claimed.
+coordination issues. Native ARM reference execution now reaches the first CP15 operation after
+software entry (arm-reference.txt). Complete board boot, parameter-state mapping
+and original audio remain pending.

@@ -22,14 +22,35 @@ Evidence
   CODE. The fixture supplies only PC and CPSR 0xd3; other registers start unknown.
   All six decoded section SHA-256 identities are checked before execution.
 
-Current frontier: processor-status transfers fail before execution when their
-condition passes. Upstream MRS CPSR omits control bits, immediate MSR does not
-synchronize all flags, and register banking needs an architectural adapter.
-Running those semantics unchanged would incorrectly advance startup. The fixture
-stops at the first CODE status operation with unchanged state. This is an
-implementation frontier, not successful boot or a firmware defect. CP15,
-interrupts, exceptions, unaligned data access, Thumb/Jazelle, board timing and
-complete core qualification remain pending. Unsupported intrinsics fail visibly.
+Status and bank adapter
+MRS/MSR execute through an owned ARMv5 architecture adapter. Current status
+reads include mode/interrupt bits; immediate and register writes synchronize
+N/Z/C/V/Q with native arithmetic and honor selected fields and privilege.
+All seven supported processor modes are validated. FIQ has separate r8-r12;
+User and System share SP/LR, while FIQ/IRQ/Supervisor/Abort/Undefined have their
+own SP/LR and SPSR. Unknown inactive registers remain unknown. ArmState banks
+are canonical snapshots; supplied active registers take precedence over duplicate
+active-bank fields at initialization. Partial SPSR writes retain bit knowledge;
+reading uninitialized implemented bits fails. Reserved status bits are modeled
+as zero and attempts to set them are rejected as unpredictable. Unsupported
+execution-state changes, invalid modes, PC status operands/destinations, exception
+returns and user-bank block transfers stop without committing side effects.
+Independent expectations follow the ARM references in arm-architecture.json.
+
+Owned assembly covers every bank, User/System aliasing and privilege, immediate
+rotations, Q flag set/clear, masked/conditional writes, incomplete saved state
+and invalid forms. Literal truth masks check all 15 ARM conditions over all 16
+N/Z/C/V combinations. Native ADC observes MSR-written carry. Complete state
+comparisons include bank contents on failures; conditional failures do not read
+unknown operands.
+
+Current original frontier
+Both unchanged ARM0 entries transfer to CODE, then execute its first four
+instructions: full status read, interrupt-mask update, control write and operand
+initialization. The next CP15 cache-maintenance operation stops visibly at CODE
++0x10 with unchanged state. Cache/system-control, interrupts, exception return,
+unaligned data access, Thumb/Jazelle, board timing and complete core qualification
+remain pending. No cache-maintenance operation is silently accepted.
 
 This is software-entry execution, not physical reset, ROM loading, MMU/cache
 qualification, DSP loading, audio or MIDI. Original instructions/disassembly and
@@ -38,7 +59,7 @@ private reconstruction sources are not embedded in public tests.
   python3 tools/dependencies.py --fetch --ghidra
   cmake --preset strict
   cmake --build --preset strict
-  ctest --test-dir build/strict -R 'arm_instructions|reference_memory|original_images|native_build' --output-on-failure
+  ctest --test-dir build/strict -R 'arm_status_banks|arm_instructions|reference_memory|original_images|native_build' --output-on-failure
 
 Original checks skip explicitly without local firmware. Owned instruction/RAM
 tests remain mandatory. Native checks audit actual compile commands, all three

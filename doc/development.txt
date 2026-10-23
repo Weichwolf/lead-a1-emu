@@ -39,7 +39,8 @@ GTK integration runs separately and requires GTK4 plus an isolated display.
 release retains strict checks; thread is for future separate concurrency testing.
 miniLZO is built from pinned upstream source for safe container decoding, with
 native sanitizers/hardening. Native SLEIGH executes an ARM-state reference
-fixture; banking/system/interrupt/board qualification remains pending. No Blofeld
+fixture with an owned status/bank adapter; system/interrupt/board qualification
+remains pending. No Blofeld
 CPU model is imported. Future fuzz harnesses run only
 on explicit user request.
 
