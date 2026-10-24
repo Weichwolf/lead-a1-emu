@@ -28,7 +28,8 @@ metadata. Post-rounded overflow returns signed infinity for nearest/even or
 the format's largest finite magnitude for toward-zero, with overflow metadata.
 These metadata describe numeric range outcomes, not ASTAT/STKY or a routed
 arithmetic interrupt. NAN/infinity inputs, bits above40 and invalid formats/
-rounding enums reject. The numeric engine is not a complete floating unit.
+rounding enums reject. The numeric engine is not a complete floating unit. Shared numeric results use
+SharcFloatResult; finite multiply is in sharc-floating-multiply.txt.
 
 Native integration
 
@@ -69,7 +70,8 @@ exact sums/differences, both signed zeros, denormal flush, halfway even/odd,
 above-half/toward-zero, input extension clearing, postround tiny and signed
 overflow bounds, including the largest-finite/half-ULP crossover. Native
 toward-zero retains the largest finite value without a postround overflow
-when the unrounded exact sum lies just beyond that value. Actual native words qualify both effective rounding controls,
+when the unrounded exact sum lies just beyond that value. Actual native words
+qualify both effective rounding controls,
 positive/negative flags and STKY preservation, unknown discarded versus required
 extension bits, all four per-PE condition combinations, in-place writes,
 alternate banks, pending MODE1 latency and whole-step fault rollback.
@@ -95,4 +97,6 @@ physical-silicon comparison. Literal vectors supplement the generated oracle.
 Remaining FPU scope includes exceptional native status/interrupts, NAN/infinity
 inputs, other ALU operations and conversions, multiplier/accumulators,
 multifunction, VISA, operand/pipeline hazards and full DSP application/audio.
+Bounded floating multiplication now has the separate sharc-floating-multiply.txt
+contract; full multiplier/accumulator coverage remains open.
 The loader's integer paths do not qualify floating synthesis or real-time speed.

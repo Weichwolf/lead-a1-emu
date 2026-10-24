@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Finite, deterministic SHARC add/sub expectations from exact rational values."""
+"""Finite, deterministic SHARC arithmetic expectations from exact rational values."""
 
 import itertools
 from fractions import Fraction
@@ -24,14 +24,23 @@ def operand(raw, narrow):
 
 def expected(left, right, narrow, truncate, subtract):
     value = operand(left, narrow) + (-1 if subtract else 1) * operand(right, narrow)
+    negative_zero = operand(left, narrow) == 0 and bool(left & (1 << 39)) and (
+        bool(right & (1 << 39)) != subtract
+    )
+    return rounded(value, narrow, truncate, negative_zero)
+
+
+def expected_product(left, right, narrow, truncate):
+    value = operand(left, narrow) * operand(right, narrow)
+    negative_zero = bool((left ^ right) & (1 << 39))
+    return rounded(value, narrow, truncate, negative_zero)
+
+
+def rounded(value, narrow, truncate, negative_zero):
     padding = 8 if narrow else 0
     precision = 24 if narrow else 32
     if not value:
-        # Only two effective negative zeros yield -zero under these modes.
-        negative = operand(left, narrow) == 0 and bool(left & (1 << 39)) and (
-            bool(right & (1 << 39)) != subtract
-        )
-        return (int(negative) << 39), 0
+        return int(negative_zero) << 39, 0
     negative = value < 0
     value = abs(value)
     exponent = value.numerator.bit_length() - value.denominator.bit_length()
@@ -66,21 +75,28 @@ def operands():
 
 
 def main():
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: sharc_float_oracle.py NATIVE_TEST")
+    multiply = len(sys.argv) == 3 and sys.argv[1] == "--multiply"
+    if len(sys.argv) != 2 and not multiply:
+        raise SystemExit("usage: sharc_float_oracle.py [--multiply] NATIVE_TEST")
     values = operands()
     count = 0
+    subtract_modes = (False,) if multiply else (False, True)
     with tempfile.TemporaryDirectory(prefix="lead-a1-float-oracle-") as directory:
         target = Path(directory) / "cases.txt"
         with target.open("w", encoding="ascii") as output:
-            for narrow, truncate, subtract in itertools.product((False, True), repeat=3):
+            for narrow, truncate, subtract in itertools.product((False, True), (False, True), subtract_modes):
                 for left, right in itertools.product(values, repeat=2):
-                    result, flags = expected(left, right, narrow, truncate, subtract)
+                    if multiply:
+                        result, flags = expected_product(left, right, narrow, truncate)
+                    else:
+                        result, flags = expected(left, right, narrow, truncate, subtract)
+                    suffix = "" if multiply else f" {int(subtract)}"
                     output.write(f"{left} {right} {result} {flags} "
-                                 f"{int(narrow)} {int(truncate)} {int(subtract)}\n")
+                                 f"{int(narrow)} {int(truncate)}{suffix}\n")
                     count += 1
-        subprocess.run([sys.argv[1], str(target)], check=True)
-    print(f"{count} exact Fraction expectations: both precisions/roundings, add/sub, "
+        subprocess.run([sys.argv[-1], str(target)], check=True)
+    operation = "multiply" if multiply else "add/sub"
+    print(f"{count} exact Fraction expectations: both precisions/roundings, {operation}, "
           "all signs, fixed exponent/fraction grid; no random inputs")
 
 

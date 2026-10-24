@@ -38,13 +38,18 @@ target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_loop.cpp src/sharc_fetch_lo
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_dag.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_dag.cpp src/sharc_fetch_operand.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_memory_view.cpp src/sharc_memory_bus.cpp src/sharc_spi_bus.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_float.cpp src/sharc_float_alu.cpp)
+target_sources(lead_a1_sharc PRIVATE src/sharc_float.cpp src/sharc_float_compute.cpp src/sharc_fetch_multiplier.cpp)
 target_include_directories(lead_a1_sharc PUBLIC include)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-float-multiply-test test/sharc_float_multiply_test.cpp)
+  target_link_libraries(lead-a1-sharc-float-multiply-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_floating_multiply COMMAND lead-a1-sharc-float-multiply-test)
+  add_test(NAME sharc_float_product_oracle COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/sharc_float_oracle.py" --multiply $<TARGET_FILE:lead-a1-sharc-float-multiply-test>)
   add_executable(lead-a1-sharc-float-test test/sharc_float_test.cpp)
   target_link_libraries(lead-a1-sharc-float-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_finite_floating_alu COMMAND lead-a1-sharc-float-test)
@@ -392,7 +397,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-quiet-clock-test
       lead-a1-sharc-fetch-loop-test
       lead-a1-sharc-dag-stall-test
-      lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test lead-a1-sharc-float-test
+      lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test lead-a1-sharc-float-test lead-a1-sharc-float-multiply-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
       lead-a1-memory-test lead-a1-original-arm-test lead-a1-mmu-walk-test
       lead-a1-mmu-cpu-test lead-a1-arm-data-test lead-a1-original-cache-test

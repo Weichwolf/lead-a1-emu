@@ -12,6 +12,7 @@ namespace lead_a1::detail {
 inline constexpr std::uint32_t sharc_fetch_controls = 0x80010;
 void sharc_fetch_validate(const SharcFetchState &state);
 void sharc_fetch_address(std::uint32_t address);
+void sharc_fetch_multiplier_guard(const SharcFetchState &state);
 void sharc_fetch_mode(const SharcFetchState &state, SharcKnown32 mode);
 [[nodiscard]] SharcFetchLookup
 sharc_fetch_lookup(SharcCacheState &cache, SharcKnown32 mode, std::uint32_t address);

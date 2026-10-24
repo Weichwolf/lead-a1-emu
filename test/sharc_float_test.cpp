@@ -18,8 +18,8 @@ namespace {
 
 using lead_a1::Sharc;
 using lead_a1::SharcFloatFormat;
+using lead_a1::SharcFloatResult;
 using lead_a1::SharcFloatRounding;
-using lead_a1::SharcFloatSum;
 using lead_a1::SharcKnown40;
 using lead_a1::SharcMemory;
 constexpr auto wide = SharcFloatFormat::extended40;
@@ -79,7 +79,7 @@ struct NumericCase {
   SharcFloatFormat format{wide};
   SharcFloatRounding rounding{nearest};
   bool subtract{};
-  SharcFloatSum expected;
+  SharcFloatResult expected;
 };
 
 constexpr std::array literals{
@@ -436,7 +436,7 @@ void rational_oracle(const char *path) {
          subtract_input) {
     const auto actual = lead_a1::sharc_float_add(
         left, right, short_input ? narrow : wide, toward_zero ? truncate : nearest, subtract_input);
-    const SharcFloatSum expected{
+    const SharcFloatResult expected{
         .value = value, .underflow = (flags & 1) != 0, .overflow = (flags & 2) != 0};
     if (actual != expected) {
       throw std::runtime_error("Exact Fraction mismatch case " + std::to_string(count) +

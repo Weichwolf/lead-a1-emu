@@ -225,10 +225,21 @@ ID  State    Evidence / remaining work
              signed zero, denormal flush, tiny/overflow and halfway boundaries
              against460800 exact rational cases. Native zero/exception status,
              NAN/infinity and arithmetic IRQs remain explicitly guarded;
-             multiplier, conversions and complete floating execution remain open
+             remaining multiplier/accumulators, conversions and full floating
+             execution remain open
              (sharc-floating-point.txt). Actual clocked floating accumulation
              and independently rebound mid-loop continuation have literal
              result/frame oracles; no application/audio performance follows.
+             Floating multiplier CU001/op30 now executes normal and genuine
+             positive-zero products with unit-specific MN/MV/MU/MI updates,
+             preserving ALU/AF/shifter/STKY state. The exact unsigned64 product
+             uses shared32/40-bit rounding and230400 independent Fraction
+             expectations. Negative-zero, nonzero range exceptions and NAN/Inf
+             remain guarded. Clocked loop doubling/checkpoint, MN-versus-AZ
+             branches, safe single-input forwarding and immediate-class checks
+             pass; possible adjacent dual-input forwarding rejects atomically
+             until its additional stall phase is qualified. Parallel transfers
+             retain old full40 inputs and rollback (sharc-floating-multiply.txt).
              Runtime SPI RX DMA has a completed-bootstrap handoff, finite
              four-word FIFO plus receive buffer, explicit grouped memory grants,
              signed cursor steps, zero-count65536 semantics and transactional
@@ -380,6 +391,9 @@ ID  State    Evidence / remaining work
              Finite floating add/sub has independent packed-bit literals and
              a460800-case fixed Fraction grid, plus native per-PE/rounding/
              mode-latency/known-bit and clocked loop continuation checks.
+             Floating multiply adds230400 exact Fraction cases, native unit-flag/
+             positive-zero/knowledge tests, actual loop and branch continuation,
+             conservative dual-forwarding guards and parallel-store rollback.
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

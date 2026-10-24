@@ -121,7 +121,8 @@ void lane(SharcState &state, std::uint64_t opcode, unsigned int element) {
   const auto operation = static_cast<unsigned int>((opcode >> operation_shift) & 0xff);
   constexpr unsigned int float_add = 0x81;
   constexpr unsigned int float_subtract = 0x82;
-  if (operation == float_add || operation == float_subtract) {
+  if (operation == float_add || operation == float_subtract ||
+      sharc_float_multiply_encoding(opcode)) {
     sharc_float_lane(state, opcode, element);
     return;
   }
@@ -169,7 +170,7 @@ void sharc_compute(SharcState &state, std::uint64_t opcode) {
     sharc_shift(state, opcode, false);
     return;
   }
-  if ((opcode & unit_mask) != 0) {
+  if ((opcode & unit_mask) != 0 && !sharc_float_multiply_encoding(opcode)) {
     throw std::runtime_error("SHARC multiplier/shifter/multifunction compute not implemented");
   }
   const auto condition = static_cast<unsigned int>((opcode >> 33) & 31);

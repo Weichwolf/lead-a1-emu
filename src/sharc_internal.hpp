@@ -58,6 +58,7 @@ void sharc_indexed_move(SharcMemory &memory,
 [[nodiscard]] SharcKnown40 &
 sharc_compute_register(SharcState &state, unsigned int reg, unsigned int element);
 void sharc_compute(SharcState &state, std::uint64_t opcode);
+[[nodiscard]] bool sharc_float_multiply_encoding(std::uint64_t opcode);
 void sharc_float_lane(SharcState &state, std::uint64_t opcode, unsigned int element);
 void sharc_shift(SharcState &state, std::uint64_t opcode, bool immediate);
 void sharc_shift_status(SharcState &state, SharcKnown32 flags, unsigned int element);

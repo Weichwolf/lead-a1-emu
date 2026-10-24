@@ -155,7 +155,10 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
     throw std::logic_error("SHARC cache fetch requires its idle bound memory");
   }
   validate_clock(state_, next_address, bus, sequenced);
-  if (sequenced) { detail::sharc_fetch_flow_guard(cpu.state_, state_); }
+  if (sequenced) {
+    detail::sharc_fetch_flow_guard(cpu.state_, state_);
+    detail::sharc_fetch_multiplier_guard(state_);
+  }
   const auto mode = cpu.state_.effective[4];
   detail::sharc_validate_cache(cpu.state_.cache);
   detail::sharc_fetch_mode(state_, mode);

@@ -1,0 +1,101 @@
+SHARC finite floating multiplication reference
+
+Primary evidence: Programming Reference rev2.4,3-13/14,3-21/Table3-7,
+3-37..39,4-111,11-57,12-1/6/Table12-6,A-5,A-18/19,C-1..3. Manuals remain
+local; provenance is in reference/sharc.json. No private implementation used.
+The add/sub contract remains in sharc-floating-point.txt.
+
+Numeric engine
+
+sharc_float_multiply accepts finite packed40 register operands. RND32 clears
+low8 input bits before the operation and selects24 significant output bits;
+extended mode retains32 significant bits. TRUNC selects toward-zero, otherwise
+nearest/even. Each unpacked significand has at most32 bits. Their exact
+unsigned64 product retains all64 possible bits before reduction with sticky
+information to the common rounding input. Product bit62 represents1.0;
+rounding-input bit34 represents1.0. An exponent sum minus bias127 and sign XOR
+supply the other fields. Only one final precision rounding is performed.
+
+The shared result type is named SharcFloatResult for both addition and product.
+Common control validation, finite unpacking and rounding remain independent
+of native instruction status. Signed zero products, denormal flush, postround
+tiny and overflow metadata are checked numerically. Denormal/zero operands
+produce signed zero without underflow; finite nonzero tiny products set the
+range metadata. Malformed high bits, formats, rounding and NAN/infinity inputs
+reject. No host floating arithmetic, environment, FMA, SIMD or wider integer
+dependency is required. This is not a complete IEEE/SHARC exceptional engine.
+
+Native multiplier
+
+Type2a CU001/op30 performs floating multiply. Other multiplier/multifunction
+operations remain guarded. The encoding classifier requires a compute-bearing
+instruction class; immediate data resembling compute bits does not become MUL.
+Native normal results establish all40 destination bits and update only
+MN/MV/MU/MI (ASTAT bits6..9). MN follows the normal result sign; MV/MU/MI clear.
+ALU flags including AF, CACC, shifter fields and every STKY bit/knowledge remain
+unchanged. Rounding, per-PE conditions, in-place capture, primary/secondary
+bank selection and pending MODE1 latency use the existing compute contracts.
+Inactive lanes do not read unknown inputs/controls. Missing required bits
+fail; narrow mode may discard unknown low8 input bits.
+
+Genuine positive-zero products also execute. PGR A-19 explicitly says zero/
+denormal operands never cause multiplier underflow. Positive zero is not
+negative, so MN/MV/MU/MI clear and no sticky event occurs. Negative-zero MN,
+nonzero underflow/overflow status/IRQ and NAN/infinity input outcomes remain
+explicitly guarded before native commit. ALU exact-zero AUS/AN questions from
+the add/sub contract are unchanged. Unknown X times zero is not simplified:
+X could be a NAN/infinity. A fault in a later lane or after parallel tentative
+stores rolls back the whole core/memory/controller instruction.
+
+Clocked transport limits
+
+The existing branch condition interlock now knows this multiplier's flag mask.
+An MN-dependent branch waits for its real multiplier producer; an AZ-dependent
+branch retains the earlier ALU zero flag without a false ALU dependency.
+The owned tests qualify these separate cases with actual captured branches.
+
+PGR3-14/4-111 requires one additional cycle when both multiplier operands are
+produced by the preceding ALU/multiplier instruction. The detailed partial-stall
+alignment and its composition with loops/cache/control are not yet qualified.
+The sequenced clock therefore rejects a Decode MUL when both operands may be
+written by its immediate Address predecessor. This includes the same register
+used twice. The conservative possible-write set includes compute, immediate/
+register/RAM/dual-load outputs; it is not a claim that all those producers incur
+the same hardware stall. Conditional/banked/parallel ambiguities also reject
+when that set conflicts. No fabricated cycle, bypass or guest NOP is installed.
+The failed clock retains the entire CPU/cache/fetch boundary for inspection.
+
+An explicit intervening guest NOP removes the demonstrated immediate-producer
+hazard. A single forwarded operand and unrelated producers do not require that
+guard. Functional execution still has instruction-order semantics and only a
+minimum-cycle lower bound; standalone owner-driven fetch is not a fully timed
+pipeline. Snapshots validate their existing typed resources, not absent prior
+history. Complete operand forwarding, pipeline arbitration and physical Nord
+timing remain required, not supplied by these references.
+
+Evidence and remaining scope
+
+sharc_floating_multiply uses independent literal normal/sign/zero/denormal,
+halfway even/odd, above-boundary precision, maximum-significand and signed
+range cases. Native cases check RND32/TRUNC, unit-specific status and unrelated
+flag knowledge, SISD/SIMD conditions and alternate banks, low8 knowledge,
+in-place MODE1 latency, positive-zero execution, negative-zero/range guards,
+unknown operands and whole-step rollback. Parallel register moves preserve
+old full40 sources and destination priority. The existing dual-move test now
+checks old inputs, DM load precedence, separate ALU/multiplier flags and
+post-store floating-fault rollback for both units.
+
+Actual sequenced execution qualifies a five-body doubling loop2/4/8/16/32,
+independently rebound mid-loop CPU/fetch/RAM continuation, MN versus AZ branch
+interlocks, adjacent dual-input rejection, safe one-input forwarding and a
+real intervening NOP. A real immediate whose payload contains MUL-like bits
+checks the class distinction. Failed forwarding clocks remain unchanged.
+
+sharc_float_product_oracle checks230400 fixed Fraction product expectations
+covering both precisions/roundings, signs and the existing exponent/fraction
+grid. It computes exact rational multiplication and quotient rounding rather
+than C++ product reduction. The460800 add/sub Fraction cases remain separately
+required. These owned deterministic grids are not fuzz, original floating DSP
+execution, hardware comparison or performance evidence. Complete fixed-point/
+MR accumulators, other floating and multifunction/VISA forms, operand-stall
+sequencing, exception status/IRQs, application/boot/audio remain incomplete.

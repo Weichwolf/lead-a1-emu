@@ -53,6 +53,8 @@ std::uint32_t compute_flags(std::uint64_t opcode) {
   if ((opcode & compute_mask) == 0) { return 0; }
   if ((opcode & unit_mask) == 0) { return alu_flags; }
   if ((opcode & unit_mask) == shifter) { return shift_flags; }
+  constexpr std::uint32_t multiply_flags = 0x3c0;
+  if (sharc_float_multiply_encoding(opcode)) { return multiply_flags; }
   throw std::runtime_error("SHARC multiplier/multifunction branch hazard not qualified");
 }
 

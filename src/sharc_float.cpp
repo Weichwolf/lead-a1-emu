@@ -24,6 +24,15 @@ struct Operand {
   bool negative{};
 };
 
+void validate_controls(SharcFloatFormat format, SharcFloatRounding rounding) {
+  if (format != SharcFloatFormat::binary32 && format != SharcFloatFormat::extended40) {
+    throw std::invalid_argument("Invalid SHARC floating precision");
+  }
+  if (rounding != SharcFloatRounding::nearest_even && rounding != SharcFloatRounding::toward_zero) {
+    throw std::invalid_argument("Invalid SHARC floating rounding");
+  }
+}
+
 Operand unpack(std::uint64_t value, SharcFloatFormat format) {
   if ((value & ~full) != 0) { throw std::invalid_argument("Invalid SHARC40 floating input bits"); }
   if (format == SharcFloatFormat::binary32) { value &= ~low_byte; }
@@ -44,7 +53,7 @@ std::uint64_t shift_jam(std::uint64_t value, unsigned int count) {
   return (value >> count) | (discarded == 0 ? 0U : 1U);
 }
 
-SharcFloatSum rounded(Operand sum, SharcFloatFormat format, SharcFloatRounding rounding) {
+SharcFloatResult rounded(Operand sum, SharcFloatFormat format, SharcFloatRounding rounding) {
   auto magnitude = sum.significand;
   auto exponent = sum.exponent;
   const auto signed_bit = sum.negative ? sign : 0;
@@ -85,17 +94,12 @@ SharcFloatSum rounded(Operand sum, SharcFloatFormat format, SharcFloatRounding r
 
 }
 
-SharcFloatSum sharc_float_add(std::uint64_t left,
-                              std::uint64_t right,
-                              SharcFloatFormat format,
-                              SharcFloatRounding rounding,
-                              bool subtract) {
-  if (format != SharcFloatFormat::binary32 && format != SharcFloatFormat::extended40) {
-    throw std::invalid_argument("Invalid SHARC floating precision");
-  }
-  if (rounding != SharcFloatRounding::nearest_even && rounding != SharcFloatRounding::toward_zero) {
-    throw std::invalid_argument("Invalid SHARC floating rounding");
-  }
+SharcFloatResult sharc_float_add(std::uint64_t left,
+                                 std::uint64_t right,
+                                 SharcFloatFormat format,
+                                 SharcFloatRounding rounding,
+                                 bool subtract) {
+  validate_controls(format, rounding);
   auto first = unpack(left, format);
   auto second = unpack(right, format);
   second.negative = second.negative != subtract;
@@ -115,6 +119,25 @@ SharcFloatSum sharc_float_add(std::uint64_t left,
   const bool negative = first.negative && (result != 0 || same_sign);
   return rounded(
       {.significand = result, .exponent = first.exponent, .negative = negative}, format, rounding);
+}
+
+SharcFloatResult sharc_float_multiply(std::uint64_t left,
+                                      std::uint64_t right,
+                                      SharcFloatFormat format,
+                                      SharcFloatRounding rounding) {
+  validate_controls(format, rounding);
+  const auto first = unpack(left, format);
+  const auto second = unpack(right, format);
+  // Each significand has at most32 bits, so its exact product fits unsigned64.
+  // Product bit62 represents1.0; bit34 is the common rounding input's1.0.
+  constexpr unsigned int product_shift = 28;
+  constexpr int bias = 127;
+  const auto product = first.significand * second.significand;
+  return rounded({.significand = shift_jam(product, product_shift),
+                  .exponent = first.exponent + second.exponent - bias,
+                  .negative = first.negative != second.negative},
+                 format,
+                 rounding);
 }
 
 }

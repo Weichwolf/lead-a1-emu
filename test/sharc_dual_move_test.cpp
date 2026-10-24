@@ -252,32 +252,42 @@ void late_compute_failure_and_peripheral_guard() {
   require(peripheral.state() == state && !memory.active());
 }
 
-void floating_old_inputs_and_load_priority() {
-  constexpr std::uint64_t float_add = 0x81312; // F3=old F1+old F2.
+struct FloatingTransferCase {
+  std::uint64_t compute{};
+  std::uint64_t result{};
+  bool conflict{};
+  bool multiply{};
+};
+
+void floating_transfer(FloatingTransferCase test) {
   constexpr std::uint64_t one = 0x3f80000000;
   constexpr std::uint64_t two = 0x4000000000;
-  constexpr std::uint64_t three = 0x4040000000;
   constexpr std::uint32_t float_status = 0x400;
   constexpr std::uint32_t alu_mask = 0x43f;
-  for (const bool conflict : {false, true}) {
-    lead_a1::SharcMemory memory;
-    program(memory, instruction(conflict ? 3U : 1U, conflict ? 3U : 4U, 0) | float_add);
-    auto state = initial();
-    state.data[0][1] = {.value = one, .known = full40};
-    state.data[0][2] = {.value = two, .known = full40};
-    lead_a1::SharcControl control(true);
-    lead_a1::Sharc cpu(memory, state, &control);
-    static_cast<void>(cpu.step());
-    require(cpu.state().data[0][3].value == (conflict ? dm_input << 8 : three));
-    if (!conflict) {
-      require(cpu.state().data[0][1].value == dm_input << 8);
-      require(cpu.state().data[0][4].value == pm_input << 8);
-    }
-    require((cpu.state().system[6].value & alu_mask) == float_status);
-    require(cpu.state().system[8] == state.system[8]);
-  }
+  constexpr std::uint32_t multiply_mask = 0x3c0;
   lead_a1::SharcMemory memory;
-  program(memory, instruction(6, 8, 3) | float_add);
+  program(memory, instruction(test.conflict ? 3U : 1U, test.conflict ? 3U : 4U, 0) | test.compute);
+  auto state = initial();
+  state.data[0][1] = {.value = one, .known = full40};
+  state.data[0][2] = {.value = two, .known = full40};
+  state.system[6].value = alu_mask | multiply_mask;
+  state.effective = state.system;
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, state, &control);
+  static_cast<void>(cpu.step());
+  require(cpu.state().data[0][3].value == (test.conflict ? dm_input << 8 : test.result));
+  if (!test.conflict) {
+    require(cpu.state().data[0][1].value == dm_input << 8);
+    require(cpu.state().data[0][4].value == pm_input << 8);
+  }
+  const auto flags = test.multiply ? alu_mask : multiply_mask | float_status;
+  require(cpu.state().system[6].value == flags);
+  require(cpu.state().system[8] == state.system[8]);
+}
+
+void floating_store_rollback(std::uint64_t compute) {
+  lead_a1::SharcMemory memory;
+  program(memory, instruction(6, 8, 3) | compute);
   auto state = initial();
   state.data[0][1] = {}; // Real stores precede the unknown arithmetic input.
   lead_a1::SharcControl control(true);
@@ -287,6 +297,20 @@ void floating_old_inputs_and_load_priority() {
   require(failing.state() == state && !memory.active() && control.snapshot() == before_control);
   require(memory.read({.address = dm_address}) == dm_input);
   require(memory.read({.address = pm_address}) == pm_input);
+}
+
+void floating_old_inputs_and_load_priority() {
+  constexpr std::uint64_t float_add = 0x81312;
+  constexpr std::uint64_t float_multiply = 0x130312;
+  constexpr std::uint64_t three = 0x4040000000;
+  constexpr std::uint64_t two = 0x4000000000;
+  for (const bool conflict : {false, true}) {
+    floating_transfer({.compute = float_add, .result = three, .conflict = conflict});
+    floating_transfer(
+        {.compute = float_multiply, .result = two, .conflict = conflict, .multiply = true});
+  }
+  floating_store_rollback(float_add);
+  floating_store_rollback(float_multiply);
 }
 
 void flush_follower_and_simd_guards() {
