@@ -89,6 +89,10 @@ ID  State    Evidence / remaining work
              Accepted internal IRQ-entry clocks settle pending core/SYSCTL
              effects before the first handler operation per PGR A-32; real
              guest bank/width writes and clock-owner rollback have regressions.
+             An ordinary unlooped internal delayed JUMP/CALL/RTS retains
+             pending requests while its two real slots finish, then permits
+             explicit delivery at the target. Both arrival positions, a last-
+             slot IMASK write and checkpoint continuation have owned tests.
              Ordinary unlooped IDLE holds the core while actual owned SPI DMA
              progresses, then its completion routes through P1I/RTI to a real
              continuation. Checkpoints, masks, pending effects and rollback have
@@ -155,7 +159,8 @@ ID  State    Evidence / remaining work
              rollback tests. Busy reads never progress DMA; receive-ahead data
              survives count rearming. Maskable IRPTL requests latch even when
              delivery is masked (sharc-spi.txt). Other SPI modes/registers,
-             raw IISPI readback, chaining/flush and interrupt entry remain open.
+             raw IISPI readback, chaining/flush and autonomous interrupt routing
+             remain open; explicit P1I entry/RTI has the separate contract above.
              General DAG/circular/broadcast/SIMD transfers, remaining arithmetic/float/
              other computation/VISA and timing remain open. No automatic ready
              signal or silently successful programmable-port stub.

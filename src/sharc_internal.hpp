@@ -121,6 +121,7 @@ void sharc_cache_program_access(SharcState &state);
 void sharc_cache_finish(const SharcState &previous, SharcState &next);
 
 void sharc_interrupt_environment_guard(const SharcState &state);
+[[nodiscard]] bool sharc_interrupt_deferred(const SharcState &state);
 void sharc_interrupt_service_guard(const SharcState &state);
 void sharc_validate_interrupt(const SharcState &state);
 [[nodiscard]] std::optional<SharcInterruptStep>

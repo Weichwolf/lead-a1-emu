@@ -213,6 +213,16 @@
     },
     "limits": "General/circular/reversed/broadcast/SIMD DAG, non-data RAM UREGs, forced LW/SW/external/indexed-IOP transfers, arithmetic/float/other computations, VISA, runtime peripherals and physical timing remain open"
   },
+  "interrupt_reference": {
+    "primary": "PGRrev2.4 4-22/23,4-26/43,9-44/46,10-17,A-10,A-31/34,A-37/42",
+    "source": "Explicitly routed P1I; aligned internal native IVT supplied by owner, offset0x30",
+    "entry": "Bit25 interrupt PC frame with CALL bit24 clear; IMASKP0x1000; own source held clear, other latches retained; no P1I automatic status/MMASK push/pop",
+    "clock_effects": "Four internal branch-overhead minimum clocks, no guest NOP or instruction retirement; pending supported core/SYSCTL effects settle before the first handler operation",
+    "delayed_branch": "Ordinary unlooped internal JUMP/CALL/RTS defers explicit delivery until both real delay slots finish; target-boundary effective controls decide entry; physical earlier recognition/pipeline latch remains unqualified",
+    "return": "Actual immediate conditional RTI through matched interrupt frame; ISR results retained; SIMD AND condition",
+    "idle": "Ordinary Type22a IDLE holds core while actual owned SPI reception/DMA proceeds; explicitly routed completion, actual ISR/RTI and dependent foreground continuation",
+    "limits": "Delayed-branch/loop IDLE, interrupted loop reentry, other/nested sources, automatic board routing, synchronization, cache/fetch visibility, complete boot and physical timing remain unqualified"
+  },
   "compute_reference": {
     "primary": "PGRrev2.4 9-10/11,10-6,11-15/19,12-2/3,A-17/20",
     "supported": [

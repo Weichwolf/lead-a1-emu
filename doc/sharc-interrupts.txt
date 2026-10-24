@@ -6,12 +6,12 @@ internal IVT base; P1I uses offset30. This is a core programmable-interrupt
 reference, not proof of the Nord board's PICR routing, IVT/reset selection,
 interrupt synchronization, SPI acknowledgement or complete pipeline timing.
 Other enabled/unknown sources, nonmaskable state, active/unknown timer,
-nesting, foreground loops/delayed branch, unknown/full stack, unknown existing
+nesting, foreground loops, unknown/full stack, unknown existing
 IMASKP and pending IRPTL writes are explicitly guarded before any mutation.
 
 Recognition checks effective MODE1/IMASK/IRPTL before the accepted branch.
-It pushes the interrupted PC with bit25 set and CALL bit24 clear (PGR A-10), sets P1I in
-IMASKP and clears that source in IRPTL. It publishes a separate recognition
+It pushes the interrupted PC with bit25 set and CALL bit24 clear (PGR A-10),
+sets P1I in IMASKP and clears that source in IRPTL. It publishes a recognition
 event with four internal branch-overhead minimum clocks. No guest instruction
 or NOP retires. The complete synchronization/recognition/fetch pipeline is not
 inferred from this lower bound or the functional owner placement.
@@ -20,6 +20,19 @@ The accepted internal branch's clock interval therefore settles pending
 MODE1/IMASK/FLAGS and cache-flush effects before the first ISR instruction.
 Bound SYSCTL effects also settle; a partial one-clock interval or an active
 controller transaction is guarded. No fictional guest NOP supplies this time.
+
+During an ordinary unlooped internal delayed JUMP/CALL/RTS, explicit delivery
+attempts return no event and preserve the latch/CPU state until both slots
+finish (PGR4-22/31). Those real guest instructions execute; the existing call
+push/return pop remains visible. At the resulting target boundary, an explicit
+owner operation checks effective controls and enters the actual ISR. A final
+delay-slot IMASK write still has its old effective mask at this boundary;
+accepted entry clocks then settle it before the handler. Checkpoint continuation
+and arrivals before either slot have owned tests. IDLE in a slot still fails
+with an enabled pending request; the exact branch/latch state survives failure
+and both repaired fixture slots execute on retry. This functional placement does
+not model an earlier physical recognition/pipeline latch or establish pin timing.
+Delayed-branch IDLE, loop reentry and non-native boundaries remain guarded.
 
 P1I does not automatically push/pop ASTATx/y or MODE1, nor apply MMASK. Those
 status actions belong to IRQ2-0/timer or explicit status-stack instructions.
@@ -39,11 +52,12 @@ stack sources, nested recognition and changed top return frames stay guarded.
 Checkpoints validate controller/frame consistency; failed recognition/handler
 instructions preserve their pre-operation CPU/device/transaction states.
 
-Primary evidence: PGRrev2.4,4-26..35,4-40..43,9-44/46,10-17,A-5,A-10,A-31/34,A-37/42.
+Primary evidence: PGRrev2.4,4-22/23,4-26..35,4-40..43,9-44/46,10-17,A-5,A-10,A-31/34,A-37/42.
 Owned tests exercise entry metadata, a real handler, IMASKP readback, status
 retention/checkpoint continuation, masks/clock effect latency, active-source clearing,
 unqualified/unknown boundaries, failed handler/repair, return conditions and
-SIMD/MMASK distinctions. Real guest MODE1-bank and SYSCTL-width writes directly
+SIMD/MMASK distinctions, atomic delayed JUMP/CALL/RTS and last-slot mask effects.
+Real guest MODE1-bank and SYSCTL-width writes directly
 before recognition check the very first handler operation; a failed clock owner
 preserves CPU/controller state. A pending MODE1 write enabling unqualified nesting
 also rejects atomically after the entry-clock check. Stack depth must be known for service

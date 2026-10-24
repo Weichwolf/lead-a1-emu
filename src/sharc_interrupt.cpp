@@ -90,6 +90,13 @@ unsigned int recognition_boundary(const SharcState &state, SharcInterruptReferen
 
 }
 
+bool sharc_interrupt_deferred(const SharcState &state) {
+  // PGR4-22/31: both slots complete before maskable interrupt processing.
+  // Loop reentry and non-native pipeline boundaries remain unqualified.
+  return state.branch && internal(state.pc) && internal(state.branch->target) &&
+         !state.count_loop && !state.arithmetic_loop && state.loops_empty == true;
+}
+
 void sharc_validate_interrupt(const SharcState &state) {
   if (!state.interrupt) { return; }
   const auto frame = *state.interrupt;
@@ -131,6 +138,7 @@ std::optional<SharcInterruptStep> sharc_service_interrupt(SharcState &state,
   const auto mask = state.effective[sharc_imask];
   const auto possible = (latch.value | ~latch.known) & (mask.value | ~mask.known) & interrupt_bits;
   if (possible == 0) { return {}; }
+  if (sharc_interrupt_deferred(state)) { return {}; }
   if (possible != p1i || !selected(latch, p1i) || !selected(mask, p1i)) {
     throw std::runtime_error("SHARC unknown/other interrupt source not qualified");
   }

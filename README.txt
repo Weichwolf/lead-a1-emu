@@ -16,9 +16,11 @@ snapshot viewer work. Complete CPU/board/DSP boot, MIDI, audio and a parameter-s
 remain pending. The UI starts with unknown values and waits for snapshots.
 See doc/arm-reference.txt, doc/arm-exceptions.txt and doc/aintc.txt.
 Native SHARC references execute original loader streams through the finalizer
-prefix; remaining arithmetic-loop/interrupt/VISA execution still blocks DSP
-application boot. See doc/sharc-stream-reference.txt and doc/dsp-roles.txt for
-the qualified boundaries and static synthesis/routing observations.
+prefix. P1I/RTI, ordinary IDLE and atomic ordinary delayed branches have bounded
+references; self-modifying loop/fetch visibility, delayed-branch IDLE and VISA
+still block DSP application boot. See doc/sharc-stream-reference.txt and
+doc/dsp-roles.txt for the qualified boundaries and static synthesis/routing
+observations.
 
 Build and checks (Linux, regular user)
 Requires LLVM 19 (clang++, clang-tidy, clang-format, sanitizer runtimes),

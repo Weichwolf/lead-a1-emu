@@ -30,6 +30,10 @@ constexpr std::uint64_t increment_r0 = 0x013e00029000;
 constexpr std::uint64_t negative = 0x8000000100;
 constexpr std::uint64_t initial_counter = 123;
 constexpr std::uint64_t resumed_counter = 124;
+constexpr std::uint32_t branch_target = base + 128;
+constexpr std::uint64_t delayed_jump = 0x063e04000000;
+constexpr std::uint64_t delayed_call = 0x06be04000000;
+constexpr std::uint64_t delayed_return = 0x0a3e04000000;
 
 void require(bool condition, const std::source_location &where = std::source_location::current()) {
   if (!condition) {
@@ -232,6 +236,101 @@ void pending_nesting_is_rejected_atomically() {
   require(cpu.state() == before && !memory.active());
 }
 
+void atomic_delayed_branches() {
+  for (const auto branch :
+       {delayed_jump | branch_target, delayed_call | branch_target, delayed_return}) {
+    for (const unsigned int arrival : {0U, 1U}) {
+      lead_a1::SharcMemory memory;
+      program(memory);
+      code(memory, foreground, branch);
+      code(memory, foreground + 1, increment_r0);
+      code(memory, foreground + 2, pass_r3_r4);
+      auto state = initial();
+      constexpr std::uint32_t call_frame = 0x1000000;
+      state.pc_stack[0] = call_frame | branch_target;
+      lead_a1::Sharc cpu(memory, state);
+      static_cast<void>(cpu.step());
+      if (arrival == 1) { static_cast<void>(cpu.step()); }
+      cpu.latch_interrupt(p1i);
+      for (unsigned int slot = arrival; slot < 2; ++slot) {
+        require(cpu.state().branch && cpu.state().branch->slots == 2 - slot);
+        const auto before = cpu.state();
+        require(!cpu.service_interrupt({.vector_base = base}) && cpu.state() == before);
+        static_cast<void>(cpu.step());
+      }
+      require(!cpu.state().branch && cpu.state().pc == branch_target);
+      require(cpu.state().data[0][4].value == negative);
+      require(cpu.state().data[0][0].value == resumed_counter * 256);
+      require((cpu.state().effective[10].value & p1i) != 0 && !cpu.state().interrupt);
+      const auto completed = cpu.state();
+      const auto event = cpu.service_interrupt({.vector_base = base});
+      require(event && event->return_pc == branch_target);
+      require(cpu.state().interrupt->saved_depth == completed.depth);
+      for (unsigned int instruction = 0; instruction < 3; ++instruction) {
+        static_cast<void>(cpu.step());
+      }
+      require(!cpu.state().interrupt && cpu.state().pc == branch_target);
+      require(cpu.state().depth == completed.depth);
+      require(cpu.state().data[0][0].value == resumed_counter * 256);
+    }
+  }
+}
+
+void delay_slot_mask_write_and_checkpoint() {
+  lead_a1::SharcMemory memory;
+  program(memory);
+  code(memory, foreground, delayed_jump | branch_target);
+  code(memory, foreground + 1, 0);
+  constexpr std::uint64_t clear_imask = 0x0f7b00000000;
+  code(memory, foreground + 2, clear_imask);
+  code(memory, branch_target, increment_r0);
+  lead_a1::Sharc cpu(memory, initial());
+  static_cast<void>(cpu.step());
+  cpu.latch_interrupt(p1i);
+  require(!cpu.service_interrupt({.vector_base = base}));
+  static_cast<void>(cpu.step());
+  lead_a1::Sharc restored(memory, cpu.state());
+  require(!restored.service_interrupt({.vector_base = base}));
+  static_cast<void>(cpu.step());
+  static_cast<void>(restored.step());
+  require(cpu.state() == restored.state() && !cpu.state().branch);
+  require(cpu.state().system[11].value == 3 && cpu.state().effective[11].value == (p1i | 3));
+  require(cpu.state().pending[11].has_value());
+  const auto event = cpu.service_interrupt({.vector_base = base});
+  require(event && event->return_pc == branch_target);
+  require(cpu.state().effective[11].value == 3 && !cpu.state().pending[11]);
+  for (unsigned int instruction = 0; instruction < 3; ++instruction) {
+    static_cast<void>(cpu.step());
+  }
+  require(cpu.state().pc == branch_target && !cpu.state().interrupt);
+  static_cast<void>(cpu.step());
+  require(cpu.state().data[0][0].value == resumed_counter * 256);
+}
+
+void failed_delay_slot_keeps_pending_request() {
+  lead_a1::SharcMemory memory;
+  program(memory);
+  code(memory, foreground, delayed_jump | branch_target);
+  constexpr std::uint64_t idle = 0x008000000000;
+  code(memory, foreground + 1, idle);
+  code(memory, foreground + 2, pass_r3_r4);
+  lead_a1::Sharc cpu(memory, initial());
+  static_cast<void>(cpu.step());
+  cpu.latch_interrupt(p1i);
+  const auto before = cpu.state();
+  require(!cpu.service_interrupt({.vector_base = base}) && cpu.state() == before);
+  rejected([&] { static_cast<void>(cpu.step()); }, "delayed-branch/loop IDLE not qualified");
+  require(cpu.state() == before && !memory.active());
+  code(memory, foreground + 1, increment_r0); // Repair the owned fixture and retry both real slots.
+  for (unsigned int slot = 0; slot < 2; ++slot) {
+    require(!cpu.service_interrupt({.vector_base = base}));
+    static_cast<void>(cpu.step());
+  }
+  require(cpu.state().pc == branch_target && !cpu.state().idle_pc);
+  const auto event = cpu.service_interrupt({.vector_base = base});
+  require(event && event->return_pc == branch_target && cpu.state().interrupt);
+}
+
 void in_service_latch_clearing() {
   lead_a1::SharcMemory memory;
   program(memory);
@@ -261,7 +360,7 @@ enum class InvalidBoundary : std::uint8_t {
   nesting,
   depth,
   loops,
-  branch,
+  loop_branch,
   latch_write
 };
 
@@ -271,7 +370,7 @@ void rejected_boundaries() {
                              InvalidBoundary::nesting,
                              InvalidBoundary::depth,
                              InvalidBoundary::loops,
-                             InvalidBoundary::branch,
+                             InvalidBoundary::loop_branch,
                              InvalidBoundary::latch_write}) {
     lead_a1::SharcMemory memory;
     program(memory);
@@ -289,8 +388,9 @@ void rejected_boundaries() {
       case InvalidBoundary::nesting: state.system[2].value |= nesting; break;
       case InvalidBoundary::depth: state.depth.reset(); break;
       case InvalidBoundary::loops: state.loops_empty.reset(); break;
-      case InvalidBoundary::branch:
+      case InvalidBoundary::loop_branch:
         state.branch = lead_a1::SharcBranch{.target = base, .slots = 2};
+        state.loops_empty.reset();
         break;
       case InvalidBoundary::latch_write: state.pending[10] = state.system[10]; break;
       default: throw std::logic_error("Invalid owned boundary case");
@@ -387,6 +487,9 @@ int main() {
     pending_sysctl_and_cache_clocks();
     failed_clock_owner_preserves_cpu();
     pending_nesting_is_rejected_atomically();
+    atomic_delayed_branches();
+    delay_slot_mask_write_and_checkpoint();
+    failed_delay_slot_keeps_pending_request();
     masks_and_delayed_controls();
     in_service_latch_clearing();
     rejected_boundaries();

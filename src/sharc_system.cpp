@@ -260,7 +260,7 @@ void sharc_interrupt_guard(const SharcState &state) {
   const auto mask = state.effective[sharc_imask];
   const auto possible =
       (latch.value | ~latch.known) & (mask.value | ~mask.known) & interrupt_writable;
-  if (possible != 0) {
+  if (possible != 0 && !sharc_interrupt_deferred(state)) {
     throw std::runtime_error("SHARC pending interrupt delivery not implemented");
   }
 }

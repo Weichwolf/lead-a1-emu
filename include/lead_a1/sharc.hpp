@@ -167,7 +167,8 @@ public:
   void latch_interrupt(std::uint32_t mask);
 
   // Explicit recognition of an already latched P1I at a qualified boundary.
-  // Physical synchronization and delayed-branch/loop entry remain unqualified.
+  // Ordinary internal delayed branches defer delivery until both slots finish.
+  // Physical synchronization, delayed IDLE and loop entry remain unqualified.
   [[nodiscard]] std::optional<SharcInterruptStep>
   service_interrupt(SharcInterruptReference reference);
 
