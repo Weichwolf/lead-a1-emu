@@ -1,0 +1,57 @@
+Fetched arithmetic-loop entry through IDLE, DMA and P1I/RTI
+
+Pure first-slot IDLE is qualified on the external delayed JUMP into a live,
+nonwrapped, fetched type0 arithmetic frame. The branch must target its native
+start and the delay-slot PC must lie outside the body. Native stack/depth/type
+validation remains mandatory. This does not permit IDLE in an arbitrary loop
+body or accept unknown, counter, draining, nested or mixed-cache contexts.
+
+IDLE preserves the real arithmetic frame and captured following slot. Actual
+serial reception/DMA may replace instruction RAM while CPU/fetch remain held;
+only the routed completion changes IRPTL. Wake clears the idle hold, retaining
+the branch and slot. The actual captured final slot retires even if its RAM
+word changed. Its IMASK write still has the old effective mask at recognition.
+
+P1I acceptance at the native loop-start boundary requires the bound sequencer,
+retired Execute, no pending cache transfer and known stack resources. The real
+bit25 interrupt frame is pushed above the unchanged loop frame. The native
+loop enters fetched_suspended; F1 neither tests its condition nor redirects
+its cursor during service. Speculative pipeline words are discarded, cache
+contents remain intact, and pending controls settle over the accepted entry.
+Raw/unsequenced entry and raw retirement of fetched states fail explicitly.
+
+Actual RTI selects/validates its live interrupt frame in Address and pops only
+that frame in Execute. It restores fetched loop sequencing and the original
+start PC; ordinary loop-end retirement is not applied to ISR instructions.
+The target is fetched again from the DMA-replaced RAM. This is an explicit
+owner recognition boundary, not a complete IRQ-recognition/global-clock model.
+Other arithmetic return boundaries, counter-loop IRQs, draining/nested loops,
+other ISR branches and general cache/stall/loop combinations remain guarded.
+
+Owned tests transfer192 real normal32 words over a128-instruction image,
+including an invalid replacement for the retained slot. The actual handler
+reads LADDR, IRQ PCSTK and depth before RTI; their literal values preserve the
+loop type/start/end and distinct IRQ metadata. Foreground code has independent
+short-loop pass/result expectations and rejects the stale prefetched target.
+One held-state restoration and48 occupied/retired-Execute continuations bind
+separate RAM/controllers/cores/fetch state, with independent serial/DMA replay.
+Further checks cover masks, unknown wake, invalid entry targets, malformed
+suspension/frame/depth, raw APIs and foreign-controller failure/repair.
+
+The optional original continuation receives all384 final vector words through
+the existing continuous SPI source/DMA and compares each with the local input.
+Original IDLE, retained mask slot, real P1I frame and original temporary RTI
+execute through restored CPU8c003. The next PM/cache clock remains explicitly
+unsupported with native/transport/controller state preserved. No resumed
+foreground instruction, self-modifying store, saved-vector restoration or
+application boot is qualified. The ordinary109318-cell oracle per cadence
+remains separate and intact; instruction-only streams still stop at8c08e.
+
+Primary constraints: PGRrev2.4 4-22/38,4-53/58,4-73/74,9-44/46,A-10/11,A-32;
+HWRrev1.1 24-25/27; the pinned official21489 SPI-kernel ordering explanation
+in reference/visualdsp.json. No counter freeze interval is generalized to an
+arithmetic loop. Owner ticks/entry bookkeeping are not measured physical CCLK;
+no vendor simulator or stock-device timing/boot/audio qualification follows.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_loop_idle_dma_interrupt_return|sharc_delayed_idle_and_interrupt_fetch|sharc_fetched_arithmetic.*|original_sharc_images)$' --output-on-failure

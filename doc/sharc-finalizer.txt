@@ -2,10 +2,11 @@ SHARC finalizer evidence and remaining execution boundary
 
 The bound original setup now reaches CPU8c08e with its actual Address-stage
 DB target selected, PM request/cache handling and deferred type0 frame
-intact (sharc-fetch-finalizer.txt). The later arithmetic continuation retires
-the entry DB and captures the actual next IDLE at CPU8c08f, where execution
-still fails explicitly (sharc-fetch-arithmetic.txt). No loop-IDLE/vector
-acceptance is qualified.
+intact (sharc-fetch-finalizer.txt). The later arithmetic continuation executes
+entry DB/IDLE, receives all384 vector words, accepts P1I and retires the actual
+temporary RTI through restored8c003 (sharc-loop-idle.txt). The next
+self-modifying PM/cache clock still fails before a foreground instruction
+retires. No saved-vector restoration or application boot is qualified.
 
 The qualified PX/bit/parallel prefix is documented separately. Arithmetic DO
 and deferred PC-stack setup have a bounded reference in sharc-arithmetic-loops.txt.
@@ -13,9 +14,10 @@ The pure cache invalidation and Type1 dual-memory instruction references are
 in sharc-cache.txt/sharc-dual-moves.txt. Unlooped P1I/RTI and ordinary IDLE
 have separate contracts in sharc-interrupts.txt/sharc-idle.txt. The further
 unlooped fetched DB/IDLE, retained slot and P1I/RTI redirect component is in
-sharc-delayed-idle.txt. These do not
-qualify the original reentered/short/self-modifying loop, loop IDLE,
-interrupt loop reentry or cache/prefetch. No vector load/application boot is implied.
+sharc-delayed-idle.txt. The arithmetic-entry composition in sharc-loop-idle.txt
+extends the native frame/retained slot/DMA/P1I/RTI path. Self-modifying stores,
+general interrupted-loop execution and the combined cache/prefetch path
+remain unqualified; application boot does not follow from these components.
 The separate instruction-bus transport in sharc-fetch.txt captures actual F2
 data and retires retained words through the native core. Its bound cache clock
 has the explicit-input contract in sharc-fetch-cache.txt. Its optional cursor

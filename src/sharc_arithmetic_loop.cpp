@@ -46,6 +46,38 @@ void deferred_guard(const SharcState &state, std::uint64_t opcode) {
   }
 }
 
+unsigned int frame_depth(const SharcState &state, const SharcArithmeticLoop &loop) {
+  if (loop.phase != SharcArithmeticPhase::fetched_suspended) {
+    if (state.interrupt) {
+      throw std::invalid_argument("Invalid SHARC interrupt arithmetic phase");
+    }
+    return loop.saved_depth + (live(loop) ? 1U : 0U);
+  }
+  if (!state.interrupt || state.branch || state.interrupt->saved_depth != loop.saved_depth + 1 ||
+      state.interrupt->return_pc != loop.body) {
+    throw std::invalid_argument("Invalid SHARC suspended arithmetic interrupt frame");
+  }
+  return loop.saved_depth + 2;
+}
+
+}
+
+bool sharc_fetched_arithmetic(const SharcState &state) {
+  if (!state.arithmetic_loop) { return false; }
+  const auto phase = state.arithmetic_loop->phase;
+  return phase == SharcArithmeticPhase::fetched ||
+         phase == SharcArithmeticPhase::fetched_draining ||
+         phase == SharcArithmeticPhase::fetched_suspended;
+}
+
+bool sharc_arithmetic_entry_delay(const SharcState &state) {
+  const auto loop = state.arithmetic_loop;
+  if (!loop || loop->phase != SharcArithmeticPhase::fetched || !state.branch ||
+      state.branch->target != loop->body || body_address(*loop, state.pc)) {
+    return false;
+  }
+  sharc_validate_arithmetic_loop(state);
+  return true;
 }
 
 void sharc_validate_arithmetic_loop(const SharcState &state) {
@@ -55,8 +87,7 @@ void sharc_validate_arithmetic_loop(const SharcState &state) {
       !state.loops_empty || loop.body > sharc_pc_mask || loop.end > sharc_pc_mask ||
       loop.termination >= condition_count || loop.termination == counter_condition ||
       loop.saved_depth >= before_almost_full || loop.kind != SharcArithmeticKind::multiple ||
-      *state.depth != loop.saved_depth + (live(loop) ? 1U : 0U) ||
-      *state.loops_empty == live(loop)) {
+      *state.depth != frame_depth(state, loop) || *state.loops_empty == live(loop)) {
     throw std::invalid_argument("Invalid SHARC arithmetic-loop resources");
   }
   if (live(loop) && state.pc_stack[loop.saved_depth] != loop.body) {
@@ -66,6 +97,7 @@ void sharc_validate_arithmetic_loop(const SharcState &state) {
     case SharcArithmeticPhase::deferred: return;
     case SharcArithmeticPhase::fetched:
     case SharcArithmeticPhase::fetched_draining:
+    case SharcArithmeticPhase::fetched_suspended:
       if (loop.end <= loop.body) {
         throw std::invalid_argument("Invalid SHARC fetched arithmetic address span");
       }
@@ -164,6 +196,9 @@ sharc_arithmetic_loop_finish(const SharcState &previous, SharcState &next, Sharc
 void sharc_clocked_arithmetic_finish(const SharcState &previous, SharcState &next, bool exit) {
   if (!previous.arithmetic_loop || !next.arithmetic_loop || !sharc_fetched_arithmetic(previous)) {
     throw std::logic_error("Missing SHARC clocked arithmetic resource");
+  }
+  if (previous.arithmetic_loop->phase == SharcArithmeticPhase::fetched_suspended) {
+    return; // ISR instructions, including its actual RTI, do not retire a foreground loop end.
   }
   const auto loop = *next.arithmetic_loop;
   if (exit) {

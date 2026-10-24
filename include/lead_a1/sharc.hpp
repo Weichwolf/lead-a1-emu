@@ -65,7 +65,8 @@ enum class SharcArithmeticPhase : std::uint8_t {
   active,
   draining,
   fetched,
-  fetched_draining
+  fetched_draining,
+  fetched_suspended
 };
 enum class SharcArithmeticKind : std::uint8_t { multiple, single };
 

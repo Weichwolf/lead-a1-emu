@@ -67,15 +67,31 @@ void settle_entry_effects(SharcState &state) {
   nonnesting(state); // A pending MODE1 update must not sneak in unqualified nesting.
 }
 
-unsigned int recognition_boundary(const SharcState &state, SharcInterruptReference reference) {
+void loop_boundary(const SharcState &state, bool fetched) {
+  if (state.count_loop || (!state.arithmetic_loop && state.loops_empty != true)) {
+    throw std::runtime_error("SHARC delayed-branch/loop interrupt entry not qualified");
+  }
+  if (!state.arithmetic_loop) { return; }
+  if (!fetched) { throw std::runtime_error("SHARC loop interrupt requires bound fetch"); }
+  const auto loop = *state.arithmetic_loop;
+  if (loop.phase != SharcArithmeticPhase::fetched || state.pc != loop.body) {
+    throw std::runtime_error(
+        "SHARC arithmetic interrupt outside fetched start boundary not qualified");
+  }
+  sharc_validate_arithmetic_loop(state);
+}
+
+unsigned int
+recognition_boundary(const SharcState &state, SharcInterruptReference reference, bool fetched) {
   constexpr std::uint32_t vector_alignment = 255;
   if (!internal(reference.vector_base) || (reference.vector_base & vector_alignment) != 0 ||
       !internal(state.pc)) {
     throw std::runtime_error("SHARC interrupt requires an explicit internal native IVT/PC");
   }
-  if (state.branch || state.count_loop || state.arithmetic_loop || state.loops_empty != true) {
+  if (state.branch) {
     throw std::runtime_error("SHARC delayed-branch/loop interrupt entry not qualified");
   }
+  loop_boundary(state, fetched);
   if (!state.depth || *state.depth >= before_almost_full) {
     throw std::runtime_error("SHARC unknown/full interrupt PC stack not qualified");
   }
@@ -94,7 +110,8 @@ bool sharc_interrupt_deferred(const SharcState &state) {
   // PGR4-22/31: both slots complete before maskable interrupt processing.
   // Loop reentry and non-native pipeline boundaries remain unqualified.
   return state.branch && internal(state.pc) && internal(state.branch->target) &&
-         !state.count_loop && !state.arithmetic_loop && state.loops_empty == true;
+         ((!state.count_loop && !state.arithmetic_loop && state.loops_empty == true) ||
+          sharc_arithmetic_entry_delay(state));
 }
 
 void sharc_validate_interrupt(const SharcState &state) {
@@ -125,8 +142,8 @@ void sharc_interrupt_service_guard(const SharcState &state) {
   nonnesting(state);
 }
 
-std::optional<SharcInterruptStep> sharc_service_interrupt(SharcState &state,
-                                                          SharcInterruptReference reference) {
+std::optional<SharcInterruptStep>
+sharc_service_interrupt(SharcState &state, SharcInterruptReference reference, bool fetched) {
   sharc_interrupt_environment_guard(state);
   if (state.interrupt) {
     nonnesting(state);
@@ -143,7 +160,7 @@ std::optional<SharcInterruptStep> sharc_service_interrupt(SharcState &state,
     throw std::runtime_error("SHARC unknown/other interrupt source not qualified");
   }
   nonnesting(state);
-  const auto saved_depth = recognition_boundary(state, reference);
+  const auto saved_depth = recognition_boundary(state, reference, fetched);
   const auto vector = reference.vector_base + vector_offset;
   const auto return_pc = state.pc;
   // PGR A-10: interrupt push sets bit25, with CALL bit24 clear.
@@ -151,6 +168,9 @@ std::optional<SharcInterruptStep> sharc_service_interrupt(SharcState &state,
   state.depth = saved_depth + 1;
   state.interrupt = SharcInterruptFrame{
       .source = p1i, .vector = vector, .return_pc = return_pc, .saved_depth = saved_depth};
+  if (state.arithmetic_loop) {
+    state.arithmetic_loop->phase = SharcArithmeticPhase::fetched_suspended;
+  }
   state.system[imaskp] = {.value = p1i, .known = all_bits};
   state.effective[imaskp] = state.system[imaskp];
   clear_source(state, p1i);
@@ -171,9 +191,14 @@ sharc_return_interrupt(SharcState &state, std::uint64_t opcode, std::optional<bo
   }
   const auto condition = static_cast<unsigned int>((opcode >> 33) & 31);
   if (!(captured ? *captured : sharc_condition(state, condition))) { return {}; }
-  if (!state.interrupt || state.branch || state.count_loop || state.arithmetic_loop) {
-    throw std::runtime_error("SHARC RTI requires a qualified non-loop P1I frame");
+  const bool suspended = state.arithmetic_loop &&
+                         state.arithmetic_loop->phase == SharcArithmeticPhase::fetched_suspended;
+  if (!state.interrupt || state.branch || state.count_loop ||
+      (state.arithmetic_loop && !suspended)) {
+    throw std::runtime_error(
+        "SHARC RTI requires a qualified non-loop P1I frame or suspended arithmetic frame");
   }
+  sharc_validate_arithmetic_loop(state);
   const auto frame = *state.interrupt;
   if (state.depth != frame.saved_depth + 1 ||
       state.pc_stack[frame.saved_depth] != (sharc_special_frame | frame.return_pc)) {
@@ -184,6 +209,7 @@ sharc_return_interrupt(SharcState &state, std::uint64_t opcode, std::optional<bo
   state.effective[imaskp] = state.system[imaskp];
   clear_source(state, frame.source);
   state.interrupt.reset();
+  if (state.arithmetic_loop) { state.arithmetic_loop->phase = SharcArithmeticPhase::fetched; }
   // P1I does not push/pop ASTATx/y or MODE1 status (PGR4-28,9-45).
   return frame.return_pc;
 }
@@ -201,6 +227,7 @@ std::optional<SharcInterruptStep> Sharc::service_interrupt(SharcInterruptReferen
   if (memory_.active()) { throw std::logic_error("Active SHARC transaction at recognition"); }
   auto next = state_;
   const auto result = detail::sharc_service_interrupt(next, reference);
+  detail::sharc_validate_arithmetic_loop(next);
   detail::sharc_validate_interrupt(next);
   detail::sharc_validate_idle(next);
   if (result && control_ != nullptr) {

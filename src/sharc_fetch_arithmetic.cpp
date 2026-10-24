@@ -34,6 +34,20 @@ void entry_branch(const SharcArithmeticLoop &loop, const SharcFetchWord &word) {
   }
 }
 
+void branch_word(const SharcState &cpu, const SharcFetchWord &word) {
+  if (!cpu.arithmetic_loop) { throw std::logic_error("Missing arithmetic branch context"); }
+  const auto loop = *cpu.arithmetic_loop;
+  if (loop.phase == SharcArithmeticPhase::fetched_suspended) {
+    constexpr unsigned int class_shift = 40;
+    constexpr unsigned int rti = 11;
+    if (sharc_fetch_branch_encoding(word.opcode) && (word.opcode >> class_shift) != rti) {
+      throw std::runtime_error("SHARC suspended-loop ISR branch other than RTI not qualified");
+    }
+    return;
+  }
+  entry_branch(loop, word);
+}
+
 void control_context(const SharcState &cpu, const SharcFetchState &transport) {
   if (!cpu.arithmetic_loop) { throw std::logic_error("Missing arithmetic control context"); }
   if (cpu.branch && (draining(cpu) || cpu.branch->target != cpu.arithmetic_loop->body ||
@@ -41,7 +55,7 @@ void control_context(const SharcState &cpu, const SharcFetchState &transport) {
     throw std::runtime_error("SHARC arithmetic pending branch is not its external entry");
   }
   for (const auto &word : {transport.address, transport.execute}) {
-    if (word) { entry_branch(*cpu.arithmetic_loop, *word); }
+    if (word) { branch_word(cpu, *word); }
   }
   for (const auto &word :
        {transport.fetch2, transport.decode, transport.address, transport.execute}) {
@@ -131,11 +145,6 @@ void terminate(SharcState &cpu, SharcFetchState &transport) {
 
 }
 
-bool sharc_fetched_arithmetic(const SharcState &state) {
-  return state.arithmetic_loop &&
-         (state.arithmetic_loop->phase == SharcArithmeticPhase::fetched || draining(state));
-}
-
 void sharc_fetch_arithmetic_validate(const SharcFetchState &transport) {
   if (transport.fetch2 && transport.fetch2->arithmetic_exit) {
     throw std::invalid_argument("SHARC arithmetic exit marker before Decode");
@@ -159,8 +168,9 @@ void sharc_fetch_arithmetic_guard(const SharcState &cpu, const SharcFetchState &
     return;
   }
   if (!transport.flow) { throw std::logic_error("Missing SHARC fetched arithmetic-loop context"); }
-  if (cpu.count_loop || cpu.interrupt || transport.flow->loop || transport.flow->long_loop ||
-      transport.lookup || transport.fill) {
+  const bool suspended = cpu.arithmetic_loop->phase == SharcArithmeticPhase::fetched_suspended;
+  if (cpu.count_loop || (cpu.interrupt && !suspended) || transport.flow->loop ||
+      transport.flow->long_loop || transport.lookup || transport.fill) {
     throw std::runtime_error("SHARC fetched mixed arithmetic-loop context not qualified");
   }
   sharc_validate_arithmetic_loop(cpu);
@@ -208,7 +218,7 @@ SharcLoopClock sharc_fetch_arithmetic_retirement(const SharcState &cpu,
     throw std::logic_error("Missing SHARC fetched arithmetic retirement");
   }
   const auto word = *transport.execute;
-  entry_branch(*cpu.arithmetic_loop, word);
+  branch_word(cpu, word);
   return word.arithmetic_exit ? SharcLoopClock::arithmetic_exit : SharcLoopClock::arithmetic;
 }
 

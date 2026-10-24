@@ -22,16 +22,20 @@ std::optional<SharcInterruptStep> Sharc::service_interrupt(SharcFetch &fetch,
   if (fetch.state_.execute) {
     throw std::runtime_error("SHARC interrupt requires retired fetch Execute");
   }
+  if (state_.arithmetic_loop && !fetch.state_.flow) {
+    throw std::runtime_error("SHARC arithmetic interrupt requires its sequenced fetch transport");
+  }
   if (fetch.state_.lookup || fetch.state_.fill ||
       (fetch.state_.flow && (fetch.state_.flow->loop || fetch.state_.flow->long_loop))) {
     throw std::runtime_error("SHARC interrupt with pending cache/loop transport not qualified");
   }
   auto core = state_;
-  const auto event = detail::sharc_service_interrupt(core, reference);
+  const auto event = detail::sharc_service_interrupt(core, reference, true);
   if (!event) { return {}; }
   SharcFetchState redirected;
   if (fetch.state_.flow) { redirected.flow = SharcFetchFlow{.next = core.pc}; }
   detail::sharc_validate_interrupt(core);
+  detail::sharc_validate_arithmetic_loop(core);
   detail::sharc_validate_idle(core);
   detail::sharc_validate_cache(core.cache);
   detail::sharc_fetch_validate(redirected);

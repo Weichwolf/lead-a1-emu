@@ -24,10 +24,11 @@ count1 CALL architectural-stack arbitration remains explicitly unknown
 (doc/sharc-dag-loop.txt, doc/sharc-fetch-long-loops.txt,
 doc/sharc-fetch-four-loops.txt, doc/sharc-fetch-count1.txt,
 doc/sharc-fetch-finalizer.txt). Fetched arithmetic loops have explicit
-termination/flush references; original entry DB retires, followed by the
-still unsupported captured loop-IDLE at8c08f (doc/sharc-fetch-arithmetic.txt).
+termination/flush references. Original loop-entry IDLE, final vector DMA and
+P1I/RTI now execute through restored8c003, where self-modifying PM/cache timing
+remains guarded (doc/sharc-fetch-arithmetic.txt, doc/sharc-loop-idle.txt).
 P1I/RTI, ordinary delayed branches and unlooped fetched DB/IDLE wake
-have bounded references; self-modifying loop/fetch visibility, loop IDLE and VISA
+have bounded references; self-modifying loop/fetch visibility, general loop IDLE and VISA
 still block DSP application boot. See doc/sharc-stream-reference.txt and
 doc/sharc-delayed-idle.txt for execution boundaries, and doc/dsp-roles.txt for synthesis/routing
 observations.

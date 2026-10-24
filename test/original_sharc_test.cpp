@@ -375,6 +375,88 @@ struct StreamRecord {
   std::uint32_t destination;
 };
 
+void sequenced_vector_receive(lead_a1::SharcMemory &memory,
+                              lead_a1::Sharc &cpu,
+                              lead_a1::SharcFetch &fetch,
+                              SerialInput &serial,
+                              HeaderDevices devices) {
+  constexpr unsigned int limit = 131072;
+  constexpr unsigned int vector_words = 384;
+  constexpr std::uint32_t destination = 0x92000;
+  constexpr std::uint32_t p1i = 0x1000;
+  auto expected = cpu.state();
+  const auto held = fetch.state();
+  require(expected.idle_pc && !expected.pending[10]);
+  unsigned int ticks{};
+  while (devices.spi.state().serial.remaining != 0 && ticks < limit) {
+    advance_devices(memory, cpu, serial, devices);
+    ++ticks;
+    if (devices.spi.state().serial.remaining == 0) {
+      expected.system[10].value |= p1i;
+      expected.effective[10].value |= p1i;
+    }
+    require(cpu.state() == expected && fetch.state() == held);
+  }
+  require(ticks < limit && devices.spi.state().serial.remaining == 0 &&
+          devices.spi.state().serial.next_word == destination + vector_words &&
+          serial.bit == serial.stream.size() * 8);
+  const auto payload = serial.stream.size() - kernel_bytes;
+  for (unsigned int index = 0; index < vector_words; ++index) {
+    require(memory.read({.address = destination + index}) ==
+            word(serial.stream, payload + (std::size_t{index} * 4)));
+  }
+  std::cout << "  Sequenced final vectors: all384 actual DMA words matched, CPU held for " << ticks
+            << " owner ticks\n";
+}
+
+void sequenced_loop_interrupt(lead_a1::SharcMemory &memory,
+                              lead_a1::Sharc &cpu,
+                              lead_a1::SharcFetch &fetch,
+                              SerialInput &serial,
+                              HeaderDevices devices) {
+  constexpr std::uint32_t loop_start = 0x8c003;
+  const auto slot = cpu.state().idle_delay_word;
+  if (!slot) { throw std::runtime_error("Missing original retained mask slot"); }
+  require(!cpu.service_interrupt(fetch, {.vector_base = reset}) && cpu.wake_idle());
+  static_cast<void>(fetch.advance_sequenced(cpu));
+  require(cpu.step(fetch).opcode == *slot);
+  advance_devices(memory, cpu, serial, devices);
+  require(cpu.state().pc == loop_start && !cpu.state().branch && cpu.state().depth == 1);
+  const auto entry = cpu.service_interrupt(fetch, {.vector_base = reset});
+  if (!entry) { throw std::runtime_error("Missing original loop P1I acceptance"); }
+  require(entry->return_pc == loop_start && entry->vector == saved_vector);
+  constexpr std::uint32_t special = 0x2000000;
+  require(cpu.state().depth == 2 && cpu.state().pc_stack[0] == loop_start &&
+          cpu.state().pc_stack[1] == (special | loop_start));
+  const auto suspended = cpu.state().arithmetic_loop;
+  require(suspended && suspended->phase == lead_a1::SharcArithmeticPhase::fetched_suspended);
+  constexpr unsigned int entry_clocks = 4;
+  require(entry->minimum_core_cycles == entry_clocks);
+  for (unsigned int clock = 0; clock < entry_clocks; ++clock) {
+    advance_devices(memory, cpu, serial, devices);
+  }
+  constexpr unsigned int limit = 16;
+  unsigned int instructions{};
+  for (unsigned int clock = 0; clock < limit && cpu.state().interrupt; ++clock) {
+    static_cast<void>(fetch.advance_sequenced(cpu));
+    if (fetch.state().execute) {
+      const auto step = cpu.step(fetch);
+      require(step.pc == saved_vector && step.next_pc == loop_start &&
+              step.opcode ==
+                  memory.read({.address = saved_vector, .width = lead_a1::SharcWidth::wide48}));
+      ++instructions;
+    }
+    advance_devices(memory, cpu, serial, devices);
+  }
+  const auto resumed = cpu.state().arithmetic_loop;
+  require(instructions == 1 && cpu.state().pc == loop_start && !cpu.state().interrupt &&
+          cpu.state().depth == 1 && cpu.state().loops_empty == false && resumed &&
+          resumed->phase == lead_a1::SharcArithmeticPhase::fetched &&
+          cpu.state().system[11].value == 3 && cpu.state().effective[11].value == 3 &&
+          cpu.state().system[10].value == 0 && cpu.state().effective[10].value == 0);
+  std::cout << "  Sequenced P1I/RTI: original vector executed, native loop restored at PC0x8c003\n";
+}
+
 void sequenced_arithmetic_entry(lead_a1::SharcMemory &memory,
                                 lead_a1::Sharc &cpu,
                                 lead_a1::SharcFetch &fetch,
@@ -384,38 +466,46 @@ void sequenced_arithmetic_entry(lead_a1::SharcMemory &memory,
   static_cast<void>(fetch.advance_sequenced(cpu));
   require(cpu.step(fetch).minimum_core_cycles == 1);
   advance_devices(memory, cpu, serial, devices);
-  const auto branch = cpu.state().branch;
-  const auto loop = cpu.state().arithmetic_loop;
-  constexpr std::uint32_t loop_start = 0x8c003;
-  require(cpu.state().pc == frontier + 1 && branch && branch->target == loop_start &&
-          branch->slots == 2 && loop && loop->phase == lead_a1::SharcArithmeticPhase::fetched &&
-          cpu.state().depth == 1 && cpu.state().pc_stack[0] == loop_start &&
-          fetch.state().fetch1 == loop_start);
   static_cast<void>(fetch.advance_sequenced(cpu));
-  const auto word = fetch.state().execute;
-  if (!word) { throw std::runtime_error("Missing original arithmetic-entry Execute word"); }
-  require(word->address == frontier + 1 && fetch.state().fetch1 == self_modify);
-  require(word->opcode ==
-          memory.read({.address = frontier + 1, .width = lead_a1::SharcWidth::wide48}));
-  constexpr unsigned int vector_words = 384;
-  constexpr std::uint32_t vector_destination = 0x92000;
-  require(devices.spi.state().serial.remaining == vector_words &&
-          devices.spi.state().serial.next_word == vector_destination);
-  const auto before = cpu.state();
-  const auto transport = fetch.state();
-  const auto control = devices.control.snapshot();
-  try {
-    static_cast<void>(cpu.step(fetch));
-  } catch (const std::exception &error) {
-    require(std::string(error.what()).find("delayed-branch/loop IDLE not qualified") !=
-            std::string::npos);
-    require(cpu.state() == before && fetch.state() == transport &&
-            devices.control.snapshot() == control && !memory.active());
-    std::cout << "  Sequenced arithmetic entry: actual DB retired; captured IDLE at PC0x8c08f "
-                 "remains unsupported, first two body F1 addresses accepted\n";
-    return;
+  const auto idle = cpu.step(fetch);
+  require(idle.pc == frontier + 1 && cpu.state().idle_pc == frontier + 1 &&
+          cpu.state().pc == frontier + 2 && cpu.state().idle_delay_word);
+  advance_devices(memory, cpu, serial, devices);
+  sequenced_vector_receive(memory, cpu, fetch, serial, devices);
+  sequenced_loop_interrupt(memory, cpu, fetch, serial, devices);
+  constexpr unsigned int limit = 32;
+  unsigned int foreground_retired{};
+  for (unsigned int clock = 0; clock < limit; ++clock) {
+    const auto before = cpu.state();
+    const auto transport = fetch.state();
+    const auto control = devices.control.snapshot();
+    const bool requested = fetch.address_pm_request(cpu);
+    const auto bus =
+        requested ? lead_a1::SharcFetchBus::pm_data : lead_a1::SharcFetchBus::available;
+    try {
+      static_cast<void>(fetch.advance_sequenced(cpu, bus));
+    } catch (const std::exception &error) {
+      require(std::string(error.what())
+                  .find("arithmetic-loop fetch stall/cache timing not qualified") !=
+              std::string::npos);
+      constexpr std::uint32_t loop_start = 0x8c003;
+      const auto word = transport.decode;
+      require(foreground_retired == 0 && requested && before.pc == loop_start &&
+              transport.fetch1 == self_modify && word && word->address == self_modify);
+      require(cpu.state() == before && fetch.state() == transport &&
+              devices.control.snapshot() == control && !memory.active());
+      std::cout << "  Sequenced foreground: self-modifying PM/cache timing remains unsupported "
+                   "at PC0x8c003; failed clock preserves native/transport state\n";
+      return;
+    }
+    if (fetch.state().execute) {
+      static_cast<void>(cpu.step(fetch));
+      ++foreground_retired;
+    }
+    advance_devices(memory, cpu, serial, devices);
   }
-  throw std::runtime_error("Original loop-IDLE boundary changed; qualify its actual continuation");
+  throw std::runtime_error(
+      "Original arithmetic foreground probe budget exhausted; inspect boundary");
 }
 
 void sequenced_finalizer(lead_a1::SharcMemory &memory,

@@ -19,14 +19,19 @@ bool bit(SharcKnown32 value, std::uint32_t mask) {
   return (value.value & mask) != 0;
 }
 
+bool idle_context(const SharcState &state) {
+  return (!state.count_loop && !state.arithmetic_loop && state.loops_empty == true) ||
+         sharc_arithmetic_entry_delay(state);
+}
+
 }
 
 void sharc_validate_idle(const SharcState &state) {
   if (state.idle_delay_word) {
     constexpr std::uint64_t native_bits = 0xffffffffffff;
     if ((*state.idle_delay_word & ~native_bits) != 0 || !state.branch || state.branch->slots != 1 ||
-        state.pc < internal_begin || state.pc >= internal_end || state.count_loop ||
-        state.arithmetic_loop || state.loops_empty != true || state.cache.pending_flush) {
+        state.pc < internal_begin || state.pc >= internal_end || !idle_context(state) ||
+        state.cache.pending_flush) {
       throw std::invalid_argument("Invalid SHARC retained IDLE delay word");
     }
     for (const auto &pending : state.pending) {
@@ -38,8 +43,7 @@ void sharc_validate_idle(const SharcState &state) {
   if (!state.idle_pc) { return; }
   if (*state.idle_pc < internal_begin || *state.idle_pc >= internal_end - 1 ||
       state.pc != *state.idle_pc + 1 || (state.branch && !state.idle_delay_word) ||
-      state.count_loop || state.arithmetic_loop || state.loops_empty != true ||
-      state.cache.pending_flush) {
+      !idle_context(state) || state.cache.pending_flush) {
     throw std::invalid_argument("Invalid SHARC ordinary IDLE/resume state");
   }
   for (const auto &pending : state.pending) {
@@ -51,7 +55,7 @@ void sharc_begin_idle(SharcState &state, bool fetched) {
   const bool delayed = state.branch && (!fetched || state.branch->slots != 2 ||
                                         state.branch->target < internal_begin ||
                                         state.branch->target >= internal_end);
-  if (delayed || state.count_loop || state.arithmetic_loop || state.loops_empty != true) {
+  if (delayed || !idle_context(state) || (!fetched && state.arithmetic_loop)) {
     throw std::runtime_error("SHARC delayed-branch/loop IDLE not qualified");
   }
   if (state.pc < internal_begin || state.pc >= internal_end - 1) {

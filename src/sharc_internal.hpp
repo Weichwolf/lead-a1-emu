@@ -120,6 +120,7 @@ void sharc_arithmetic_loop_prepare(SharcState &state,
                                    std::uint64_t opcode,
                                    SharcLoopClock clock = SharcLoopClock::functional);
 [[nodiscard]] bool sharc_fetched_arithmetic(const SharcState &state);
+[[nodiscard]] bool sharc_arithmetic_entry_delay(const SharcState &state);
 void sharc_clocked_arithmetic_finish(const SharcState &previous, SharcState &next, bool exit);
 [[nodiscard]] unsigned int
 sharc_arithmetic_loop_finish(const SharcState &previous,
@@ -140,7 +141,7 @@ void sharc_interrupt_environment_guard(const SharcState &state);
 void sharc_interrupt_service_guard(const SharcState &state);
 void sharc_validate_interrupt(const SharcState &state);
 [[nodiscard]] std::optional<SharcInterruptStep>
-sharc_service_interrupt(SharcState &state, SharcInterruptReference reference);
+sharc_service_interrupt(SharcState &state, SharcInterruptReference reference, bool fetched = false);
 [[nodiscard]] std::optional<std::uint32_t> sharc_return_interrupt(
     SharcState &state, std::uint64_t opcode, std::optional<bool> captured = std::nullopt);
 void sharc_interrupt_finish(const SharcState &previous, SharcState &next);

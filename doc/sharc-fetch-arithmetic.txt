@@ -20,8 +20,8 @@ Forward native setup still requires at least five instructions. A backward
 setup can enter a nonwrapped multiple-instruction type0 frame after actual
 PCSTK rewriting without reclassifying its apparent shorter body. Single,
 wrapped, nested, mixed cache/stall/interrupt and termination-before-retained-
-end paths remain guarded. Original self-modifying PM/cache and loop-IDLE/
-interrupt composition require further qualification; this contract does
+end paths remain guarded. The separate loop-entry IDLE/IRQ composition is in
+sharc-loop-idle.txt; self-modifying PM/cache needs further qualification. This contract does
 not establish final vector acceptance or instrument startup.
 
 Primary constraints: PGRrev2.4 4-53/54 Table4-15,4-58,A-10/11.
@@ -36,12 +36,11 @@ popped parallel PCSTK operands with flags changed
 by the same instruction, unknown-condition rollback, missing/orphan end markers,
 corrupted drain columns and actual PM/multiplier mixed-context rejection.
 
-All eight optional original cases additionally retire the actual entry DB
-after their8c08e setup checkpoint, then preserve the unchanged captured
-loop-IDLE failure at CPU8c08f. First two body F1 addresses are accepted;
-no IDLE has retired, no vector word has transferred and all384 DMA words
-remain armed. The independent109318-cell final-payload oracle per cadence
-is still checked. Separate instruction-only streams retain8c08e.
+The original8c08e setup checkpoint additionally retires the entry DB and
+accepts the first two body F1 addresses. The later vector DMA/IRQ/RTI
+continuation and remaining8c003 PM/cache guard are in sharc-loop-idle.txt.
+The independent109318-cell final-payload oracle per cadence is still checked.
+Separate instruction-only streams retain8c08e.
 
   cmake --build --preset strict
   ctest --preset strict -R '^(sharc_fetched_arithmetic_loops|sharc_fetched_arithmetic_short_loops|sharc_fetched_deferred_arithmetic_setup|sharc_arithmetic_loops|original_sharc_images)$' --output-on-failure
