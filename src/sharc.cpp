@@ -31,10 +31,12 @@ constexpr unsigned int dm_write_class = 17;
 constexpr unsigned int pm_read_class = 18;
 constexpr unsigned int pm_write_class = 19;
 constexpr unsigned int system_bit_class = 20;
+constexpr unsigned int cache_stack_class = 23;
 constexpr std::uint32_t all_bits = std::numeric_limits<std::uint32_t>::max();
 
 void validate(const SharcState &state) {
   detail::sharc_validate_registers(state);
+  detail::sharc_validate_cache(state.cache);
   detail::sharc_validate_flag_inputs(state.flag_inputs);
   if (state.pc > detail::sharc_pc_mask || (state.depth && *state.depth > state.pc_stack.size())) {
     throw std::invalid_argument("Invalid SHARC PC/stack state");
@@ -118,6 +120,8 @@ void direct_move(SharcMemory &memory,
   if ((opcode & long_word) != 0) {
     throw std::runtime_error("SHARC forced-LW register transfer not implemented");
   }
+  constexpr std::uint64_t program = std::uint64_t{1} << 41;
+  if ((opcode & program) != 0) { detail::sharc_cache_program_access(state); }
   const auto ureg = static_cast<unsigned int>((opcode >> ureg_shift) & ureg_mask);
   const auto address = static_cast<std::uint32_t>(opcode);
   constexpr std::uint32_t iop_end = 0x40000;
@@ -156,6 +160,12 @@ void direct_move(SharcMemory &memory,
 
 std::optional<std::uint32_t>
 execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const SharcControl *control) {
+  constexpr std::uint64_t dual_mask = 0xe00000000000;
+  constexpr std::uint64_t dual_class = 0x200000000000;
+  if ((opcode & dual_mask) == dual_class) {
+    detail::sharc_dual_move(memory, state, opcode, control);
+    return {};
+  }
   constexpr std::uint64_t register_indexed_mask = 0xe00000000000;
   constexpr std::uint64_t register_indexed = 0x400000000000;
   if ((opcode & register_indexed_mask) == register_indexed) {
@@ -211,6 +221,7 @@ execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const Shar
       detail::sharc_bit_operation(state, opcode);
       return {};
     }
+    case cache_stack_class: detail::sharc_cache_flush(state, opcode); return {};
     default: throw std::runtime_error("SHARC instruction class not implemented");
   }
 }
@@ -291,6 +302,9 @@ SharcState Sharc::reset_reference_214xx(std::uint32_t entry) {
   state.effective = state.system;
   state.depth = 0;
   state.loops_empty = true;
+  state.cache.valid.known = all_bits;
+  constexpr std::uint32_t lru_bits = 0xffff;
+  state.cache.lru.known = lru_bits;
   return state;
 }
 
@@ -311,8 +325,10 @@ SharcStep Sharc::step() {
       control_transaction = true;
     }
     opcode = memory_.read({.address = state_.pc, .width = SharcWidth::wide48}, AccessKind::fetch);
+    detail::sharc_cache_guard(state_, *opcode);
     auto next = state_;
     next.pending.fill({});
+    next.cache.pending_flush = false;
     detail::sharc_arithmetic_loop_prepare(next, *opcode);
     unsigned int minimum_cycles = 1;
     if (state_.count_loop && state_.count_loop->body == state_.count_loop->end) {
@@ -328,6 +344,7 @@ SharcStep Sharc::step() {
     }
     finish_control(state_, next);
     minimum_cycles += detail::sharc_arithmetic_loop_finish(state_, next);
+    detail::sharc_cache_finish(state_, next);
     memory_.commit_instruction();
     transaction = false;
     if (control_transaction) {

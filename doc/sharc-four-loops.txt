@@ -71,8 +71,8 @@ not public build inputs.
 
 Original cooperative stream reference
 
-The arithmetic-resource prefix is qualified in both this coupled reference
-and the separately paced direct DSP reference in sharc-stream-reference.txt.
+Both the coupled reference here and the separately paced direct DSP reference
+in sharc-stream-reference.txt qualify the cache/DMA setup prefix.
 
 The optional original SPI reference retains the separately paced bootstrap,
 RAM-clear, first header and complete first tag3-record assertions. It then
@@ -90,11 +90,15 @@ payload into DSP memory. Tag1 remains the original skip, not a host zero fill.
 The terminal header's following1536 vector bytes are excluded. Execution
 retires PX=PM, BSET, SYSCTL width selection, I12 setup and the old-value
 parallel PASS/register transfer, arithmetic DO, the explicit PCSTK change
-and IRPTL/IMASK/MODE1 setup, then stops on unsupported cache flush at native
-PC0x8c088 (sharc-px.txt,sharc-bit-operations.txt,sharc-register-moves.txt,
-sharc-arithmetic-loops.txt). The retained deferred loop has start8c003,
+and IRPTL/IMASK/MODE1 setup. The actual cache flush and final DMA setup execute
+before the unsupported deferred-loop branch at native PC0x8c08e
+(sharc-px.txt,sharc-bit-operations.txt,sharc-register-moves.txt,
+sharc-arithmetic-loops.txt,sharc-cache.txt). The retained deferred loop has start8c003,
 end8c004,type0 and depth1; effective IMASK1003/IRPTL0 match independent
-expectations. Its reentered/self-modifying body has not executed.
+expectations. Cache validity is known zero with no pending flush, and SPI
+index92000/modifier1/count384 and R1/R2 match their independent expectations.
+No terminal vector word has been accepted; its reentered/self-modifying body
+has not executed.
 The ARM writer has not returned at this frontier; in-flight serial state is
 not reported as a completed whole-array transfer.
 
@@ -102,10 +106,10 @@ All four original placements reach that frontier. Record counts include the
 terminal header; payload-cell counts are final last-write-wins comparisons:
 
 Part  Transport  Records  Payload cells  Committed DSP instructions
-0     0          608      51869          6415785
-0     1          600      51755          6397480
-1     0           26       4042           617469
-1     1           21       1652           344010
+0     0          608      51869          6415791
+0     1          600      51755          6397486
+1     0           26       4042           617475
+1     1           21       1652           344016
 
 This covers1251 nonterminal records and109318 final-cell comparisons across
 the placements. Architectural count1 startup stack arbitration above,

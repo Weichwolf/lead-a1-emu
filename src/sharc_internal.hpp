@@ -78,6 +78,10 @@ void sharc_bit_shift(SharcState &state,
                      SharcBitInstruction instruction,
                      unsigned int element);
 void sharc_register_move(SharcState &state, std::uint64_t opcode);
+void sharc_dual_move(SharcMemory &memory,
+                     SharcState &state,
+                     std::uint64_t opcode,
+                     const SharcControl *control);
 void sharc_data_move(SharcMemory &memory,
                      SharcState &state,
                      std::uint64_t opcode,
@@ -110,5 +114,10 @@ void sharc_arithmetic_loop_prepare(SharcState &state, std::uint64_t opcode);
                                                         SharcState &next);
 void sharc_arithmetic_stack_write(SharcState &state, SharcKnown32 value);
 [[nodiscard]] SharcKnown32 sharc_loop_address(const SharcState &state);
+void sharc_validate_cache(const SharcCacheState &cache);
+void sharc_cache_flush(SharcState &state, std::uint64_t opcode);
+void sharc_cache_guard(const SharcState &state, std::uint64_t opcode);
+void sharc_cache_program_access(SharcState &state);
+void sharc_cache_finish(const SharcState &previous, SharcState &next);
 
 }

@@ -1,0 +1,34 @@
+Native cache invalidation reference
+
+The internal instruction cache has32 entries in16 two-way sets. The low four
+instruction-address bits select the set. Cache state records validity, tags,
+instruction data and replacement knowledge separately; unknown membership is
+not an invalid entry. Reset clears validity and LRU bits while leaving tag/data
+contents unknown. Restored state validates canonical knowledge, widths and set
+membership without pretending that unknown contents have been observed.
+
+Pure native Type20a FLUSH CACHE requests invalidation independently of MODE2
+cache disable/freeze. For qualified internal execution, its effect follows one
+subsequent committed instruction. All valid bits then become known zero; tags,
+instruction data and LRU knowledge remain. A failed instruction preserves the
+request and all CPU/peripheral state. Repeated flush and checkpoint continuation
+preserve this distinction. A PM-data encoding immediately following FLUSH CACHE
+is explicitly rejected under PGR4-86/9-70, including conditional encodings.
+Combined stack operations, reserved fields and external latency remain guarded.
+
+This is an invalidation/knowledge extension, not completed cache lookup, fill,
+replacement, fetch pipeline or PM-write coherence. Qualified PM-data operations
+conservatively forget possible unmodeled fill effects. Known CADIS preserves
+cache state; known CAFRZ preserves contents but leaves replacement history
+unknown. Unqualified controls cannot expose a falsely known empty cache.
+No architectural cache-read interface or host acceleration is introduced.
+
+Primary provenance: SHARC PGRrev2.4,4-79..89,9-70,10-26,A-8.
+The finite owned tests cover all32 entries,16 control/knowledge cases, effect
+latency, checkpoint continuation, repeated requests, rollback/repair, PM
+follower hazards, unqualified fill knowledge and invalid/reserved inputs.
+The direct original stream reference reaches deferred branch
+8c08e after the real flush and vector DMA setup (sharc-stream-reference.txt).
+No terminal vector word has been accepted at that frontier.
+Full finalizer reentry, vector restoration, IDLE/IRQ/RTI, VISA/application,
+physical timing, boot and audio remain open.

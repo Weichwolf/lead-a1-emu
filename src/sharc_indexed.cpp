@@ -35,6 +35,7 @@ void sharc_indexed_move(SharcMemory &memory,
   constexpr unsigned int index_shift = 41;
   constexpr unsigned int modifier_shift = 38;
   const auto bank = static_cast<unsigned int>((opcode >> 32) & 1);
+  if (bank != 0) { sharc_cache_program_access(state); }
   const auto index = static_cast<unsigned int>((opcode >> index_shift) & 7) + (bank * 8);
   const auto modifier = static_cast<unsigned int>((opcode >> modifier_shift) & 7) + (bank * 8);
   const auto reg = static_cast<unsigned int>((opcode >> 23) & 127);

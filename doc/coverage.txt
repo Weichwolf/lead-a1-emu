@@ -74,6 +74,14 @@ ID  State    Evidence / remaining work
              have owned tests (sharc-arithmetic-loops.txt). Deferred backward
              setup/PCSTK writes preserve type0; short/reentered/body-memory
              pipelines, branches and full cache/interrupt timing stay guarded.
+             Pure Type20a cache invalidation tracks entry validity separately
+             from tag/data/LRU knowledge, internal follower latency and rollback;
+             possible unqualified fills forget knowledge (sharc-cache.txt).
+             SISD Type1 dual DM/PM transfers retain old store/compute operands,
+             DM>PM>compute load priority, independent widths, postmodify and
+             late-failure rollback. SYSCTL is the only qualified Type1 IOP
+             target; other domains stay guarded (sharc-dual-moves.txt).
+             Cache lookup/fills/prefetch/coherence and SIMD data moves remain open.
              Four-instruction loops execute real delayed CALLs, both delay
              slots, nested callees/polling and indexed stores; final steady
              bit25 frames, startup bubbles and rollback have owned tests
@@ -229,9 +237,11 @@ ID  State    Evidence / remaining work
              1251 nonterminal records and109318 final payload-cell comparisons.
              Each executes finalizer PX, BSET, SYSCTL width selection and the
              old-value parallel PASS/move, arithmetic DO, explicit PCSTK change
-             and IRPTL/IMASK/MODE1 setup to unsupported cache flush at
-             PC0x8c088. Deferred type0/start/end/depth and effective interrupt
-             registers match independent oracles; per-placement counts and
+             and IRPTL/IMASK/MODE1 setup, actual cache flush and vector DMA
+             setup to unsupported deferred-loop branch at PC0x8c08e.
+             Deferred type0/start/end/depth, effective interrupt registers,
+             cache invalidation and SPI index92000/modifier1/count384 match
+             independent oracles; per-placement counts and
              committed-instruction totals are in sharc-four-loops.txt.
              All64 PX bits match the independent original terminal-header
              alias oracle, including low16 zero (sharc-px.txt).
@@ -241,8 +251,10 @@ ID  State    Evidence / remaining work
              A separate direct SHARC serial reference qualifies all four streams
              at two fixed edge cadences through BSET/SYSCTL and the old-value
              parallel PASS/move, arithmetic DO/PCSTK/interrupt-register setup,
-             stopping at unsupported cache flush/native PC0x8c088. Type0 and
-             the new start/end/depth, IMASK1003/IRPTL0 have independent oracles.
+             actual cache flush and vector DMA setup, stopping at unsupported
+             deferred-loop branch/native PC0x8c08e. Type0 and
+             the new start/end/depth, IMASK1003/IRPTL0, cache invalidation and
+             SPI index92000/modifier1/count384 have independent oracles.
              Each cadence retains1251 ordinary records/109318 final-cell checks
              and the independent PX oracle (sharc-stream-reference.txt). This
              exercises the original DSP code/DMA without an ARM/physical wiring

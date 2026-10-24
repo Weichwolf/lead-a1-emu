@@ -56,5 +56,5 @@ false predicates and unsupported compute. No random fuzz or physical timing clai
 The optional direct original stream reference executes R9=PASS R12 with
 R11=old R9 at all four placements and both fixed serial cadences. Its independent
 finalizer expectations retain the old instruction template in R11 and original
-SYSCTL value in R9; the further arithmetic-resource prefix reaches unsupported
-cache flush8c088 (sharc-stream-reference.txt).
+SYSCTL value in R9; the further arithmetic-resource/cache/DMA setup prefix
+reaches the deferred-loop branch guard8c08e (sharc-stream-reference.txt).

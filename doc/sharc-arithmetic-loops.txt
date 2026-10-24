@@ -51,5 +51,5 @@ reserved encodings, body memory, deferred branches and malformed restoration.
 
 Primary evidence: PGRrev2.4,4-45/54,4-56/58,9-49/50,10-19/33,A-10/11.
 reference/sharc.json records provenance. Instruction fetch visibility,
-self-modification, interrupt/RTI, cache and IDLE remain separate open work;
+self-modification, interrupt/RTI, cache lookup/prefetch and IDLE remain open;
 see sharc-finalizer.txt. No physical boot, audio or chip-timing claim.

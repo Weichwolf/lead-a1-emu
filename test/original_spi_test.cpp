@@ -887,12 +887,13 @@ void continuous_stream(Fixture &fixture,
   } catch (const std::exception &error) {
     fixture.cooperative_dsp = nullptr;
     const std::string message(error.what());
-    require(message.find("native48 pc=0x8c088") != std::string::npos);
-    require(message.find("instruction class not implemented") != std::string::npos);
+    require(message.find("native48 pc=0x8c08e") != std::string::npos);
+    require(message.find("deferred arithmetic-loop fetch/branch not qualified") !=
+            std::string::npos);
     stopped = true;
   }
   fixture.cooperative_dsp = nullptr;
-  constexpr std::uint32_t frontier = 0x8c088;
+  constexpr std::uint32_t frontier = 0x8c08e;
   require(stopped && cpu.state().pc == frontier && !fixture.dsp_memory.active());
   require(cpu.state().depth == 1 && !cpu.state().count_loop && cpu.state().loops_empty == false);
   const auto &state = cpu.state();
@@ -908,6 +909,9 @@ void continuous_stream(Fixture &fixture,
   require(cpu.state().system[11].value == primary_mask &&
           cpu.state().effective[11] == cpu.state().system[11]);
   require(cpu.state().system[10].value == 0 && cpu.state().effective[10] == cpu.state().system[10]);
+  constexpr std::uint32_t full32 = 0xffffffff;
+  require(state.cache.valid == (lead_a1::SharcKnown32{.known = full32}) &&
+          !state.cache.pending_flush);
   constexpr std::uint32_t saved_instruction = 0x8c030;
   constexpr std::uint64_t template_value = 0xb16b000000;
   require(cpu.state().dag[0][0][8].value == saved_instruction);
@@ -938,11 +942,16 @@ void continuous_stream(Fixture &fixture,
   require(cpu.state().px.value == expected_px && cpu.state().px.known == all_bits);
   if (!fixture.runtime) { throw std::logic_error("Missing cooperative runtime SPI"); }
   const auto runtime = fixture.runtime->device.state();
-  require(!runtime.overflow && runtime.serial.remaining == 0);
+  constexpr std::uint32_t vector_destination = 0x92000;
+  constexpr unsigned int vector_words = 384;
+  require(!runtime.overflow && runtime.serial.next_word == vector_destination &&
+          runtime.serial.remaining == vector_words && runtime.modifier == 1);
+  require(state.data[0][1].value == std::uint64_t{vector_destination} * 256 &&
+          state.data[0][2].value == std::uint64_t{vector_words} * 256);
   const auto cells = verify_stream_payload(fixture, input);
   std::cout << "Cooperative original ARM/DSP transfer: " << input.records << " records, " << cells
             << " final payload cells, " << fixture.dsp_steps
-            << " committed DSP instructions; finalizer reaches cache flush\n"
+            << " committed DSP instructions; vector DMA armed, deferred branch frontier\n"
             << std::flush;
 }
 
@@ -1206,7 +1215,7 @@ void kernel_transfer(std::span<const std::byte> image,
                  .records = records[part][channel]});
     std::cout << "Part " << part << " transport " << channel
               << ": original ARM/SPI first code record stored through native SW reads and indexed "
-                 "writes; cooperative finalizer reaches cache flush\n";
+                 "writes; cooperative vector DMA armed, deferred branch frontier\n";
   }
 }
 

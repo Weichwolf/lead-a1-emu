@@ -43,6 +43,9 @@ physical storage after a pop. STKYx PCFL/PCEM are derived from known stack depth
 Arithmetic DO, qualified straight bodies and deferred PCSTK setup are documented
 in sharc-arithmetic-loops.txt. LADDR exposes the known arithmetic frame or the
 empty ffffffff value; live counter/unknown loop readback remains guarded.
+Pure cache invalidation and SISD Type1 compute/dual-memory transfers have
+separate contracts in sharc-cache.txt and sharc-dual-moves.txt. They do not
+qualify the outstanding fetch/cache/self-modification pipeline.
 
 System register read views and effective controls are separate. MODE1, IRPTL
 and IMASK writes have one following internal instruction of effect latency

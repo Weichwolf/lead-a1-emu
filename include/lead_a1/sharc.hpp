@@ -70,6 +70,16 @@ struct SharcArithmeticLoop {
   bool operator==(const SharcArithmeticLoop &) const = default;
 };
 
+struct SharcCacheState {
+  // Entry bit = 2*set + way. Unknown membership is distinct from invalid.
+  SharcKnown32 valid;
+  SharcKnown32 lru; // Only the low16 bits exist.
+  std::array<SharcKnown32, 32> addresses{};
+  std::array<SharcKnown64, 32> instructions{};
+  bool pending_flush{};
+  bool operator==(const SharcCacheState &) const = default;
+};
+
 struct SharcFlagDrive {
   std::uint16_t high{};
   std::uint16_t low{};
@@ -100,6 +110,7 @@ struct SharcState {
   std::optional<SharcBranch> branch;
   std::optional<SharcCountLoop> count_loop;
   std::optional<SharcArithmeticLoop> arithmetic_loop;
+  SharcCacheState cache;
   bool operator==(const SharcState &) const = default;
 };
 

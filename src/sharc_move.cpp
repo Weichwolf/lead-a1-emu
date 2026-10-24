@@ -112,6 +112,7 @@ void sharc_data_move(SharcMemory &memory,
   // SIMD data moves evaluate conditions per element, unlike branch AND rules.
   // Reject that mode before a false PEx condition could hide a PEy access.
   if (!sharc_data_move_condition(state, opcode)) { return; }
+  if ((opcode & program_bit) != 0) { sharc_cache_program_access(state); }
   const auto index =
       static_cast<unsigned int>((opcode >> 41) & 7) + ((opcode & program_bit) != 0 ? 8U : 0U);
   sharc_addressing_guard(state, index);

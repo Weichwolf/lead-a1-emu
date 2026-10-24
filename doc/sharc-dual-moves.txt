@@ -1,0 +1,40 @@
+Native Type1 dual-memory reference
+
+The ordinary native decoder recognizes high bits001. Type1a combines the
+existing qualified compute operations with a DAG1 DM and DAG2 PM transfer.
+There is no condition field. DMI43:41,DMM40:38,DMdirection44,DREG36:33;
+PMI32:30,PMM29:27,PMdirection37,DREG26:23; compute22:0. Both indices
+postmodify using their corresponding pre-instruction modifiers. The current
+scope is SISD and the existing known bank/linear-addressing reference.
+SIMD, circular/reversed/broadcast and unknown modes remain guarded.
+
+Both store sources, indices/modifiers and computation operands come from the
+instruction's old register state. A load cannot feed the same instruction's
+computation or overwrite its simultaneous store source. DM load has priority
+over PM load, and either over a computation's destination; compute status
+still reflects the actual compute result. An empty compute field is allowed.
+On a same-block conflict the DM access completes before the PM access.
+
+RAM uses the existing shared physical-cell NW32/40/SW contracts and explicit
+SYSCTL binding. Type1 IOP support is qualified only for the mapped SYSCTL
+device, retaining the monitor guard and actual device transactions. All other
+IOP targets/domains remain explicitly unsupported; no address-range domain
+assignment is inferred. PGR7-8 prohibits peripheral IOP dual access.
+SYSCTL keeps its one-following-instruction effect latency, including during
+the concurrent PM transfer. Failure in either memory operation or computation
+rolls back the CPU, RAM writes, core control and joined devices. PM access
+participates in the cache knowledge/hazard contract; no fetch pipeline or
+self-modifying-loop completion follows from these instruction semantics.
+
+Primary evidence: SHARC PGRrev2.4,2-6/7,4-110,6-14/16,7-5/10,9-7/9,10-5.
+Other core/peripheral register domains need explicit register-map corroboration.
+The native tests enumerate4096 direction/register/bank cases and separately
+check shared-address ordering, empty compute, both independent NW widths,
+core-control effect latency and late-failure rollback. The Type1 PM-follower
+and SIMD guards also have rollback assertions.
+A static explicit-field audit of all four original terminal vector word4
+placements agrees with DM I4/M5/R9,PM I12/M13/R11,R0=R0-R0. It is not
+execution evidence. Active arithmetic-loop bodies still guard memory/control
+instructions; this extension does not remove their reentry/pipeline boundary.
+No new original Type1 finalizer execution, IDLE/IRQ/RTI/VISA, complete boot,
+audio or physical timing is established.

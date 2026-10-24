@@ -27,7 +27,7 @@ namespace {
 constexpr unsigned int kernel_bytes = 1536;
 constexpr unsigned int header_bytes = 12;
 constexpr std::uint32_t reset = 0x8c000;
-constexpr std::uint32_t frontier = 0x8c088;
+constexpr std::uint32_t frontier = 0x8c08e;
 constexpr std::uint32_t full32 = 0xffffffff;
 constexpr std::uint32_t saved_vector = 0x8c030;
 constexpr std::uint32_t self_modify = 0x8c004;
@@ -222,6 +222,14 @@ void check_frontier(const lead_a1::Sharc &cpu,
   constexpr std::uint32_t primary_mask = 0x1003;
   require(state.system[11].value == primary_mask && state.effective[11] == state.system[11]);
   require(state.system[10].value == 0 && state.effective[10] == state.system[10]);
+  require(state.cache.valid == (lead_a1::SharcKnown32{.known = full32}) &&
+          !state.cache.pending_flush);
+  constexpr std::uint32_t vector_destination = 0x92000;
+  constexpr unsigned int vector_words = 384;
+  require(spi.state().serial.next_word == vector_destination &&
+          spi.state().serial.remaining == vector_words && spi.state().modifier == 1);
+  require(state.data[0][1].value == std::uint64_t{vector_destination} * 256 &&
+          state.data[0][2].value == std::uint64_t{vector_words} * 256);
   const auto saved = (std::uint64_t{word(serial.stream, expected.terminal + 8)} << 32) |
                      (word(serial.stream, expected.terminal + 4) & 0xffff0000);
   constexpr std::uint64_t full64 = 0xffffffffffffffff;
@@ -234,7 +242,7 @@ void check_frontier(const lead_a1::Sharc &cpu,
   constexpr std::uint32_t widened = 0x204;
   require(control.state().effective == widened && control.state().control == widened &&
           !control.state().delayed);
-  require(!spi.state().overflow && spi.state().serial.remaining == 0);
+  require(!spi.state().overflow);
   require(serial.bit >= (expected.terminal + header_bytes) * 8 &&
           serial.bit < serial.stream.size() * 8);
 }
@@ -266,8 +274,9 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
       step = cpu.step();
     } catch (const std::exception &error) {
       const std::string message(error.what());
-      if (message.find("native48 pc=0x8c088") == std::string::npos ||
-          message.find("instruction class not implemented") == std::string::npos) {
+      if (message.find("native48 pc=0x8c08e") == std::string::npos ||
+          message.find("deferred arithmetic-loop fetch/branch not qualified") ==
+              std::string::npos) {
         throw std::runtime_error("Unexpected original SHARC execution failure: " + message);
       }
       require(cpu.state() == before && spi.state() == before_spi &&
@@ -299,7 +308,7 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
   }
   std::cout << expected.records << " records, " << expected.cells.size() << " final payload cells, "
             << instructions << " DSP instructions, " << interval
-            << " instructions/serial edge; cache flush frontier\n"
+            << " instructions/serial edge; vector DMA armed, deferred branch frontier\n"
             << std::flush;
 }
 
