@@ -88,6 +88,28 @@ struct SharcFlagDrive {
   bool operator==(const SharcFlagDrive &) const = default;
 };
 
+struct SharcInterruptFrame {
+  std::uint32_t source{};
+  std::uint32_t vector{};
+  std::uint32_t return_pc{};
+  unsigned int saved_depth{};
+  bool operator==(const SharcInterruptFrame &) const = default;
+};
+
+struct SharcInterruptReference {
+  // Explicit internal IVT base; P1I routing and the physical board remain separate.
+  std::uint32_t vector_base{};
+};
+
+struct SharcInterruptStep {
+  std::uint32_t source{};
+  std::uint32_t return_pc{};
+  std::uint32_t vector{};
+  // Internal branch overhead only; no guest instruction retires here.
+  unsigned int minimum_core_cycles{};
+  bool operator==(const SharcInterruptStep &) const = default;
+};
+
 struct SharcState {
   std::uint32_t pc{};
   // UREG 0x70..0x7f. Read views and effective controls are distinct.
@@ -111,6 +133,9 @@ struct SharcState {
   std::optional<SharcCountLoop> count_loop;
   std::optional<SharcArithmeticLoop> arithmetic_loop;
   SharcCacheState cache;
+  std::optional<SharcInterruptFrame> interrupt;
+  // Retired ordinary IDLE address; pc holds its queued resume address.
+  std::optional<std::uint32_t> idle_pc;
   bool operator==(const SharcState &) const = default;
 };
 
@@ -123,7 +148,7 @@ struct SharcStep {
 };
 
 // Functional native-48 instruction reference; unsupported execution fails.
-// No autonomous peripheral clocks, interrupt delivery or cycle timing yet.
+// No autonomous peripheral clocks or complete physical pipeline timing.
 class Sharc {
 public:
   Sharc(SharcMemory &memory, SharcState initial, SharcControl *control = nullptr);
@@ -138,8 +163,13 @@ public:
   [[nodiscard]] SharcFlagDrive flag_drives() const;
 
   // Explicit externally routed IRPTL maskable request. Latches even if masked;
-  // enabled delivery still fails until interrupt entry/return is implemented.
+  // Enabled requests require explicit qualified recognition by the owner.
   void latch_interrupt(std::uint32_t mask);
+
+  // Explicit recognition of an already latched P1I at a qualified boundary.
+  // Physical synchronization and delayed-branch/loop entry remain unqualified.
+  [[nodiscard]] std::optional<SharcInterruptStep>
+  service_interrupt(SharcInterruptReference reference);
 
   [[nodiscard]] SharcStep step();
 

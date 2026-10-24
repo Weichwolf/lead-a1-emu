@@ -106,6 +106,20 @@ void SharcControl::abort_core_instruction() noexcept {
   joined_ = false;
 }
 
+void SharcControl::advance_internal_clocks(unsigned int core_cycles) {
+  if (staged_ || core_active_) {
+    throw std::logic_error("SHARC SYSCTL clock advance during a transaction");
+  }
+  const auto delayed = current_.delayed;
+  if (core_cycles == 0 || !delayed) { return; }
+  if (core_cycles < 2) {
+    throw std::runtime_error("SHARC SYSCTL partial clock effect interval not qualified");
+  }
+  current_.effective = *delayed;
+  current_.effective_known = all_bits;
+  current_.delayed.reset();
+}
+
 void SharcControl::begin_instruction() {
   if (core_active_ && !joined_) {
     joined_ = true;

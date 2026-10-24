@@ -1,0 +1,52 @@
+P1I recognition and immediate RTI reference
+
+An explicit owner operation recognizes an already latched, enabled P1I at a
+qualified native internal instruction boundary. The owner supplies an aligned
+internal IVT base; P1I uses offset30. This is a core programmable-interrupt
+reference, not proof of the Nord board's PICR routing, IVT/reset selection,
+interrupt synchronization, SPI acknowledgement or complete pipeline timing.
+Other enabled/unknown sources, nonmaskable state, active/unknown timer,
+nesting, foreground loops/delayed branch, unknown/full stack, unknown existing
+IMASKP and pending IRPTL writes are explicitly guarded before any mutation.
+
+Recognition checks effective MODE1/IMASK/IRPTL before the accepted branch.
+It pushes the interrupted PC with bit25 set and CALL bit24 clear (PGR A-10), sets P1I in
+IMASKP and clears that source in IRPTL. It publishes a separate recognition
+event with four internal branch-overhead minimum clocks. No guest instruction
+or NOP retires. The complete synchronization/recognition/fetch pipeline is not
+inferred from this lower bound or the functional owner placement.
+PGR A-32 counts effect latency in processor clocks, including interrupts.
+The accepted internal branch's clock interval therefore settles pending
+MODE1/IMASK/FLAGS and cache-flush effects before the first ISR instruction.
+Bound SYSCTL effects also settle; a partial one-clock interval or an active
+controller transaction is guarded. No fictional guest NOP supplies this time.
+
+P1I does not automatically push/pop ASTATx/y or MODE1, nor apply MMASK. Those
+status actions belong to IRQ2-0/timer or explicit status-stack instructions.
+IMASKP masks every source during nonnested service. Other source latches are
+retained; repeated requests for the in-service source are held clear. Guest
+IRPTL writes cannot re-enable that source during service. Source clearing
+also covers pending IRPTL effects. Peripheral-source acknowledgement remains
+a separate owner/device action; a core latch clear is not a fabricated SPI
+acknowledgement or readiness reply.
+
+Native immediate conditional RTI returns through the matched interrupt frame,
+pops its PC resource, clears the mask pointer/source and retains ISR results.
+The physical popped PC-stack entry remains observable. SIMD uses the normal
+AND of both PE conditions. False RTI conditions preserve service state; RTS
+does not treat the interrupt frame as a CALL. Delayed/parallel RTI, status
+stack sources, nested recognition and changed top return frames stay guarded.
+Checkpoints validate controller/frame consistency; failed recognition/handler
+instructions preserve their pre-operation CPU/device/transaction states.
+
+Primary evidence: PGRrev2.4,4-26..35,4-40..43,9-44/46,10-17,A-5,A-10,A-31/34,A-37/42.
+Owned tests exercise entry metadata, a real handler, IMASKP readback, status
+retention/checkpoint continuation, masks/clock effect latency, active-source clearing,
+unqualified/unknown boundaries, failed handler/repair, return conditions and
+SIMD/MMASK distinctions. Real guest MODE1-bank and SYSCTL-width writes directly
+before recognition check the very first handler operation; a failed clock owner
+preserves CPU/controller state. A pending MODE1 write enabling unqualified nesting
+also rejects atomically after the entry-clock check. Stack depth must be known for service
+checkpoint restoration; unknown short-loop startup contexts remain guarded.
+Delayed-branch/loop IDLE wake, interrupted loop reentry, vector DMA restoration,
+VISA/application boot, audio and hardware comparison remain open.

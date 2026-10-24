@@ -33,15 +33,19 @@ for every valid BOOT_CFG mode, despite the generic reset listing0. A reserved
 mode clears it; unknown mode leaves it unknown and prevents a complete register
 read. Reset IMDW0..3 are known zero independently of that unknown bit.
 The current reference permits IIVT and IMDW9..12 writes. Reset, arbitration,
-mux, family/reserved settings fail rather than pretending to act. Interrupt
-entry/vector routing, software reset and those board functions remain open.
+mux, family/reserved settings fail rather than pretending to act. Physical
+interrupt/vector routing, software reset and those board functions remain open.
 
 Read views update immediately; width effects follow one committed internal
 instruction. Consecutive writes retain ordered effects. CPU state, memory,
 device accesses and due/new SYSCTL effects share rollback. Reading or failing
 an instruction cannot consume a delayed change. The owner stages control at
 instruction entry and joins any actual IOP access into that same transaction.
-This is an instruction-order reference, not an external-access/pipeline model.
+Accepted internal P1I entry also settles pending width effects before its first
+handler operation (PGR A-32; sharc-interrupts.txt). Explicit quiet internal
+clock intervals of at least two cycles settle the supported delayed effect;
+partial one-clock intervals and active transactions fail without mutation.
+This is a bounded functional reference, not an external-access/pipeline model.
 
 RAM moves and loops
 Type4a handles compute-free, SISD DM/PM accesses using signed immediate6 and

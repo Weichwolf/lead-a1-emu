@@ -63,7 +63,9 @@ uploader, GPIO or TI master. These two cadences and the original composition's
 one-DSP-step-per-ARM-step profile are owned functional schedules, not physical
 wiring, readiness/FLAG timing or CPU-frequency ratios. Passing them does not
 establish a completed outer upload, cold boot, slot allocation or audio.
-The original composition also qualifies all four placements through this
+The publishedb97eda8 composition qualifies all four placements through this
 DMA/deferred-branch frontier, with its distinct counts in sharc-four-loops.txt.
+The new P1I/RTI/ordinary-IDLE paths are not reached by either prefix; the current
+direct runs explicitly require no active interrupt service or retired IDLE.
 Neither reference qualifies a completed ARM writer, physical readiness wiring
 or boot.

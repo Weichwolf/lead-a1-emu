@@ -186,16 +186,21 @@ execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const Shar
   }
   const auto type = opcode >> class_shift;
   switch (type) {
-    case 0:
-      if (opcode != 0) {
-        throw std::runtime_error("SHARC idle/VISA/reserved instruction not implemented");
+    case 0: {
+      constexpr std::uint64_t idle = 0x008000000000;
+      if (opcode == idle) {
+        detail::sharc_begin_idle(state);
+      } else if (opcode != 0) {
+        throw std::runtime_error("SHARC emuidle/VISA/reserved instruction not implemented");
       }
       return {};
+    }
     case 1: detail::sharc_compute(state, opcode); return {};
     case 2: detail::sharc_shift(state, opcode, true); return {};
     case 6:
     case 7: return direct_branch(state, opcode);
     case 10: return return_branch(state, opcode);
+    case 11: return detail::sharc_return_interrupt(state, opcode);
     case 12:
     case 13: detail::sharc_begin_count_loop(state, opcode); return {};
     case 14: detail::sharc_begin_arithmetic_loop(state, opcode); return {};
@@ -259,6 +264,9 @@ void finish_control(const SharcState &previous, SharcState &next) {
 }
 
 void execution_guard(const SharcState &state) {
+  if (state.idle_pc) {
+    throw std::runtime_error("SHARC IDLE core requires an owner event, no instruction retires");
+  }
   constexpr unsigned int almost_full = 29;
   if (state.depth && *state.depth >= almost_full) {
     throw std::runtime_error("SHARC stack-full interrupt state not implemented");
@@ -281,6 +289,8 @@ Sharc::Sharc(SharcMemory &memory, SharcState initial, SharcControl *control)
   validate(state_);
   detail::sharc_validate_count_loop(state_);
   detail::sharc_validate_arithmetic_loop(state_);
+  detail::sharc_validate_interrupt(state_);
+  detail::sharc_validate_idle(state_);
   detail::sharc_stack_status(state_);
 }
 
@@ -345,6 +355,7 @@ SharcStep Sharc::step() {
     finish_control(state_, next);
     minimum_cycles += detail::sharc_arithmetic_loop_finish(state_, next);
     detail::sharc_cache_finish(state_, next);
+    detail::sharc_interrupt_finish(state_, next);
     memory_.commit_instruction();
     transaction = false;
     if (control_transaction) {

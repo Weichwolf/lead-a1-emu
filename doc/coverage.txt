@@ -82,6 +82,18 @@ ID  State    Evidence / remaining work
              late-failure rollback. SYSCTL is the only qualified Type1 IOP
              target; other domains stay guarded (sharc-dual-moves.txt).
              Cache lookup/fills/prefetch/coherence and SIMD data moves remain open.
+             Explicit unlooped native P1I recognition sets the bit25 interrupt
+             frame/IMASKP, holds its own latch clear and preserves other latches.
+             Immediate conditional RTI preserves ISR results without borrowing
+             IRQx/timer status-stack/MMASK behavior (sharc-interrupts.txt).
+             Accepted internal IRQ-entry clocks settle pending core/SYSCTL
+             effects before the first handler operation per PGR A-32; real
+             guest bank/width writes and clock-owner rollback have regressions.
+             Ordinary unlooped IDLE holds the core while actual owned SPI DMA
+             progresses, then its completion routes through P1I/RTI to a real
+             continuation. Checkpoints, masks, pending effects and rollback have
+             independent tests (sharc-idle.txt). The original delayed-branch/
+             loop IDLE, interrupt loop reentry and full pipeline stay guarded.
              Four-instruction loops execute real delayed CALLs, both delay
              slots, nested callees/polling and indexed stores; final steady
              bit25 frames, startup bubbles and rollback have owned tests
@@ -232,7 +244,7 @@ ID  State    Evidence / remaining work
              header dispatch selects part0 tag4/count27 at four-instruction loop
              PC0x8c05a; part1 tag1/count420/580 is skipped by
              real DEC/branch to PC0x8c015 (sharc-ram-moves.txt).
-             The one-DSP-step-per-ARM-instruction cooperative reference
+             The publishedb97eda8 one-DSP-step-per-ARM-instruction cooperative reference
              now qualifies all four placements' remaining ordinary records:
              1251 nonterminal records and109318 final payload-cell comparisons.
              Each executes finalizer PX, BSET, SYSCTL width selection and the
@@ -255,6 +267,8 @@ ID  State    Evidence / remaining work
              deferred-loop branch/native PC0x8c08e. Type0 and
              the new start/end/depth, IMASK1003/IRPTL0, cache invalidation and
              SPI index92000/modifier1/count384 have independent oracles.
+             The new P1I/RTI/ordinary-IDLE paths are not reached at this frontier;
+             the current direct runs additionally require no active ISR/IDLE.
              Each cadence retains1251 ordinary records/109318 final-cell checks
              and the independent PX oracle (sharc-stream-reference.txt). This
              exercises the original DSP code/DMA without an ARM/physical wiring

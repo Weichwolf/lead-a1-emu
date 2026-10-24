@@ -71,8 +71,10 @@ not public build inputs.
 
 Original cooperative stream reference
 
-Both the coupled reference here and the separately paced direct DSP reference
-in sharc-stream-reference.txt qualify the cache/DMA setup prefix.
+The following coupled qualification is from publishedb97eda8. Both it and the
+current separately paced direct reference in sharc-stream-reference.txt qualify
+the cache/DMA setup prefix. The further P1I/RTI/ordinary-IDLE paths are not
+reached at this frontier and do not acquire a new coupled execution claim.
 
 The optional original SPI reference retains the separately paced bootstrap,
 RAM-clear, first header and complete first tag3-record assertions. It then

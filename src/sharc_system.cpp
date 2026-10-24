@@ -17,6 +17,7 @@ void Sharc::latch_interrupt(std::uint32_t mask) {
     throw std::runtime_error(
         "SHARC interrupt event requires idle transaction and maskable IRPTL bits");
   }
+  if (state_.interrupt) { mask &= ~state_.interrupt->source; }
   for (auto *latch : {&state_.system[irptl], &state_.effective[irptl]}) {
     latch->value |= mask;
     latch->known |= mask;
@@ -139,9 +140,7 @@ SharcKnown32 sharc_ureg(const SharcState &state, unsigned int ureg) {
     const auto index = ureg - sreg_base;
     if (user_status(index) || (index >= sharc_astat_x && index <= 9)) { require_sisd(state); }
     if (index == sharc_flags) { return sharc_flags_read(state); }
-    if (index == 12 || index == 13) {
-      throw std::runtime_error("SHARC mask-pointer/link-register read not implemented");
-    }
+    if (index == 13) { throw std::runtime_error("SHARC link-register read not implemented"); }
     return state.system[index];
   }
   if (ureg == pc_ureg) { return {.value = state.pc, .known = all_bits}; }
@@ -237,7 +236,7 @@ bool sharc_pe_condition(const SharcState &state, unsigned int code, unsigned int
   return code == always || element_condition(state.effective[sharc_astat_x + element], code);
 }
 
-void sharc_interrupt_guard(const SharcState &state) {
+void sharc_interrupt_environment_guard(const SharcState &state) {
   constexpr std::uint32_t timer_enable = 0x20;
   const auto mode2 = state.effective[4];
   if ((mode2.known & timer_enable) == 0 || (mode2.value & timer_enable) != 0) {
@@ -247,6 +246,15 @@ void sharc_interrupt_guard(const SharcState &state) {
   if ((latch.value & 3) != 0 || (latch.known & 3) != 3) {
     throw std::runtime_error("SHARC nonmaskable interrupt state/delivery unresolved");
   }
+}
+
+void sharc_interrupt_guard(const SharcState &state) {
+  sharc_interrupt_environment_guard(state);
+  if (state.interrupt) {
+    sharc_interrupt_service_guard(state);
+    return;
+  }
+  const auto latch = state.effective[sharc_irptl];
   if (latch.known == all_bits && latch.value == 0) { return; }
   if (!known_bit(state.effective[sharc_mode1], global_interrupt_enable)) { return; }
   const auto mask = state.effective[sharc_imask];

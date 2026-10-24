@@ -30,5 +30,5 @@ follower hazards, unqualified fill knowledge and invalid/reserved inputs.
 The direct original stream reference reaches deferred branch
 8c08e after the real flush and vector DMA setup (sharc-stream-reference.txt).
 No terminal vector word has been accepted at that frontier.
-Full finalizer reentry, vector restoration, IDLE/IRQ/RTI, VISA/application,
-physical timing, boot and audio remain open.
+Full finalizer reentry, vector restoration, delayed IDLE/interrupt loop entry,
+VISA/application, physical timing, boot and audio remain open.

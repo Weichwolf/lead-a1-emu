@@ -1,0 +1,34 @@
+Ordinary native IDLE reference
+
+Pure Type22a IDLE retires once, records its address and queues the following
+instruction as the resume PC. An idled core cannot retire further instructions;
+an owner that calls step again receives an explicit diagnostic without any
+CPU/peripheral/memory change. There is no invented polling NOP or automatic
+progress from a read. The owner can advance peripheral clocks/serial inputs,
+grant requested DMA and route actual interrupt events while the core is held.
+
+Explicit qualified P1I recognition exits ordinary IDLE, preserving the queued
+resume PC in the real interrupt frame. The actual ISR and immediate RTI execute;
+only then does the continuation run. Masked requests remain latched and do not
+acquire fabricated delivery. Pending controls preceding IDLE take effect on
+that real following instruction. A preceding internal FLUSH CACHE also takes
+effect with IDLE as its follower. Restored idle state validates queued PC,
+native span, absent active branch/loops and completed follower effects.
+
+Owned finite tests exercise actual LSB-first SPI reception and requested DMA
+while the CPU remains unchanged, then route its real completion event through
+P1I, the ordinary ISR and RTI to a real dependent foreground instruction.
+The boot handoff, immutable program and peripheral configuration are explicit
+synthetic fixture inputs, not firmware startup acceptance or a readiness reply.
+Peripheral acknowledgement remains separate from core latch handling. Further
+tests cover no-retirement, checkpoint continuation, masked source, guest-written
+MODE1 effect latency, cache follower, reserved/EMUIDLE and invalid restore.
+
+The reference supports unlooped, non-delayed IDLE only. Delayed-branch/loop IDLE,
+NMI/timer/other wake sources, fetched-slot visibility and physical pipeline/
+clock latency remain unqualified. It does not resolve PGR4-23 versus the boot
+procedure or permit the original8c08e branch/8c08f IDLE sequence to execute.
+No original finalizer, vector restoration, cold boot or audio result follows.
+Primary evidence: PGRrev2.4,4-27/28,4-37/38,9-72,10-27; HWR SPI ownership
+remains under the existing explicit reference in sharc-spi.txt. The direct original prefix regressions retain8c08e and its previous counts;
+they do not execute this ordinary IDLE path.

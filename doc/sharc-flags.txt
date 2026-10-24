@@ -28,7 +28,9 @@ directions remain unqualified and fail. A direction change and level write for
 the same flag in one instruction fail, as required by A-13. Adjacent separate
 direction/level writes preserve their order.
 
-Writes have the documented one-following-internal-instruction effect latency.
+Straight execution retains the one-following-internal-instruction effect
+latency. PGR A-32 counts processor clocks: accepted internal P1I entry settles
+pending FLAGS controls before its first handler instruction (sharc-interrupts.txt).
 flag_drives reports disjoint packed high, low, high-impedance and unresolved
 core signals. A known output selection with an unknown latch is unresolved,
 not low or high-impedance. External pin/mux timing is not qualified. In

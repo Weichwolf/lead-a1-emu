@@ -210,6 +210,7 @@ void check_frontier(const lead_a1::Sharc &cpu,
                     SerialInput serial,
                     const Inventory &expected) {
   const auto &state = cpu.state();
+  require(!state.interrupt && !state.idle_pc);
   require(state.pc == frontier && state.depth == 1 && state.loops_empty == false &&
           !state.count_loop && !state.branch);
   if (!state.arithmetic_loop) { throw std::runtime_error("Missing original arithmetic DO state"); }

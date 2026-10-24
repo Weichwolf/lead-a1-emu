@@ -897,6 +897,7 @@ void continuous_stream(Fixture &fixture,
   require(stopped && cpu.state().pc == frontier && !fixture.dsp_memory.active());
   require(cpu.state().depth == 1 && !cpu.state().count_loop && cpu.state().loops_empty == false);
   const auto &state = cpu.state();
+  require(!state.interrupt && !state.idle_pc);
   if (!state.arithmetic_loop) { throw std::logic_error("Missing original arithmetic DO"); }
   const auto &active = *state.arithmetic_loop;
   constexpr std::uint32_t loop_start = 0x8c003;

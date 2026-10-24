@@ -120,4 +120,16 @@ void sharc_cache_guard(const SharcState &state, std::uint64_t opcode);
 void sharc_cache_program_access(SharcState &state);
 void sharc_cache_finish(const SharcState &previous, SharcState &next);
 
+void sharc_interrupt_environment_guard(const SharcState &state);
+void sharc_interrupt_service_guard(const SharcState &state);
+void sharc_validate_interrupt(const SharcState &state);
+[[nodiscard]] std::optional<SharcInterruptStep>
+sharc_service_interrupt(SharcState &state, SharcInterruptReference reference);
+[[nodiscard]] std::optional<std::uint32_t> sharc_return_interrupt(SharcState &state,
+                                                                  std::uint64_t opcode);
+void sharc_interrupt_finish(const SharcState &previous, SharcState &next);
+
+void sharc_validate_idle(const SharcState &state);
+void sharc_begin_idle(SharcState &state);
+
 }

@@ -132,6 +132,25 @@ void cpu_effects_and_failed_store() {
   require(control.state().effective == expected && !control.state().delayed);
 }
 
+void quiet_internal_clock_effects() {
+  lead_a1::SharcControl control(true);
+  constexpr std::uint32_t extended_bank2 = 0x804;
+  control.write(word, extended_bank2);
+  const auto before = control.state();
+  control.advance_internal_clocks(0);
+  require(control.state() == before);
+  rejected([&] { control.advance_internal_clocks(1); }, "partial clock effect interval");
+  require(control.state() == before);
+  control.begin_instruction();
+  const auto owned = control.state();
+  rejected([&] { control.advance_internal_clocks(4); }, "clock advance during a transaction");
+  require(control.state() == owned);
+  control.abort_instruction();
+  require(control.state() == before);
+  control.advance_internal_clocks(2);
+  require(control.state().effective == extended_bank2 && !control.state().delayed);
+}
+
 }
 
 int main() {
@@ -140,6 +159,7 @@ int main() {
     transaction_ownership();
     invalid_fields();
     cpu_effects_and_failed_store();
+    quiet_internal_clock_effects();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

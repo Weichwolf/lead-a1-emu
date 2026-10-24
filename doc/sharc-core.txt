@@ -12,9 +12,10 @@ transfers for reviewed system/sequencer registers. Execution is native-48 only.
 Primary/secondary data/DAG registers, SYSCTL width selection and compute-free
 SISD Type4a indexed NW32/40 RAM transfers are documented in sharc-data.txt.
 Compute-only PASS/AND/OR/XOR/NOT and direct Rx/Sx RAM transfers are documented in
-sharc-compute.txt. PX, other computation fields, general DO loops/DAG modes,
-forced LW, VISA, IDLE, interrupt entry/return and caches remain
-pending. Unsupported forms fail with PC, fetched opcode and access context.
+sharc-compute.txt. Further arithmetic, transfers, loops, cache invalidation,
+P1I/RTI and ordinary IDLE have separate contracts below. General DAG modes,
+forced LW, VISA and the complete fetch/interrupt/loop pipeline remain pending.
+Unsupported forms fail with PC, fetched opcode and access context.
 
 State and control
 Each system word tracks value and known bits. Unknown bits cannot become zero
@@ -46,10 +47,17 @@ empty ffffffff value; live counter/unknown loop readback remains guarded.
 Pure cache invalidation and SISD Type1 compute/dual-memory transfers have
 separate contracts in sharc-cache.txt and sharc-dual-moves.txt. They do not
 qualify the outstanding fetch/cache/self-modification pipeline.
+Explicit P1I recognition, immediate RTI and ordinary native IDLE are described
+in sharc-interrupts.txt/sharc-idle.txt. Recognition is a separate owner event,
+not a retired NOP. IVT/routing and physical synchronization remain explicit
+reference inputs or unknown; finalizer loop/delayed-IDLE entry stays guarded.
 
 System register read views and effective controls are separate. MODE1, IRPTL
 and IMASK writes have one following internal instruction of effect latency
-(A-32..35). Repeated writes retain their ordered effects. USTAT1..4 updates
+in the straight functional reference (A-32..35). A-32 defines processor clocks,
+not retired instructions: accepted internal P1I entry settles pending effects
+before the first ISR instruction, as detailed in sharc-interrupts.txt.
+Repeated writes retain their ordered effects. USTAT1..4 updates
 are immediate. IMASK/IRPTL bits 0/1 are read-only; bit 7 is reserved. In the
 documented reset reference IMASK=3, so writing IMASK=0 preserves 3. Reserved
 MODE1 fields are preserved; family-specific CSEL writes are unqualified.

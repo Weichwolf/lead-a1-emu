@@ -27,6 +27,9 @@ public:
   void begin_core_instruction();
   void commit_core_instruction() noexcept;
   void abort_core_instruction() noexcept;
+  // Settles the bounded internal effect after a quiet interval of at least
+  // two core clocks. Partial intervals with a pending effect remain guarded.
+  void advance_internal_clocks(unsigned int core_cycles);
   [[nodiscard]] std::uint64_t read(MemoryAccess access) override;
   void write(MemoryAccess access, std::uint64_t value) override;
   void begin_instruction() override;

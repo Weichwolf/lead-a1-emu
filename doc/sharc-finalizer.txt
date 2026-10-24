@@ -3,9 +3,10 @@ SHARC finalizer evidence and remaining execution boundary
 The qualified PX/bit/parallel prefix is documented separately. Arithmetic DO
 and deferred PC-stack setup have a bounded reference in sharc-arithmetic-loops.txt.
 The pure cache invalidation and Type1 dual-memory instruction references are
-in sharc-cache.txt/sharc-dual-moves.txt. Reentered/short/self-modifying loops,
-IRQ/RTI, cache lookup/prefetch and IDLE sequencing still need execution
-qualification. No vector load or application boot is implied.
+in sharc-cache.txt/sharc-dual-moves.txt. Unlooped P1I/RTI and ordinary IDLE
+have separate contracts in sharc-interrupts.txt/sharc-idle.txt. They do not
+qualify the original reentered/short/self-modifying loop, delayed-branch IDLE,
+interrupt loop reentry or cache/prefetch. No vector load/application boot is implied.
 
 Primary-reference provenance is recorded in reference/sharc.json:
 - PGRrev2.4,4-53/54: arithmetic-loop termination tests when the second body
@@ -13,6 +14,14 @@ Primary-reference provenance is recorded in reference/sharc.json:
   e-4 rule must not be reused as the arithmetic-loop rule.
 - PGR A-11 keeps a loop type in LADDR separately from the PC-stack start.
   A later PCSTK write must not silently reclassify a loop by its new length.
+- PGR A-10 sets PCSTK bit25 on interrupt pushes with CALL bit24 clear.
+  PGR4-28/35 holds the active source latch clear;4-40/41 applies automatic
+  status/MMASK changes to IRQx/timer, not P1I. These constrain the separate
+  ordinary reference without qualifying the finalizer's loop/branch entry.
+- PGR A-32 counts effect latency in processor clocks and explicitly includes
+  interrupt breaks. The ordinary reference settles pending core/SYSCTL effects
+  during accepted internal entry; a first-handler bank/width regression rejects
+  the old instruction-only pending-effect interpretation.
 - PGR4-22/23 delays interrupt service across a delayed branch and describes
   an IDLE-in-delay-slot deadlock. HWRrev1.1,24-25..27 explicitly describes
   the final vector DMA with delayed branch and IDLE instead.
