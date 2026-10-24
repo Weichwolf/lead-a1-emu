@@ -65,11 +65,28 @@ void bubble_guard(const SharcState &cpu, const SharcControl *control) {
 }
 
 SharcFetchEvent
-SharcFetch::advance(Sharc &cpu, std::optional<std::uint32_t> next_address, SharcFetchBus bus) try {
+SharcFetch::advance(Sharc &cpu, std::optional<std::uint32_t> next_address, SharcFetchBus bus) {
+  return advance_clock(cpu, next_address, bus, false);
+}
+
+SharcFetchEvent SharcFetch::advance_sequenced(Sharc &cpu, SharcFetchBus bus) {
+  const auto flow = state_.flow;
+  if (!flow) { throw std::logic_error("SHARC sequenced clock requires its F1 cursor"); }
+  return advance_clock(cpu, flow->next, bus, true);
+}
+
+SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
+                                          std::optional<std::uint32_t> next_address,
+                                          SharcFetchBus bus,
+                                          bool sequenced) try {
   if (&cpu.memory_ != &memory_ || memory_.active()) {
     throw std::logic_error("SHARC cache fetch requires its idle bound memory");
   }
   if (state_.execute) { throw std::runtime_error("SHARC fetch Execute word has not retired"); }
+  if (sequenced != state_.flow.has_value()) {
+    throw std::runtime_error("SHARC sequenced fetch requires its sequenced clock");
+  }
+  if (sequenced) { detail::sharc_fetch_flow_guard(cpu.state_); }
   if (next_address) { detail::sharc_fetch_address(*next_address); }
   if (bus == SharcFetchBus::block_conflict) {
     throw std::runtime_error("SHARC block-conflict arbitration not qualified; not cached");
@@ -93,6 +110,7 @@ SharcFetch::advance(Sharc &cpu, std::optional<std::uint32_t> next_address, Sharc
     event.stalled = true;
   } else {
     event = normal_clock(memory_, cache, state_, next, mode, next_address, bus);
+    if (sequenced) { detail::sharc_fetch_flow(state_, next); }
   }
   if (!next.execute) { bubble_guard(cpu.state_, cpu.control_); }
   detail::sharc_fetch_validate(next);

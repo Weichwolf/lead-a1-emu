@@ -45,8 +45,9 @@ metadata. Pair CPU/cache and transport snapshots when restoring an operation.
 Decode data completion does not resurrect validity cleared independently by
 FLUSH. Complete FLUSH/redirect/interrupt ordering is not inferred from this rule.
 
-This remains an explicitly driven cache/data transport. It does not generate
-sequencer addresses, infer bus requests, advance global time or qualify DAG
+This remains an explicitly driven cache/data transport. The optional native
+cursor and unconditional branch sequencing have the sharc-fetch-flow.txt
+contract. Neither clock infers bus requests, advances global time or qualifies DAG
 operand capture, bank arbitration, complete control interlocks or physical Nord
 timing. A transport bubble with pending core/SYSCTL/flush effects is guarded
 until its processor-clock maturation is qualified. The real PM instruction

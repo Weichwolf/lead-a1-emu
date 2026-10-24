@@ -17,9 +17,10 @@ partial stall and RAM fill. Pending operations require their bound owner.
 External/VISA addresses, unresolved controls and active memory transactions
 fail with phase/PC/MODE2/access context. Neither path infers grants from DMA
 traffic or advances CPU control effects, peripherals or global time.
-DAG operand capture, address/data arbitration, control interlocks, sequencer
-address generation, redirects/flushes and IDLE/IRQ control remain separate
-unqualified pipeline work. Its five phases do not establish complete core
+DAG operand capture, address/data arbitration, control interlocks and IDLE/IRQ
+control remain separate unqualified pipeline work. The optional cursor and
+unconditional JUMP/CALL redirects have the bounded sharc-fetch-flow.txt contract.
+Its five phases do not establish complete core
 pipeline timing or a physical Nord clock profile.
 
 An occupied Execute latch must retire before another advance. Sharc::step

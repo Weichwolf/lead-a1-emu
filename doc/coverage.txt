@@ -108,8 +108,14 @@ ID  State    Evidence / remaining work
              forwarding. Actual owned PM stores, all16 sets/both ways, SPI/DMA
              stale-cache data, snapshots and failed requests have tests
              (sharc-fetch-cache.txt). Owner PM requests must match retirement.
-             Sequencer redirects/interlocks, block arbitration, pending-effect
-             bubbles and global timing remain guarded or open; original
+             An optional F1 cursor sequences actual unconditional native
+             absolute/relative JUMP/CALL targets, suppresses speculative Decode
+             words and preserves DB slots, native CALL frames and cache-miss
+             retry. Literal five-stage tables, backward refetch, phase snapshots
+             and real guest self-modifying branch targets have independent
+             tests (sharc-fetch-flow.txt). Conditional/return/loop/IRQ/IDLE
+             redirects and complete interlocks remain guarded or open, as do
+             block arbitration, pending-effect bubbles and global timing; original
              prefixes still use the functional path.
              Four-instruction loops execute real delayed CALLs, both delay
              slots, nested callees/polling and indexed stores; final steady

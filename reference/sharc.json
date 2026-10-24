@@ -228,7 +228,7 @@
     "phases": "F1 selects an address, F2 reads real executable wide48 RAM, Decode/Address/Execute retain the actual fetched data; bubbles are absent words rather than retired guest NOPs",
     "retirement": "Bound memory and matching Execute PC required; actual native decoder consumes the latch only after successful transactional CPU/memory/device commit; no retirement-time instruction-RAM reread",
     "dma": "Owned actual LSB-first SPI reception and three normal32 DMA writes replace two native48 instructions; before-F2 writes are observed, later writes preserve captured data through actual CPU retirement and checkpoint continuation",
-    "limits": "Complete cache/pipeline integration, data arbitration/DAG operand capture, control interlocks, sequencer redirects/flushes, IDLE/IRQ sequencing and global/physical timing remain unqualified; original prefixes use the separate functional instruction-order path"
+    "limits": "Complete cache/pipeline integration, data arbitration/DAG operand capture, control interlocks, conditional/return/loop/IDLE/IRQ sequencing and global/physical timing remain unqualified; bounded unconditional direct JUMP/CALL redirects are in fetch_flow_reference; original prefixes use the separate functional instruction-order path"
   },
   "interrupt_reference": {
     "primary": "PGRrev2.4 4-22/23,4-26/43,9-44/46,10-17,A-10,A-31/34,A-37/42",
@@ -271,5 +271,15 @@
       "state_on_failure": "unchanged CPU/control/clock/RAM/transactions; no runtime DMA success"
     },
     "limits": "Arithmetic, float, compare, multiplier/shifter/multifunction, empty/VISA forms, general/observed loop resources, runtime peripherals and full board/timing/audio remain open"
+  },
+  "fetch_flow_reference": {
+    "primary": "PGRrev2.4 4-5/8, Table4-5/7 at4-20/21,4-22/23,4-115/117,9-32/34",
+    "owner": "Optional bound native F1 cursor; owner grants clocks, supplies actual PM requests and retires actual Execute words",
+    "branches": "Unconditional Type8a absolute/relative JUMP/CALL; Address chooses the following F1 target, with24-bit modular relative addition; native Execute performs actual PC/CALL stack effects",
+    "suppression": "Immediate branch suppresses n+1/n+2/n+3 Decode inputs; DB retains both real slots and suppresses n+3; absent Execute words do not retire guest NOPs",
+    "cache_stall": "Partial conflict-miss stall holds F1 cursor and Decode suppression while Address progresses to Execute; unaccepted target is retried automatically",
+    "snapshots": "Cursor, suppression, all retained words and cache phases restore with paired actual CPU/cache state; clock failures preserve all, failed retirement retains its already clocked Execute word",
+    "owned_evidence": "Literal seven-column five-stage branch tables for absolute/relative JUMP/CALL with/without DB, actual CALL frames, backward relative refetch, branch-phase checkpoint continuation and real guest PM(PX) self-modifying delayed-branch targets with miss/hit outcomes",
+    "limits": "Conditional/return/indirect/loop/ISR/IDLE sequencing and pending-fill branch arbitration guarded; no complete DAG/control interlocks, pending-effect bubble maturation, global/physical timing or new original-stream finalizer/boot/audio acceptance"
   }
 }

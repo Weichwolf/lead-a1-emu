@@ -74,6 +74,12 @@ void sharc_fetch_validate(const SharcFetchState &state) {
     }
   }
   cache_metadata(state);
+  if (state.flow) {
+    sharc_fetch_address(state.flow->next);
+    if (state.flow->discard_decode > 3) {
+      throw std::invalid_argument("Invalid SHARC inherited Decode suppression");
+    }
+  }
 }
 
 }
@@ -87,6 +93,9 @@ void SharcFetch::advance(SharcKnown32 effective_mode2,
                          std::optional<std::uint32_t> next_address) try {
   if (memory_.active()) {
     throw std::logic_error("SHARC fetch advance during a memory transaction");
+  }
+  if (state_.flow) {
+    throw std::runtime_error("SHARC sequenced fetch requires its sequenced clock");
   }
   if (state_.lookup || state_.fill) {
     throw std::runtime_error("SHARC pending cache fetch requires its bound owner");

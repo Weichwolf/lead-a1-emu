@@ -20,5 +20,7 @@ void sharc_fetch_reserve(SharcCacheState &cache, SharcFetchState &state);
                                               const SharcFetchState &state,
                                               bool &forwarded);
 void sharc_fetch_fill(SharcCacheState &cache, const SharcFetchState &state);
+void sharc_fetch_flow_guard(const SharcState &cpu);
+void sharc_fetch_flow(const SharcFetchState &previous, SharcFetchState &next);
 
 }

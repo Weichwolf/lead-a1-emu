@@ -1,0 +1,56 @@
+Native internal fetch address sequencing and branch suppression
+
+An optional SharcFetchState.flow supplies the next F1 cursor. The bound
+advance_sequenced clock generates linear addresses and unconditional native
+Type8a absolute/relative JUMP/CALL targets. The owner still grants clocks,
+supplies actual Address-stage PM requests and retires the occupied Execute
+latch through Sharc::step(fetch). No peripheral/global clock or IRQ routing
+is inferred. Explicit-address and standalone clocks reject a sequenced state.
+
+PGRrev2.4 Table4-1 and Table4-5/7 define distinct branch phases. The branch
+enters Address while the old linear n+3 is selected in F1; its target is
+selected in F1 on the next advancing clock, when the real branch reaches
+Execute. Immediate JUMP/CALL suppress n+1,n+2,n+3 at their Decode inputs,
+producing three absent Execute words. Delayed branches retain the two actual
+slots and suppress only n+3, producing one absent Execute word. A bubble
+does not retire a guest NOP. Opcode0 remains a real instruction.
+
+The existing native decoder performs actual branch PC/CALL frame effects
+at Execute. CALL pushes n+1 or n+3 with bit24 set; the new address transport
+does not push a second shadow frame. Relative displacements use native
+24-bit modular address addition. Target data is captured by actual F2
+cache/RAM selection and retained through retirement, never reread at Execute.
+
+The F1 cursor and Decode suppression mask join the cache/transport snapshot.
+A cache miss's partial stall holds that mask and cursor while the real
+Address instruction advances to Execute. An unaccepted F1 address is retried
+automatically; no skipped target or duplicate synthetic instruction is added.
+Clock failures preserve cursor, cache and all transport phases. Retirement
+remains a separate transaction: an instruction failure retains the committed
+clock's Execute latch and cursor for retry, as in sharc-fetch.txt.
+
+This is a bounded native sequencing reference. Conditional branches need
+Address-stage condition sampling and producer interlocks (PGR4-115/117).
+RTS/RTI/indirect branches, DO/loop sequencing, IDLE and ISR contexts are
+guarded before they enter Address. Branches with outstanding cache fills or
+overlapping active suppression remain guarded; their abort/fill arbitration
+is not guessed. Existing pending-effect bubble and block-conflict guards
+remain. MODE1/DAG Decode operand capture, complete control/data hazards,
+interrupt redirects, original delayed-IDLE/loop finalizer and physical timing
+are still open. This optional clock does not change default functional step.
+
+Owned tests compare all five stages of seven literal Table4-5/7 columns for
+absolute/relative JUMP/CALL, with and without DB. Invalid owned speculative
+words must be suppressed without execution. Native register effects and CALL
+frame addresses are independent oracles. Backward relative loops refetch and
+execute every actual body/slot instruction; no loop summary is used.
+Paired CPU/transport snapshots resume at each branch phase, and occupied
+Execute prevents advancing. In a real delayed branch's PM(PX) slot, the guest
+overwrites its own target instruction. A conflict-cache miss executes the
+replacement after the real PM store; a hit executes the retained cached word.
+The sequencer generates the target and retries an actual miss stall itself.
+
+Primary evidence is PGRrev2.4,4-5/8,4-19/23,4-79/85,4-115/117,9-32/34;
+provenance is in reference/sharc.json. No manufacturer/private source input
+is added. Direct original stream regressions still use the functional path
+and stop at8c08e. This is not new original finalizer/upload/boot/audio evidence.

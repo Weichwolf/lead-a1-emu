@@ -31,6 +31,13 @@ struct SharcFetchFill {
   bool operator==(const SharcFetchFill &) const = default;
 };
 
+struct SharcFetchFlow {
+  std::uint32_t next{};
+  // Low bit suppresses this clock's Decode input; shifts on an advancing clock.
+  unsigned int discard_decode{};
+  bool operator==(const SharcFetchFlow &) const = default;
+};
+
 struct SharcFetchState {
   std::optional<std::uint32_t> fetch1;
   std::optional<SharcFetchWord> fetch2;
@@ -39,6 +46,7 @@ struct SharcFetchState {
   std::optional<SharcFetchWord> execute;
   std::optional<SharcFetchLookup> lookup;
   std::optional<SharcFetchFill> fill;
+  std::optional<SharcFetchFlow> flow{std::nullopt};
   bool operator==(const SharcFetchState &) const = default;
 };
 
@@ -52,10 +60,10 @@ struct SharcFetchEvent {
   bool operator==(const SharcFetchEvent &) const = default;
 };
 
-// Native internal instruction-bus transport, PGR4-5/8. The sequencer supplies
-// F1 addresses and grants advancing clocks. Standalone CADIS=1 and bound cache
-// clocks have separate inputs; DAG arbitration and sequencer interlocks remain
-// explicit owner work, including branch/IRQ redirects.
+// Native internal instruction-bus transport, PGR4-5/8. F1 addresses come from
+// the owner or the optional bounded sequencer. The owner grants clocks;
+// standalone CADIS=1 and bound cache clocks have separate inputs. Complete
+// DAG/control interlocks and loop/IRQ/IDLE redirects remain guarded or open.
 class SharcFetch {
 public:
   explicit SharcFetch(SharcMemory &memory, SharcFetchState initial = {});
@@ -73,9 +81,19 @@ public:
   [[nodiscard]] SharcFetchEvent advance(Sharc &cpu,
                                         std::optional<std::uint32_t> next_address,
                                         SharcFetchBus bus = SharcFetchBus::available);
+  // Optional native sequencer: initialize state.flow.next to the entry address.
+  // Generates sequential F1 and unconditional direct JUMP/CALL targets, with
+  // real delayed slots and suppressed speculative Decode inputs (PGR4-20/21).
+  // The owner still grants clocks, supplies PM requests and retires Execute.
+  [[nodiscard]] SharcFetchEvent advance_sequenced(Sharc &cpu,
+                                                  SharcFetchBus bus = SharcFetchBus::available);
 
 private:
   friend class Sharc;
+  [[nodiscard]] SharcFetchEvent advance_clock(Sharc &cpu,
+                                              std::optional<std::uint32_t> next_address,
+                                              SharcFetchBus bus,
+                                              bool sequenced);
   [[nodiscard]] std::uint64_t for_execution(const SharcMemory &memory, std::uint32_t pc) const;
   SharcMemory &memory_;
   SharcFetchState state_;
