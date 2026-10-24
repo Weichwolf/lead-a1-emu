@@ -1,0 +1,57 @@
+Native instruction fetch and retained data
+
+SharcFetch separates native instruction-bus data from functional retirement.
+PGRrev2.4 Table4-1,4-5/6 places address selection in Fetch1 and data capture
+in Fetch2. Table4-2 (page4-8) gives the subsequent Decode/Address/Execute phases.
+The owner supplies F1 addresses and granted advancing transport clocks.
+Fetch2 reads real executable wide48 internal RAM through SharcMemory; each
+later phase retains that fetched address/opcode. A later memory write cannot
+replace the captured data. A bubble is an absent word; an actual opcode0 NOP
+is a present instruction and retires normally.
+
+The bounded path requires explicitly known effective MODE2.CADIS=1. Cache
+lookup/enabled or unknown CADIS, external/VISA addresses and active memory
+transactions fail with F1/next/MODE2 and memory access context. It does not
+create cache entries or infer grants from PM/DMA traffic. Fetch stalls retain
+the transport state until the owner grants another advancing clock. This
+component does not advance CPU control effects, peripherals or global time.
+DAG operand capture, address/data arbitration, control interlocks, sequencer
+address generation, redirects/flushes and IDLE/IRQ control remain separate
+unqualified pipeline work. Its five phases do not establish complete core
+pipeline timing or a physical Nord clock profile.
+
+An occupied Execute latch must retire before another advance. Sharc::step
+with the bound transport checks memory identity and Execute PC, then executes
+the actual captured word through the existing native instruction decoder and
+transaction. It consumes the latch only after CPU/memory/device commit.
+Failures preserve both the CPU and captured instruction for retry; changing
+instruction RAM does not repair an instruction already fetched. The existing
+instruction-order semantics and minimum-clock limits still apply. This API
+alone does not qualify a new instruction, control hazard or branch schedule.
+
+Snapshots preserve all five phases, including already fetched data that now
+differs from RAM. Restoration validates native address/word bounds; it must
+not re-read current RAM in place of saved latches. CPU, memory and device
+snapshots remain separate owner resources.
+
+Owned tests check every phase of Table4-2, four warmup clocks without guest
+retirement, a real NOP among real ALU instructions, explicit bubbles/drain,
+Execute backpressure, binding/PC mismatch and external transaction retention.
+Actual LSB-first SPI reception and three requested normal32 DMA writes replace
+two adjacent wide48 instructions. DMA after F1 is seen by the following F2;
+DMA after F2/Decode/Address/Execute preserves the old instruction. Both original
+and restored snapshots execute it through the actual core. A fresh fetch sees
+the replacement.
+Two in-flight words also retain independent capture boundaries: a mixed old/new
+pair executes when DMA occurs between their F2 reads; both execute old words
+when both reads already completed. The SPI bootstrap/configuration are explicit
+owned inputs, not original boot. No automatic interrupt routing is inferred from DMA.
+Further tests cover unknown/non-executable/unmapped fetches, malformed inputs,
+failed IOP instruction retry and preservation of a fetched opcode after RAM
+repair. Manufacturer/private program bytes are not test/build inputs.
+
+The existing direct original loader regressions still use the functional
+instruction-order path and stop at8c08e. They do not exercise this transport
+or establish finalizer, vector restoration, complete boot or audio. The native
+fetch-data contract is a prerequisite for self-modification qualification;
+cache and the original delayed-branch/loop IDLE remain open (sharc-finalizer.txt).

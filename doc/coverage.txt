@@ -98,6 +98,13 @@ ID  State    Evidence / remaining work
              continuation. Checkpoints, masks, pending effects and rollback have
              independent tests (sharc-idle.txt). The original delayed-branch/
              loop IDLE, interrupt loop reentry and full pipeline stay guarded.
+             A separate native instruction-bus transport captures data in F2
+             and retains it through Decode/Address/Execute, under explicit
+             CADIS=1 and owner clock/address grants (sharc-fetch.txt).
+             Actual owned SPI/DMA replacements before/after F2, checkpoint
+             continuation and actual latched-word CPU retirement have tests.
+             Cache lookup, sequencer redirects/interlocks and global timing
+             remain open; original prefixes still use the functional path.
              Four-instruction loops execute real delayed CALLs, both delay
              slots, nested callees/polling and indexed stores; final steady
              bit25 frames, startup bubbles and rollback have owned tests

@@ -319,7 +319,11 @@ SharcState Sharc::reset_reference_214xx(std::uint32_t entry) {
 }
 
 SharcStep Sharc::step() {
-  std::optional<std::uint64_t> opcode;
+  return step_opcode({});
+}
+
+SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured) {
+  auto opcode = captured;
   bool transaction{};
   bool control_transaction{};
   try {
@@ -334,7 +338,9 @@ SharcStep Sharc::step() {
       control_->begin_core_instruction();
       control_transaction = true;
     }
-    opcode = memory_.read({.address = state_.pc, .width = SharcWidth::wide48}, AccessKind::fetch);
+    if (!opcode) {
+      opcode = memory_.read({.address = state_.pc, .width = SharcWidth::wide48}, AccessKind::fetch);
+    }
     detail::sharc_cache_guard(state_, *opcode);
     auto next = state_;
     next.pending.fill({});

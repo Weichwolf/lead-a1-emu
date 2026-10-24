@@ -10,6 +10,7 @@
 namespace lead_a1 {
 
 class SharcControl;
+class SharcFetch;
 
 struct SharcKnown32 {
   std::uint32_t value{};
@@ -173,8 +174,12 @@ public:
   service_interrupt(SharcInterruptReference reference);
 
   [[nodiscard]] SharcStep step();
+  // Retire the matching Execute word captured by the explicit fetch transport.
+  // Failed instructions retain that word; no instruction-RAM reread occurs.
+  [[nodiscard]] SharcStep step(SharcFetch &fetch);
 
 private:
+  [[nodiscard]] SharcStep step_opcode(std::optional<std::uint64_t> captured);
   SharcMemory &memory_;
   SharcState state_;
   SharcControl *control_;

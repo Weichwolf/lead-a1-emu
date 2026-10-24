@@ -7,6 +7,9 @@ in sharc-cache.txt/sharc-dual-moves.txt. Unlooped P1I/RTI and ordinary IDLE
 have separate contracts in sharc-interrupts.txt/sharc-idle.txt. They do not
 qualify the original reentered/short/self-modifying loop, delayed-branch IDLE,
 interrupt loop reentry or cache/prefetch. No vector load/application boot is implied.
+The separate CADIS=1 instruction-bus transport in sharc-fetch.txt captures real
+RAM data in F2 and retires retained words through the native core. It does not
+yet supply the original finalizer's cache/redirect/loop/IDLE pipeline.
 
 Primary-reference provenance is recorded in reference/sharc.json:
 - PGRrev2.4,4-53/54: arithmetic-loop termination tests when the second body
