@@ -18,8 +18,9 @@ MODE1 selects primary/secondary data low/high halves and four DAG groups using
 its effective, delayed view. Bx writes update the corresponding Ix in the same
 bank even with circular mode disabled; Ix writes leave Bx unchanged. Reviewed
 Type17 immediate and Type14 32-bit IOP forms access these registers. SIMD data
-transfers, PX and additional register/compute instruction forms remain guarded
+transfers and additional register/compute instruction forms remain guarded
 (sharc-compute.txt adds compute-only logical and direct data-register RAM forms).
+The separate qualified PX transfer forms are described in sharc-px.txt.
 
 SYSCTL
 SharcControl maps device offset0/read-write32 to word0x30024. The owning core

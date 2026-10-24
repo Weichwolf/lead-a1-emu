@@ -21,7 +21,8 @@ aligned at bits39:8 of the data register. Such data-register writes clear the
 low8 extension bits. Data-to-data file copies remain guarded until their
 separate full-width transfer behavior is qualified; they are not silently
 truncated. Explicit Sx upper32 reads in SISD use the PEy register bank.
-PX, swap, SIMD pairing and parallel compute are not supplied by this path.
+Combined-PX/data40 and split-PX/UREG32 moves have their separate known-bit
+contract in sharc-px.txt. Swap, SIMD pairing and parallel compute remain guarded.
 Primary alignment references are2-5,2-10,6-5/Figure6-3.
 
 sharc_register_moves uses literal encodings for data/B/I/USTAT/explicit-Sx

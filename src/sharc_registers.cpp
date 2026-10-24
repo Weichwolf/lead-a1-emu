@@ -79,6 +79,9 @@ SharcKnown40 &sharc_compute_register(SharcState &state, unsigned int reg, unsign
 }
 
 void sharc_validate_registers(const SharcState &state) {
+  if ((state.px.value & ~state.px.known) != 0) {
+    throw std::invalid_argument("Invalid SHARC PX register knowledge");
+  }
   for (const auto &bank : state.data) {
     for (const auto word : bank) {
       if ((word.value & ~word.known) != 0 || (word.known & ~sharc_data_mask) != 0) {
@@ -114,6 +117,7 @@ void sharc_register_move(SharcState &state, std::uint64_t opcode) {
   const auto source =
       static_cast<unsigned int>((((opcode >> source_high_shift) & 31) << 2) | ((opcode >> 31) & 3));
   const auto destination = static_cast<unsigned int>((opcode >> 23) & 127);
+  if (sharc_px_register_move(state, source, destination)) { return; }
   const auto data_file = [](unsigned int reg) {
     return reg < 16 || (reg >= complement_base && reg < complement_end);
   };

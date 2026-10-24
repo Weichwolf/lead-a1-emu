@@ -1,0 +1,54 @@
+SHARC bus-exchange register transfers
+
+The native reference adds the combined64-bit PX register with independent
+value/known masks. Reset does not invent its undefined contents. PX1 is its
+lower32-bit alias and PX2 its upper32-bit alias (UREG6b/6c/6d). SISD32-bit
+reads/writes of either half preserve the other half and its bit knowledge.
+
+Compute-free Type5a combined-PX/data-register transfers move the data
+register's full40 bits to/from PX63:24. A write to PX zero-fills its low24;
+a read uses only those upper40 bits. Explicit Rx/Sx and independently
+selected low/high alternate banks follow the existing effective MODE1 rules.
+Half-register transfers use ordinary32-bit UREG alignment, including the
+zero data-register low8. False conditions read no source operand.
+
+Compute-free Type14a direct and Type3a indexed combined-PX RAM moves use
+three physical16-bit columns in the normal-word address range. A load
+places all48 bits in PX63:16 and zero-fills its low16. A store requires only
+PX63:16 to be known, preserves PX itself and writes exactly those48 bits.
+These accesses are independent of SYSCTL.IMDW and need no SYSCTL binding.
+All memory/index/control effects share the instruction transaction; a failed
+third physical-column store also rolls back the first two columns.
+
+This initial qualification is SISD, non-LW and normal-word RAM only. Forced
+LW/long-word/SW/external/IOP PX transfers, PX1/PX2 RAM operands, combined-PX
+non-data-register/immediate moves, SIMD and parallel compute remain guarded.
+No pipeline/peripheral timing or full finalizer/application execution follows
+from these register-transfer checks.
+
+Primary evidence: ADI Programming Reference rev2.4,2-9..12/Figures2-1..4,
+2-16,9-12..13,9-22,10-31,A-26 and A-56/TableA-18's undefined reset values;
+provenance in reference/sharc.json. Only owned emulator code and synthetic
+instructions participate in public builds; manuals/manufacturer/private sources
+stay local.
+
+Owned checks use literal split immediates,40/48-bit alignment expectations,
+128 explicit data-register/bank/partial-knowledge cases, split alias/unknown
+preservation, false predicates, invalid state, both IMDW settings and missing
+SYSCTL binding, partial stores, read-only-column rollback, actual indexed
+single-instruction loop stores and guarded forms. No random fuzz or host SIMD.
+
+Original finalizer prefix
+All four original cooperative transfers retain the payload comparisons in
+sharc-four-loops.txt and execute the finalizer's actual PX=PM(0x8c003).
+The header DMA at NW0x92003..5 aliases this native instruction area. The
+independent read-only oracle constructs PX from the terminal header's third
+word shifted32 and the high16 bits of its second word, with low16 zero.
+It checks all64 known bits against that value, using the original CODE input,
+without reading the expected value back through the emulated PX/RAM decoder.
+The saved value is not assumed to be surviving bootstrap code.
+
+Each placement retires exactly one further instruction and stops on unsupported
+BSET at nativePC0x8c07f. The final1536 vector bytes remain excluded and the
+original ARM writer has not returned. This qualifies the functional PX prefix;
+full finalization, IRQ/cache/pipeline/physical timing, VISA boot and audio remain open.

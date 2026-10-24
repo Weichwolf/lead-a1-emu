@@ -132,6 +132,7 @@ std::uint32_t sharc_value(SharcKnown32 word) {
 }
 
 SharcKnown32 sharc_ureg(const SharcState &state, unsigned int ureg) {
+  if (sharc_px_half(ureg)) { return sharc_px_half_read(state, ureg); }
   if (sharc_data_ureg(ureg)) { return sharc_register_read(state, ureg); }
   if (ureg >= sreg_base && ureg < sreg_base + state.system.size()) {
     const auto index = ureg - sreg_base;
@@ -158,6 +159,10 @@ SharcKnown32 sharc_ureg(const SharcState &state, unsigned int ureg) {
 }
 
 void sharc_ureg(SharcState &state, unsigned int ureg, SharcKnown32 value) {
+  if (sharc_px_half(ureg)) {
+    sharc_px_half_write(state, ureg, value);
+    return;
+  }
   if (sharc_data_ureg(ureg)) {
     sharc_register_write(state, ureg, value);
     return;

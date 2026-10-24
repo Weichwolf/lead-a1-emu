@@ -31,8 +31,10 @@ without host overflow. A false SISD condition reads no addressing/data operands.
 An instruction using a UREG from its own addressing DAG is prohibited by9-13.
 
 The current RAM operand implementation accepts Rx/Sx data registers only.
-Other UREGs, PX, forcedLW, indexed IOP/external accesses, parallel compute,
+Other UREGs, forcedLW, indexed IOP/external accesses, parallel compute,
 circular/reversed/broadcast/SIMD addressing remain explicit unsupported cases.
+Combined-PX normal-word48 transfers have a separate contract in sharc-px.txt;
+PX short-word and split-PX memory transfers remain guarded.
 These restrictions must be removed with qualified semantics as runtime needs
 them; they are not successful peripheral or arithmetic substitutes.
 

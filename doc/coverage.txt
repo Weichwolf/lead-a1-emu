@@ -86,7 +86,12 @@ ID  State    Evidence / remaining work
              support full32 modifiers/pre/post, mixed effective banks and single
              loops. All65536 short values in both SSE states,1536 addressing/
              width cases, aliases, wrap and rollback have independent tests
-             (sharc-ram-moves.txt). Other RAM UREGs/PX remain guarded.
+             (sharc-ram-moves.txt). Other RAM UREGs remain guarded. Combined
+             PX has64-bit known state,32-bit half aliases,40-bit data-register
+             transfers and48-bit direct/Type3a RAM transfers independent of
+             IMDW. Partial bits, banks, alias preservation, failed stores and
+             real indexed loops have owned tests (sharc-px.txt). LW/SIMD/IOP,
+             split-PX RAM and combined-PX/non-data register forms remain open.
              Compute-only fixed PASS/AND/OR/XOR/NOT have known-bit SISD/SIMD
              reference tests, per-element conditions/banks, immediate ALU flags
              and one-instruction loop support. AC/AV tests use A-6's actual bits,
@@ -203,8 +208,11 @@ ID  State    Evidence / remaining work
              A separate one-DSP-step-per-ARM-instruction cooperative reference
              now qualifies all four placements' remaining ordinary records:
              1251 nonterminal records and109318 final payload-cell comparisons.
-             Each reaches finalizer PX at PC0x8c07e; per-placement counts and
+             Each executes finalizer PX at PC0x8c07e and reaches unsupported
+             BSET at PC0x8c07f; per-placement counts and
              committed-instruction totals are in sharc-four-loops.txt.
+             All64 PX bits match the independent original terminal-header
+             alias oracle, including low16 zero (sharc-px.txt).
              Final vectors are excluded and the ARM writer has not returned.
              Count1 architectural stack arbitration and physical timing remain
              unqualified (sharc-four-loops.txt).

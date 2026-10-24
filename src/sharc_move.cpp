@@ -64,6 +64,11 @@ void sharc_ram_transfer(SharcMemory &memory,
   constexpr unsigned int complement_begin = 0x50;
   constexpr unsigned int complement_end = 0x60;
   const auto reg = transfer.ureg;
+  constexpr unsigned int combined_px = 0x6b;
+  if (reg == combined_px) {
+    sharc_px_ram_transfer(memory, state, transfer);
+    return;
+  }
   if (reg >= 16 && (reg < complement_begin || reg >= complement_end)) {
     throw std::runtime_error("SHARC RAM non-data UREG transfer not implemented");
   }

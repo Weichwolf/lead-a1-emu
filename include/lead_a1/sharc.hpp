@@ -29,6 +29,12 @@ struct SharcKnown40 {
   bool operator==(const SharcKnown40 &) const = default;
 };
 
+struct SharcKnown64 {
+  std::uint64_t value{};
+  std::uint64_t known{};
+  bool operator==(const SharcKnown64 &) const = default;
+};
+
 // Private sequencing information when architectural startup-stack timing is
 // unresolved. These frames are never exposed as architectural PCSTK values.
 struct SharcLoopControl {
@@ -68,6 +74,8 @@ struct SharcState {
   SharcKnown32 flag_inputs{};
   // PEx primary/secondary, PEy primary/secondary; all reset data stays unknown.
   std::array<std::array<SharcKnown40, 16>, 4> data{};
+  // Combined bus-exchange register; PX1/PX2 alias the lower/upper32 bits.
+  SharcKnown64 px{};
   // Primary/secondary, then I/M/L/B, then register number.
   std::array<std::array<std::array<SharcKnown32, 16>, 4>, 2> dag{};
   // Full 26-bit frames, including CALL/loop/interrupt metadata.

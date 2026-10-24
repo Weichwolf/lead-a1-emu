@@ -887,25 +887,37 @@ void continuous_stream(Fixture &fixture,
   } catch (const std::exception &error) {
     fixture.cooperative_dsp = nullptr;
     const std::string message(error.what());
-    require(message.find("native48 pc=0x8c07e") != std::string::npos);
-    require(message.find("non-data UREG") != std::string::npos);
+    require(message.find("native48 pc=0x8c07f") != std::string::npos);
+    require(message.find("other shifter operation") != std::string::npos);
     stopped = true;
   }
   fixture.cooperative_dsp = nullptr;
-  constexpr std::uint32_t frontier = 0x8c07e;
+  constexpr std::uint32_t frontier = 0x8c07f;
   require(stopped && cpu.state().pc == frontier && !fixture.dsp_memory.active());
   require(cpu.state().depth == 0 && !cpu.state().count_loop && cpu.state().loops_empty == true);
   constexpr std::uint32_t saved_instruction = 0x8c030;
   constexpr std::uint64_t template_value = 0xb16b000000;
   require(cpu.state().dag[0][0][8].value == saved_instruction);
   require(cpu.state().data[0][9].value == template_value);
+  constexpr std::uint32_t final_vectors_bytes = 1536;
+  constexpr std::uint32_t header_bytes = 12;
+  const auto header = input.end - final_vectors_bytes - header_bytes;
+  constexpr std::uint32_t high_half = 0xffff0000;
+  // Header DMA at NW92003..5 aliases PM8c002..3. PM8c003 contains the
+  // second header word's high half and the complete third word, not old code.
+  constexpr unsigned int high_word_shift = 32;
+  const auto expected_px =
+      (std::uint64_t{reference_word(fixture, header + 8, 4)} << high_word_shift) |
+      (reference_word(fixture, header + 4, 4) & high_half);
+  constexpr std::uint64_t all_bits = 0xffffffffffffffff;
+  require(cpu.state().px.value == expected_px && cpu.state().px.known == all_bits);
   if (!fixture.runtime) { throw std::logic_error("Missing cooperative runtime SPI"); }
   const auto runtime = fixture.runtime->device.state();
   require(!runtime.overflow && runtime.serial.remaining == 0);
   const auto cells = verify_stream_payload(fixture, input);
   std::cout << "Cooperative original ARM/DSP transfer: " << input.records << " records, " << cells
             << " final payload cells, " << fixture.dsp_steps
-            << " committed DSP instructions; finalizer PX remains unsupported\n"
+            << " committed DSP instructions; finalizer PX loaded, BSET remains unsupported\n"
             << std::flush;
 }
 
@@ -1169,7 +1181,7 @@ void kernel_transfer(std::span<const std::byte> image,
                  .records = records[part][channel]});
     std::cout << "Part " << part << " transport " << channel
               << ": original ARM/SPI first code record stored through native SW reads and indexed "
-                 "writes; cooperative remaining records reach finalizer PX frontier\n";
+                 "writes; cooperative remaining records load finalizer PX\n";
   }
 }
 

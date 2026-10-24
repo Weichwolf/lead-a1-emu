@@ -41,6 +41,12 @@ void sharc_ram_transfer(SharcMemory &memory,
                         SharcState &state,
                         SharcDataTransfer transfer,
                         const SharcControl *control);
+void sharc_px_ram_transfer(SharcMemory &memory, SharcState &state, SharcDataTransfer transfer);
+[[nodiscard]] bool
+sharc_px_register_move(SharcState &state, unsigned int source, unsigned int destination);
+[[nodiscard]] bool sharc_px_half(unsigned int reg);
+[[nodiscard]] SharcKnown32 sharc_px_half_read(const SharcState &state, unsigned int reg);
+void sharc_px_half_write(SharcState &state, unsigned int reg, SharcKnown32 value);
 void sharc_short_transfer(
     SharcMemory &memory, SharcKnown40 &data, SharcKnown32 mode, SharcAccess access, bool write);
 [[nodiscard]] bool sharc_data_move_condition(const SharcState &state, std::uint64_t opcode);
