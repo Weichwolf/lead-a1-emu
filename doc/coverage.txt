@@ -185,7 +185,20 @@ ID  State    Evidence / remaining work
              (sharc-fetch-four-loops.txt). All8 original prefixes additionally
              execute their first tag4 record:27/54/52 exact normal words and
              original part1 tag1 skips420/580, with real return to8c015.
-             Count1 fetched startup and broader stall/loop timing remain open.
+             Count1 ordinary startup now records its native pending pop and
+             pops in the actual following empty Execute clock. Literal columns,
+             stack operand reads, independent continuations, malformed phases
+             and clock-owner repair check this behavior (sharc-fetch-count1.txt).
+             Taken count1 CALLs execute with the existing private native control
+             frames; architectural depth/affected frames/flags remain unknown,
+             and an explicit stack observer fails rather than receiving guessed
+             data. That arbitration and broader stall/loop timing stay open.
+             All8 fresh original fetched fixtures now run all ordinary records
+             (607/599/25/20,1251 per cadence), compare every completed data record
+             and parse the terminal header at8c019.
+             All109318 final payload cells per cadence also match the independent
+             last-write oracle. Final vectors/application
+             boot remain open; separate functional streams retain8c08e.
              A separate internal RAM-port reference grants IO0>IO1>DM>PM per block,
              retains losing IO1 into the following clock and alternates new
              I/O launch eligibility from an explicit owner phase. Actual reads,

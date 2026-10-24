@@ -1,0 +1,50 @@
+Single-iteration four-instruction loops in the native fetch reference
+
+PGRrev2.4 4-67/Table4-27 specifies the startup hold and the stack pop in
+the empty Execute clock after the first body instruction. The bound path
+records that actual retirement as four_pop_pending; the next real bubble
+pops the native frame before the second body's operands. Native and bound
+state validation rejects inconsistent count, frame, PC or pipeline phases.
+A foreign controller transaction preserves the pending pop for repair.
+The instruction-only reference retains its separate minimum-cycle summary.
+
+For a taken CALL(DB) in this startup, the architectural stack arbitration
+remains unqualified. The existing native partial reference keeps actual
+CALL/RTS control frames private and leaves architectural depth, affected
+physical stack entries, loop-empty and sequencer-stack flags unknown.
+The fetched composition now preserves that contract through both real
+delay slots, callee polling/nested calls, the RTS-to-end interlock and the
+actual final body instruction. It never exports private frames as PCSTK
+readback. An observer of the unresolved architectural stack fails with PC
+context. Known parent frames survive; the completed loop restores known
+parent depth/empty-loop state while overwritten physical entries stay unknown.
+Executing these instructions does not qualify the missing stack arbitration.
+
+Owned checks include literal eight-column Table4-27 expectations, the exact
+pop clock, real PCSTK/PCSTKP operands after pop, quiet-owner rollback/repair,
+independent RAM/controller/CPU/fetch continuations, actual nested CALLs and
+conditional callee countdowns, immediate/UREG setup, taken/false CALLs and
+malformed native/pipeline pop states. An unknown-stack read preserves CPU,
+controller and Execute; replacing RAM cannot replace its retained opcode.
+
+The fresh optional original fixture continues all ordinary tag1/3/4 records
+instead of stopping at the first tag4 record. Both explicitly supplied2/3
+grant serial-edge cadences pass all four streams:607/599/25/20 ordinary
+records,1251 per cadence, including the earlier first tag3 record. Every
+data record is compared against the local original immediately after its
+real return. The independent last-write oracle additionally checks all109318
+final16-bit payload cells per cadence (51869/51755/4042/1652 by stream).
+The original terminal header is received and parsed at8c019
+with no active loop/frame; its dispatch/finalizer has not run in this path.
+The independent full functional stream fixture still reaches8c08e.
+
+This is reference composition with explicit unknowns, not a vendor-simulator
+or silicon waveform. AVAILABLE-BUS grants do not couple the separate block/
+DMA arbiter or establish physical CCLK/board clocks. Count1 CALL stack
+arbitration, general mixed stalls/loops/interrupts, final vector execution,
+complete application boot, MIDI/audio/USB/recovery, hardware comparisons and
+real-time performance remain open under the unchanged complete objective.
+
+Reproduce:
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_fetched_four_single_iteration|sharc_fetched_long_counter_loops|sharc_four_instruction_loops|original_sharc_images)$' --output-on-failure

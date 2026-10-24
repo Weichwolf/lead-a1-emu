@@ -68,6 +68,14 @@ struct Placement {
   unsigned int cells;
 };
 
+using CellExpectations = std::map<std::uint32_t, std::uint16_t>;
+
+void check_cells(lead_a1::SharcMemory &memory, const CellExpectations &expected) {
+  for (const auto &[address, value] : expected) {
+    require(memory.read({.address = address, .width = lead_a1::SharcWidth::short16}) == value);
+  }
+}
+
 constexpr std::array<std::array<Placement, 2>, 2> placements{
     {{{{.offset = 0x2c6d78, .bytes = 114112, .records = 608, .cells = 51869},
        {.offset = 0x2ab0f8, .bytes = 113788, .records = 600, .cells = 51755}}},
@@ -353,6 +361,28 @@ void advance_devices(lead_a1::SharcMemory &memory,
   require(!devices.spi.state().overflow);
 }
 
+struct StreamRecord {
+  std::size_t header;
+  std::uint32_t tag;
+  std::uint32_t count;
+  std::uint32_t destination;
+};
+
+std::size_t check_record_payload(lead_a1::SharcMemory &memory,
+                                 std::span<const std::byte> stream,
+                                 StreamRecord record) {
+  const auto payload = record.header + header_bytes;
+  if (record.tag == 1) { return payload; }
+  require(record.tag == 3 || record.tag == 4);
+  const auto bytes = record.tag == 3 ? 2U : 4U;
+  const auto width = record.tag == 3 ? lead_a1::SharcWidth::short16 : lead_a1::SharcWidth::normal32;
+  for (std::uint32_t index = 0; index < record.count; ++index) {
+    require(memory.read({.address = record.destination + index, .width = width}) ==
+            word(stream, payload + (std::size_t{index} * bytes), bytes));
+  }
+  return payload + (((std::size_t{record.count} * bytes) + 3) & ~std::size_t{3});
+}
+
 void sequenced_next_records(lead_a1::SharcMemory &memory,
                             lead_a1::Sharc &cpu,
                             lead_a1::SharcFetch &fetch,
@@ -361,16 +391,16 @@ void sequenced_next_records(lead_a1::SharcMemory &memory,
   const auto stream = serial.stream;
   std::size_t cursor =
       kernel_bytes + header_bytes + (std::size_t{word(stream, kernel_bytes + 4)} * 2);
-  constexpr unsigned int limit = 80000;
+  constexpr unsigned int limit = 8000000;
   constexpr std::uint32_t parsed = 0x8c019;
   constexpr std::uint32_t returned = 0x8c015;
   constexpr std::uint32_t buffer = 0x92003;
-  constexpr unsigned int max_records = 8;
-  for (unsigned int record = 0; record < max_records; ++record) {
+  unsigned int records{};
+  while (cursor < stream.size()) {
     const auto tag = word(stream, cursor);
     const auto count = word(stream, cursor + 4);
     const auto destination = word(stream, cursor + 8);
-    require(tag == 1 || tag == 4);
+    require(tag == 0 || tag == 1 || tag == 3 || tag == 4);
     bool header_seen{};
     unsigned int clocks{};
     while ((!header_seen || cpu.state().pc != returned) && clocks < limit) {
@@ -385,23 +415,21 @@ void sequenced_next_records(lead_a1::SharcMemory &memory,
           require(memory.read({.address = buffer + index}) ==
                   word(stream, cursor + (std::size_t{index} * 4)));
         }
+        if (tag == 0) {
+          require(!cpu.state().count_loop && cpu.state().depth == 0 && !memory.active());
+          std::cout << "  Sequenced remaining ordinary records: " << records
+                    << ", terminal header parsed, next PC0x8c019\n";
+          return;
+        }
       }
     }
     require(header_seen && cpu.state().pc == returned && cpu.state().depth == 0);
     require(!cpu.state().count_loop && !memory.active());
-    cursor += header_bytes;
-    if (tag == 4) {
-      for (std::uint32_t index = 0; index < count; ++index) {
-        require(memory.read({.address = destination + index}) ==
-                word(stream, cursor + (std::size_t{index} * 4)));
-      }
-      std::cout << "  Sequenced first normal-word record: " << count << " words/" << clocks
-                << " available-bus clocks, next PC0x8c015\n";
-      return;
-    }
-    std::cout << "  Sequenced skipped record: " << count << " words/" << clocks << " grants\n";
+    cursor = check_record_payload(
+        memory, stream, {.header = cursor, .tag = tag, .count = count, .destination = destination});
+    ++records;
   }
-  throw std::runtime_error("Original first normal-word record not reached");
+  throw std::runtime_error("Original terminal header not reached");
 }
 
 void sequenced_first_record(lead_a1::SharcMemory &memory,
@@ -512,7 +540,9 @@ void sequenced_first_header(lead_a1::SharcMemory &memory,
   sequenced_first_record(memory, cpu, fetch, stream, serial, devices);
 }
 
-void sequenced_clock_setup(std::span<const std::byte> stream, unsigned int interval) {
+void sequenced_clock_setup(std::span<const std::byte> stream,
+                           unsigned int interval,
+                           const CellExpectations &expected) {
   // This fixture owns fresh RAM and PMCTL: its writes cannot seed the full stream.
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
@@ -582,10 +612,12 @@ void sequenced_clock_setup(std::span<const std::byte> stream, unsigned int inter
   sequenced_first_clear(memory, cpu, fetch, clock, stream);
   sequenced_first_header(
       memory, cpu, fetch, stream, {.clock = clock, .spi = spi, .interval = interval});
+  check_cells(memory, expected);
+  std::cout << "  Sequenced final payload cells: " << expected.size() << " matched\n";
 }
 
 struct Inventory {
-  std::map<std::uint32_t, std::uint16_t> cells;
+  CellExpectations cells;
   unsigned int records{};
   std::size_t terminal{};
 };
@@ -688,7 +720,7 @@ void check_frontier(const lead_a1::Sharc &cpu,
 
 void run_stream(std::span<const std::byte> stream, Placement placement, unsigned int interval) {
   const auto expected = inventory(stream, placement); // Read-only oracle, never writes guest RAM.
-  sequenced_clock_setup(stream, interval);
+  sequenced_clock_setup(stream, interval, expected.cells);
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
   auto boot = lead_a1::SharcSpiBoot::slave_reference_214xx();

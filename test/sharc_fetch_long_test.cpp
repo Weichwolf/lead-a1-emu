@@ -490,10 +490,7 @@ void four_phase_failures() {
     switch (variant) {
       case 0: loop.held.reset(); break;
       case 1: loop.held->address = base + 3; break;
-      case 2:
-        loop.counter->total = 1;
-        loop.counter->remaining = 1;
-        break;
+      case 2: loop.four = lead_a1::SharcFetchFourPhase::none; break;
       case 3: loop.refetch_end = true; break;
       case 4: loop.counter->remaining = 1; break;
       default: throw std::logic_error("Invalid four-loop test");
@@ -501,15 +498,6 @@ void four_phase_failures() {
     rejected([&] { const lead_a1::SharcFetch broken(memory, invalid); }, "four-loop");
   }
   finish(fetch, cpu, {.length = 4, .sum = 8});
-  lead_a1::Sharc one(memory, initial(1), &control);
-  lead_a1::SharcFetch transport(memory, sequenced());
-  constexpr unsigned int before_do = 4;
-  for (unsigned int clock = 0; clock < before_do; ++clock) { tick(transport, one); }
-  static_cast<void>(transport.advance_sequenced(one));
-  const auto native = one.state();
-  const auto pending = transport.state();
-  rejected([&] { static_cast<void>(one.step(transport)); }, "count-one startup");
-  require(one.state() == native && transport.state() == pending && !memory.active());
 }
 
 void four_failed_end_store() {

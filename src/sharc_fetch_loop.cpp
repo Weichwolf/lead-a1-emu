@@ -125,9 +125,16 @@ void sharc_fetch_loop_clock(SharcState &cpu,
                             const SharcFetchState &previous,
                             SharcFetchState &next,
                             bool startup_stall) {
-  if (startup_stall && previous.flow && previous.flow->long_loop) {
-    if (previous.flow->long_loop->four == SharcFetchFourPhase::hold) {
+  if (previous.flow && previous.flow->long_loop) {
+    if (startup_stall && previous.flow->long_loop->four == SharcFetchFourPhase::hold) {
       sharc_fetch_long_clock(cpu, next);
+    }
+    const auto native = cpu.count_loop;
+    if (native && native->four_pop_pending) {
+      if (next.execute) {
+        throw std::runtime_error("SHARC four-loop pop requires its real bubble");
+      }
+      sharc_four_loop_clock_pop(cpu);
     }
     return;
   }

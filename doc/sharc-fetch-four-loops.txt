@@ -3,8 +3,8 @@ Four-instruction counter loops in the bound native fetch sequencer
 Primary evidence: PGRrev2.4 4-45..48/Tables4-13/14,4-67/Table4-27,
 4-71..75,4-119 and A-10. This is a composed reference interpretation; no vendor
 simulator or physical waveform is claimed. Count>=2 and encoded zero/2^32
-use immediate or UREG setup. Count1 fetched startup remains explicitly
-guarded; its separate functional limitations are in sharc-four-loops.txt.
+use immediate or UREG setup. Count1's timed ordinary pop and explicitly
+unknown CALL-stack composition are separate in sharc-fetch-count1.txt.
 
 The actual DO resolves count in Execute. The second body word is retained
 raw when its initial Decode is aborted. The startup clock holds F1/F2,
@@ -43,7 +43,7 @@ grants. Transport1 skips580 words (391/580 grants), then stores52 words at
 stream; each real return reaches8c015 with no active loop/frame. The serial
 source continues across all records. The oracle only reads original data.
 
-Count1 startup, other body control, nested/arithmetic/interrupted loops,
+Count1 CALL architectural stack arbitration, other body control, nested/arithmetic/interrupted loops,
 mixed PM/cache/DAG/mode stalls and complete instruction/global timing remain
 guarded or open. The owner grants AVAILABLE-BUS clocks without coupling the
 separate block/DMA arbiter. These counts are not physical CCLK or board-clock

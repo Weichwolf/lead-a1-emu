@@ -51,6 +51,7 @@ void pop(SharcState &state) {
   state.depth = active.saved_depth;
   state.loops_empty = true;
   active.frame_live = false;
+  active.four_pop_pending = false;
   sharc_stack_status(state);
 }
 
@@ -102,8 +103,8 @@ void context(const SharcState &state) {
 void validate_startup(const SharcState &state) {
   const auto &active = loop(state);
   if (!active.control) { throw std::logic_error("Missing SHARC startup control"); }
-  if (active.total != 1 || active.remaining != 1 || !active.frame_live || state.depth ||
-      state.loops_empty) {
+  if (active.total != 1 || active.remaining != 1 || !active.frame_live || active.four_pop_pending ||
+      state.depth || state.loops_empty) {
     throw std::invalid_argument("Invalid SHARC unknown four-loop startup state");
   }
   for (unsigned int index = 0; index < state.pc_stack.size(); ++index) {
@@ -134,11 +135,16 @@ void sharc_validate_four_loop(const SharcState &state) {
       active.saved_depth >= before_almost_full) {
     throw std::invalid_argument("Invalid SHARC four-loop state");
   }
+  if (active.four_pop_pending && (active.total != 1 || !active.frame_live || active.control ||
+                                  state.branch || state.pc != active.body + 1)) {
+    throw std::invalid_argument("Invalid SHARC four-loop pending pop");
+  }
   if (active.control) {
     validate_startup(state);
   } else if (!state.depth || !state.loops_empty || *state.loops_empty == active.frame_live ||
              (!active.frame_live && active.remaining != 1) ||
-             (active.frame_live && active.remaining == 1 && state.pc != active.body)) {
+             (active.frame_live && active.remaining == 1 && state.pc != active.body &&
+              !active.four_pop_pending)) {
     throw std::invalid_argument("Invalid SHARC four-loop resource state");
   }
   context(state);
@@ -150,6 +156,9 @@ void sharc_validate_four_loop(const SharcState &state) {
 }
 
 unsigned int sharc_four_loop_prepare(SharcState &state, std::uint64_t opcode) {
+  if (loop(state).four_pop_pending) {
+    throw std::runtime_error("SHARC four-loop pending pop requires its owner clock");
+  }
   context(state);
   const auto &active = loop(state);
   const auto type = opcode >> class_shift;
@@ -184,13 +193,17 @@ unsigned int sharc_four_loop_prepare(SharcState &state, std::uint64_t opcode) {
   return initial ? 2U : 1U;
 }
 
-void sharc_four_loop_finish(const SharcState &previous, SharcState &next) {
+void sharc_four_loop_finish(const SharcState &previous, SharcState &next, bool clocked) {
   const auto &before = loop(previous);
   if (!next.count_loop) { throw std::logic_error("Lost SHARC four loop"); }
   auto &active = *next.count_loop;
   if (before.total == 1 && !active.control && previous.pc == before.body) {
     // PGR4-67: startup bubble after the first body instruction pops the stacks.
-    pop(next);
+    if (clocked) {
+      active.four_pop_pending = true;
+    } else {
+      pop(next);
+    }
   }
   if (body_instruction(previous) && previous.pc == before.end) {
     if (active.remaining == 1) {
@@ -207,6 +220,16 @@ void sharc_four_loop_finish(const SharcState &previous, SharcState &next) {
     next.pc = active.body;
   }
   context(next);
+}
+
+void sharc_four_loop_clock_pop(SharcState &state) {
+  const auto &active = loop(state);
+  if (!active.four_pop_pending || active.total != 1 || active.control || !active.frame_live ||
+      state.branch || state.pc != active.body + 1 || state.depth != active.saved_depth + 1 ||
+      state.pc_stack[active.saved_depth] != active.body || state.loops_empty != false) {
+    throw std::runtime_error("SHARC four-loop clocked pop context mismatch");
+  }
+  pop(state);
 }
 
 }

@@ -55,6 +55,8 @@ struct SharcCountLoop {
   unsigned int saved_depth{};
   bool frame_live{};
   std::optional<SharcLoopControl> control;
+  // Count1 ordinary four-body startup: the following real bubble pops the frame.
+  bool four_pop_pending{};
   bool operator==(const SharcCountLoop &) const = default;
 };
 

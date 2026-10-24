@@ -257,7 +257,7 @@ unsigned int execute_loop(SharcMemory &memory,
   return detail::sharc_count_loop_step(state, opcode, clocked);
 }
 
-void finish_control(const SharcState &previous, SharcState &next) {
+void finish_control(const SharcState &previous, SharcState &next, bool clocked) {
   for (unsigned int index = 0; index < previous.pending.size(); ++index) {
     const auto effect = previous.pending[index];
     if (effect) { next.effective[index] = *effect; }
@@ -271,7 +271,7 @@ void finish_control(const SharcState &previous, SharcState &next) {
     }
   }
   if (detail::sharc_four_loop(previous)) {
-    detail::sharc_four_loop_finish(previous, next);
+    detail::sharc_four_loop_finish(previous, next, clocked);
   } else if (previous.count_loop && previous.count_loop->body != previous.count_loop->end) {
     detail::sharc_long_loop_finish(previous, next);
   }
@@ -389,7 +389,7 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     // A bound fetch clock already accounted for the actual PM cache request.
     // The instruction-only helper must not erase that staged fetch knowledge.
     if (preserve_cache) { next.cache = state_.cache; }
-    finish_control(state_, next);
+    finish_control(state_, next, loop_clock != SharcLoopClock::functional);
     minimum_cycles += detail::sharc_arithmetic_loop_finish(state_, next);
     detail::sharc_cache_finish(state_, next);
     detail::sharc_interrupt_finish(state_, next);

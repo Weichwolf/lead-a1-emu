@@ -28,8 +28,9 @@ void sharc_validate_count_loop(const SharcState &state) {
     sharc_validate_four_loop(state);
     return;
   }
-  if (loop->control || state.branch || !state.depth || !state.loops_empty || loop->total == 0 ||
-      loop->total > full_counter || loop->remaining == 0 || loop->remaining > loop->total ||
+  if (loop->control || loop->four_pop_pending || state.branch || !state.depth ||
+      !state.loops_empty || loop->total == 0 || loop->total > full_counter ||
+      loop->remaining == 0 || loop->remaining > loop->total ||
       loop->saved_depth >= before_almost_full || loop->end < loop->body ||
       loop->end > sharc_pc_mask || (loop->end != loop->body && loop->end - loop->body < 4) ||
       *state.loops_empty == loop->frame_live) {

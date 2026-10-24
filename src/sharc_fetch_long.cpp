@@ -70,8 +70,10 @@ void body_control(const SharcFetchLongLoop &loop, const SharcFetchState &next) {
 void end_fetch(const SharcState &cpu, SharcFetchState &next, bool preserve_next) {
   if (!next.flow || !next.flow->long_loop) { throw std::logic_error("Missing SHARC end fetch"); }
   auto &loop = *next.flow->long_loop;
-  if (!loop.counter || !cpu.count_loop || !cpu.depth ||
-      *cpu.depth != cpu.count_loop->saved_depth + (cpu.count_loop->frame_live ? 1U : 0U)) {
+  const auto native = cpu.count_loop;
+  const auto depth = native && native->control ? native->control->depth : cpu.depth;
+  if (!loop.counter || !native || !depth ||
+      *depth != native->saved_depth + (native->frame_live ? 1U : 0U)) {
     throw std::runtime_error("SHARC long-loop end fetch during a callee not qualified");
   }
   auto &count = *loop.counter;
@@ -165,9 +167,6 @@ void sharc_fetch_long_retirement(const SharcState &cpu, SharcFetchState &transpo
     sharc_begin_count_loop(checked, word.opcode);
     if (!checked.count_loop) { throw std::logic_error("Missing validated native counter"); }
     const auto native = *checked.count_loop;
-    if (loop.four != SharcFetchFourPhase::none && native.total == 1) {
-      throw std::runtime_error("SHARC fetched four-loop count-one startup not qualified");
-    }
     loop.counter = SharcFetchLongCounter{
         .total = native.total, .remaining = native.total, .saved_depth = native.saved_depth};
     return;
