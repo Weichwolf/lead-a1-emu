@@ -7,9 +7,11 @@ compute-status availability. Manufacturer/private sources are not build inputs.
 
 COMPUTE23 retains the three CU bits, eight operation bits and three four-bit
 register selectors. Full native Type2a reserved fields and other execution
-forms remain guarded. Floating point, comparisons, arithmetic, multiplier,
-shifter, multifunction and empty compute-only forms remain unqualified and
-fail visibly when selected. No arithmetic exception/timing implementation is
+forms remain guarded. Floating add/sub has the separate bounded normal-result
+reference in sharc-floating-point.txt. Other floating and compare operations,
+multiplier/multifunction and empty compute-only forms remain unqualified and
+fail visibly when selected. Integer arithmetic and shifters have their separate
+contracts below. No arithmetic exception/timing implementation is
 claimed by these non-exception-generating logical operations.
 
 The ALU operates on upper32 bits of a 40-bit register, clears the result's low8

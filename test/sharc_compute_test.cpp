@@ -226,7 +226,7 @@ void guards_and_rollback() {
   const auto before = unknown_bank.state();
   rejected([&] { static_cast<void>(unknown_bank.step()); }, "bank selection");
   require(unknown_bank.state() == before && !memory.active());
-  constexpr std::uint64_t unsupported_float = 0x013e00081312;
+  constexpr std::uint64_t unsupported_float = 0x013e000a1312; // Floating PASS remains unqualified.
   memory.write({.address = base, .width = lead_a1::SharcWidth::wide48}, unsupported_float);
   lead_a1::Sharc floating(memory, lead_a1::Sharc::reset_reference_214xx(base));
   rejected([&] { static_cast<void>(floating.step()); }, "arithmetic/float/compare");

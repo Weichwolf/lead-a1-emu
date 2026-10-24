@@ -219,6 +219,16 @@ ID  State    Evidence / remaining work
              and preserve compute flags.8192 bank/PE/RND32/knowledge cases,
              literal priority/source/flag/control/rollback tests qualify this
              extension. Combined-PX parallel,swap and SIMD transfers remain open.
+             Native floating ALU add/sub now executes normal nonzero results
+             with effective RND32/TRUNC, exact integer rounding and independent
+             per-PE conditions/banks. The finite numeric engine also checks
+             signed zero, denormal flush, tiny/overflow and halfway boundaries
+             against460800 exact rational cases. Native zero/exception status,
+             NAN/infinity and arithmetic IRQs remain explicitly guarded;
+             multiplier, conversions and complete floating execution remain open
+             (sharc-floating-point.txt). Actual clocked floating accumulation
+             and independently rebound mid-loop continuation have literal
+             result/frame oracles; no application/audio performance follows.
              Runtime SPI RX DMA has a completed-bootstrap handoff, finite
              four-word FIFO plus receive buffer, explicit grouped memory grants,
              signed cursor steps, zero-count65536 semantics and transactional
@@ -367,6 +377,9 @@ ID  State    Evidence / remaining work
              typed continuation. SPI per-word tests drive actual serial edges,
              exact grant binding, tail/receive-ahead behavior, core contention,
              partial-transfer failure, pause/resume and signed wrap/zero stride.
+             Finite floating add/sub has independent packed-bit literals and
+             a460800-case fixed Fraction grid, plus native per-PE/rounding/
+             mode-latency/known-bit and clocked loop continuation checks.
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

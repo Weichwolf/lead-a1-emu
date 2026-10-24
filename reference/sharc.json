@@ -350,5 +350,14 @@
     "owned_evidence": "All16 finite masks, carried IO1/gap/new-IO0 sequence, four independent blocks, all five view geometries, real alias/fetch ordering, permissions/knowledge/unmapped failures and repair, transaction ownership and typed continuation; actual SPI serial edges/group/tail/receive-ahead, core contention, mismatched grants, pause/resume, partial-transfer repair, signed wrap/zero stride",
     "original_evidence": "No changed original schedule; existing serial record-stream fixtures retain their 8c08e frontier and historical functional whole-group grants, separate available-bus first-clear prefix unchanged",
     "limits": "No native Fetch/PM-data bus selection or pipeline stall coupling, shadow-write FIFO, earlier peripheral channel arbitration, external-memory/audio DMA, complete boot/finalizer/global physical timing or real-time performance qualification"
+  },
+  "finite_float_reference": {
+    "primary": "PGRrev2.4 3-37..39,11-24/25,12-4/Table12-4,A-5,A-17..23,C-1..3",
+    "format": "Packed40 sign/exponent8/fraction31; A-5 RND32=1 clears low8 inputs before24-significant-bit arithmetic and low8 outputs, RND32=0 retains32 significant bits; introductory3-37 parenthetical conflicts with explicit A-5 definition",
+    "numeric": "Owned unsigned64 integer align/jam/normalize and one nearest-even/toward-zero rounding; finite inputs, denormal flush, signed cancellation/zero, postround tiny/overflow metadata; no host floating arithmetic or environment",
+    "native": "Type2a ALU81/82 normal nonzero results; effective MODE1 latency, input known bits and bank/condition per PE; all40 output bits, AF/sign, other ALU flags cleared, unrelated ASTAT and STKY preserved",
+    "guards": "Native zero/underflow/overflow, NAN/infinity inputs and unknown required bits/modes reject before commit; no guessed AUS/AN/NAN payload or arithmetic interrupt",
+    "owned_evidence": "Independent packed-bit literals and460800 deterministic Fraction cases across precisions/roundings/add-sub/signs/exponents/fractions; actual native lane/status/known-bit/mode latency, old-value/conflicting parallel register moves and dual loads, post-store floating fault rollback, false-condition/unknown-alias guards and five-iteration clocked accumulation with independent mid-loop CPU/fetch/RAM rebinding",
+    "limits": "Exceptional native status/IRQ, NAN/infinity, other ALU/conversions, multiplier/accumulators/multifunction, VISA and full pipeline/application/audio/physical performance remain unqualified"
   }
 }

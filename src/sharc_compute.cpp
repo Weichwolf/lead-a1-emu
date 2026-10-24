@@ -119,6 +119,12 @@ void status(SharcState &state, AluResult result, unsigned int element) {
 void lane(SharcState &state, std::uint64_t opcode, unsigned int element) {
   constexpr unsigned int operation_shift = 12;
   const auto operation = static_cast<unsigned int>((opcode >> operation_shift) & 0xff);
+  constexpr unsigned int float_add = 0x81;
+  constexpr unsigned int float_subtract = 0x82;
+  if (operation == float_add || operation == float_subtract) {
+    sharc_float_lane(state, opcode, element);
+    return;
+  }
   const auto destination = static_cast<unsigned int>((opcode >> 8) & 15);
   const auto left = operand(state, static_cast<unsigned int>((opcode >> 4) & 15), element);
   SharcKnown32 right;

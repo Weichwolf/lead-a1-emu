@@ -252,6 +252,43 @@ void late_compute_failure_and_peripheral_guard() {
   require(peripheral.state() == state && !memory.active());
 }
 
+void floating_old_inputs_and_load_priority() {
+  constexpr std::uint64_t float_add = 0x81312; // F3=old F1+old F2.
+  constexpr std::uint64_t one = 0x3f80000000;
+  constexpr std::uint64_t two = 0x4000000000;
+  constexpr std::uint64_t three = 0x4040000000;
+  constexpr std::uint32_t float_status = 0x400;
+  constexpr std::uint32_t alu_mask = 0x43f;
+  for (const bool conflict : {false, true}) {
+    lead_a1::SharcMemory memory;
+    program(memory, instruction(conflict ? 3U : 1U, conflict ? 3U : 4U, 0) | float_add);
+    auto state = initial();
+    state.data[0][1] = {.value = one, .known = full40};
+    state.data[0][2] = {.value = two, .known = full40};
+    lead_a1::SharcControl control(true);
+    lead_a1::Sharc cpu(memory, state, &control);
+    static_cast<void>(cpu.step());
+    require(cpu.state().data[0][3].value == (conflict ? dm_input << 8 : three));
+    if (!conflict) {
+      require(cpu.state().data[0][1].value == dm_input << 8);
+      require(cpu.state().data[0][4].value == pm_input << 8);
+    }
+    require((cpu.state().system[6].value & alu_mask) == float_status);
+    require(cpu.state().system[8] == state.system[8]);
+  }
+  lead_a1::SharcMemory memory;
+  program(memory, instruction(6, 8, 3) | float_add);
+  auto state = initial();
+  state.data[0][1] = {}; // Real stores precede the unknown arithmetic input.
+  lead_a1::SharcControl control(true);
+  const auto before_control = control.snapshot();
+  lead_a1::Sharc failing(memory, state, &control);
+  rejected([&] { static_cast<void>(failing.step()); }, "Unknown SHARC floating register");
+  require(failing.state() == state && !memory.active() && control.snapshot() == before_control);
+  require(memory.read({.address = dm_address}) == dm_input);
+  require(memory.read({.address = pm_address}) == pm_input);
+}
+
 void flush_follower_and_simd_guards() {
   lead_a1::SharcMemory memory;
   program(memory, instruction(6, 8, 3));
@@ -281,6 +318,7 @@ int main() {
     core_control_effect_and_rollback();
     independent_data_widths();
     late_compute_failure_and_peripheral_guard();
+    floating_old_inputs_and_load_priority();
     flush_follower_and_simd_guards();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
