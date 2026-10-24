@@ -60,7 +60,9 @@ alignment and its composition with loops/cache/control are not yet qualified.
 The sequenced clock therefore rejects a Decode MUL when both operands may be
 written by its immediate Address predecessor. This includes the same register
 used twice. The conservative possible-write set includes compute, immediate/
-register/RAM/dual-load outputs; it is not a claim that all those producers incur
+register/RAM/dual-load outputs. Fixed COMP/COMPU has no DREG result, so its
+ignored n field contributes no write; actual parallel load/copy outputs still
+count (sharc-compare.txt). This is not a claim that all those producers incur
 the same hardware stall. Conditional/banked/parallel ambiguities also reject
 when that set conflicts. No fabricated cycle, bypass or guest NOP is installed.
 The failed clock retains the entire CPU/cache/fetch boundary for inspection.

@@ -58,8 +58,10 @@ std::uint32_t sharc_fetch_condition_mask(unsigned int code) {
   constexpr std::array<std::uint32_t, 15> masks{
       1, 0, 0, 8, 2, 0x80, 0x40, 0x800, 0x1000, 0, 0, 0, 0, sharc_btf, 0x4000};
   const auto base = code & 15;
+  constexpr std::uint32_t relational = 0x407; // AF/AN/AV/AZ; MODE1 has a separate guard.
+  if (base == 1 || base == 2) { return relational; }
   if (code > always || base >= masks.size() || masks[base] == 0) {
-    throw std::runtime_error("SHARC sequenced relational/FLAG/loop condition not qualified");
+    throw std::runtime_error("SHARC sequenced FLAG/loop condition not qualified");
   }
   return masks[base];
 }

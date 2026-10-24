@@ -1,13 +1,14 @@
 Native Address-stage branch decisions and condition interlocks
 
-The optional fetch sequencer now resolves the nineteen supported conditions
+The optional fetch sequencer now resolves the 23 supported conditions
 for direct absolute/relative JUMP/CALL and plain immediate/delayed RTS. The
 condition and selected internal native target are retained on the Address
 word through Execute. The native decoder executes the original captured
 opcode and uses that saved decision; it does not resample later ASTAT or
 rewrite the instruction's condition bits. SISD uses PEx; SIMD ANDs the two
 element conditions. A false branch neither redirects nor reads a return frame.
-Relational, external FLAG and loop conditions remain explicitly unsupported.
+LT/LE/GE/GT use AF/AN/AV/AZ and effective ALUSAT as specified in
+sharc-compare.txt. External FLAG and loop conditions remain unsupported.
 
 RTS selects its known ordinary CALL frame in Address. Actual stack pop, PC
 effects and DB slots still use the shared native core at Execute. No private
@@ -23,11 +24,13 @@ Address empty. The F1 cursor and Decode suppression mask hold, and no next
 address is accepted. After actual producer retirement, the following clock
 resolves the branch from its updated flags. An absent phase is not a guest NOP.
 
-Dependency masks distinguish ALU flags, shifter SZ/SV/SS and system-bit-test
-BTF. Compute-only, immediate shifts, register moves with parallel compute and
-Type1 compute fields are classified; an unrelated flag class does not stall.
-Unconditional branches do not consume flags. Multiplier/multifunction hazards
-are unqualified. Simultaneous cache/control stalls and pending cache phases
+Dependency masks distinguish ALU flags, multiplier MN/MV/MU/MI, shifter SZ/SV/SS
+and system-bit-test BTF. Compute-only, immediate shifts, register moves with
+parallel compute and Type1 compute fields are classified; an unrelated flag
+class does not stall.
+Unconditional branches do not consume flags. Dual-operand multiplier forwarding
+and multifunction hazards retain the sharc-floating-multiply.txt guards.
+Simultaneous cache/control stalls and pending cache phases
 at a control interlock remain guarded rather than assuming merged stalls;
 4-118 explicitly warns that different causes need not merge. MODE1 Decode
 capture/interlocks, explicit ASTAT/FLAGS effect latencies, indirect branches,
@@ -52,6 +55,11 @@ A failed actual producer retains its waiting Decode branch until repaired
 and retried. These are finite
 deterministic inputs, not random fuzzing or physical measurements.
 
+The separate sharc-compare.txt tests add 2176 relational branch/compute scenarios,
+actual compare/overflow producer interlocks and retained true/false decisions
+after independently restoring unknown later ASTAT and ALUSAT. Pending/in-flight
+MODE1 effects retain existing guards; no physical mode-capture timing follows.
+
 The optional original-stream test executes each actual serially loaded
 kernel's first eight instructions through the sequencer: five NOPs, CALL(DB)
 and both real mask/latch writes. Twelve granted fetch clocks reach8c091 with
@@ -62,6 +70,6 @@ The full original stream then starts with a separate fresh functional CPU and
 retains its existing8c08e frontier. This is not a pipeline-qualified complete
 loader, terminal-vector acceptance, ARM writer return, coldboot or audio.
 
-Primary references: PGRrev2.4,4-5/8,4-19/23,4-106,4-115/118,9-32/34,
+Primary references: PGRrev2.4,4-5/8,4-19/23,4-92/93,4-106,4-115/118,9-32/34,
 9-44/46,A-17/20,A-31/35. Provenance is in reference/sharc.json; no private
 reconstruction source or manufacturer program words are public build inputs.

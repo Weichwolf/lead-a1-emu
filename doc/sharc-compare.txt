@@ -1,0 +1,76 @@
+SHARC fixed comparisons and relational conditions
+
+Primary evidence: Programming Reference rev2.4,3-7/11,4-92/93/Table4-37,
+10-33,11-7/8,12-1/3/Table12-3,A-17..20. The overbars in Table4-37's
+footnotes were checked in the PDF: extracted text loses the complements.
+Manuals remain local; reference/sharc.json records provenance. No private
+source, encoder, decoder or original program words are build inputs.
+
+Native COMP and COMPU
+
+CU000/op0a compares the signed upper 32 register bits; op0b compares them unsigned.
+Both use the existing effective banks, SISD/SIMD predicates and old-operand
+capture. The low eight extension bits and RND32/TRUNC/ALUSAT are irrelevant. Required
+unknown upper bits reject. Signed order uses unsigned ranks with the sign bit
+flipped, without host signed overflow or implementation-defined conversion.
+
+Neither instruction has a DREG destination. The unused n encoding never reads
+its apparent register/bank or creates a multiplier forwarding dependency.
+Parallel register/RAM loads still write their actual destinations. Both
+operands precede parallel writes; the ordinary transfer priority is unchanged.
+
+AZ means equal and AN means less; AV/AC/AS/AI/AF clear. The eight-bit CACC
+history in ASTAT31..24 shifts right and records X>Y in bit31. Knowledge shifts
+with the old bits; the newest entry and updated ALU flags become known. Other
+ASTAT fields and all STKY values/knowledge are preserved independently per PE.
+Later-lane or parallel-transfer failures roll back the whole instruction,
+including tentative CACC changes and actual tentative memory stores.
+
+Relational conditions
+
+Condition codes 1/2/17/18 implement LT/LE/GE/GT. For fixed operations,
+N = AN XOR (AV AND NOT ALUSAT), LT=N and LE=N OR AZ. For floating operations,
+LT=AN AND NOT AZ and LE=AN OR AZ. AF selects the interpretation; GE=NOT LT and
+GT=NOT LE. These are flag predicates, not a qualification of floating COMP,
+NaN execution or exceptional floating status. Floating COMP remains guarded.
+
+The native compute predicate is independent per PE; SIMD branches require
+both predicates. Required unknown flags/controls reject, with short-circuit
+cases preserving unused knowledge: floating conditions ignore AV/ALUSAT,
+fixed AV=0 ignores ALUSAT, and fixed LT does not need AZ. No general Boolean
+known-bit solver or guessed status is introduced.
+
+The bound fetch sequencer now supports 23 conditions. Its existing branch
+producer interlock tracks AF/AN/AV/AZ for these four additions. A real compare
+or arithmetic producer retires before the dependent Address decision. The
+retained taken decision survives later unknown ASTAT/ALUSAT through Execute.
+Pending/in-flight MODE1 changes retain their existing guards. This does not
+qualify physical MODE1 capture, mixed stalls or complete processor timing.
+
+Owned evidence
+
+sharc_compare_and_relational_conditions checks signed/unsigned literal endpoints,
+equality, dirty/unknown extension, irrelevant unknown modes, ignored n and
+preservation of all DREGs/unrelated flags/STKY. Eight actual comparisons have
+literal CACC and knowledge histories. A literal 32-row AF/AN/AV/AZ/ALUSAT truth
+table drives 2176 finite SISD/SIMD branch and conditional-compute scenarios.
+Inactive elements have unknown operands; all four activation combinations,
+alternate banks and each compare ordering are checked separately.
+
+Actual sequenced tests check adjacent versus NOP-separated compare branches,
+real ADD/SUB overflow branches in both saturation modes, retained true/false
+Address decisions with independently rebound RAM/CPU/fetch, and a five-body
+comparison loop with literal CACC entries and mid-loop checkpoint continuation.
+An adjacent comparison followed by a real floating square checks that ignored
+n is not a data producer. Parallel UREG copies and sharc_dual_moves check old
+comparison inputs, actual load destinations and failed tentative-store rollback.
+Unknown required operands, later-PE failure and required unknown ALUSAT reject
+without partial CPU, memory or pending-control changes. No random/fuzz inputs.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^(sharc_compare_and_relational_conditions|sharc_dual_moves|sharc_fetch_flow)$' --output-on-failure
+
+This adds bounded instruction/reference coverage. Full floating/multifunction/
+VISA execution, remaining forwarding and loop/cache/DAG arbitration, original
+boot/application/audio, hardware comparison and real-time performance remain
+unqualified. No host SIMD, concurrent execution or JIT follows from this work.

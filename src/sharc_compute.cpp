@@ -126,6 +126,10 @@ void lane(SharcState &state, std::uint64_t opcode, unsigned int element) {
     sharc_float_lane(state, opcode, element);
     return;
   }
+  if (sharc_compare_encoding(opcode)) {
+    sharc_compare_lane(state, opcode, element);
+    return;
+  }
   const auto destination = static_cast<unsigned int>((opcode >> 8) & 15);
   const auto left = operand(state, static_cast<unsigned int>((opcode >> 4) & 15), element);
   SharcKnown32 right;

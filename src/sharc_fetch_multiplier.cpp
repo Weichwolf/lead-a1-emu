@@ -28,7 +28,8 @@ std::uint32_t possible_writes(std::uint64_t opcode) {
   const bool dual_move = (opcode & dual_mask) == dual;
   const bool parallel_move = (opcode & register_mask) == register_move;
   std::uint32_t writes{};
-  if ((type == 1 || dual_move || parallel_move) && (opcode & compute) != 0) {
+  if ((type == 1 || dual_move || parallel_move) && (opcode & compute) != 0 &&
+      !sharc_compare_encoding(opcode)) {
     writes |= data_bit(static_cast<unsigned int>((opcode >> 8) & 15));
   }
   if (type == 2) { writes |= data_bit(static_cast<unsigned int>((opcode >> 4) & 15)); }

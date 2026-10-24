@@ -114,8 +114,8 @@ ID  State    Evidence / remaining work
              retry. Literal five-stage tables, backward refetch, phase snapshots
              and real guest self-modifying branch targets have independent
              tests (sharc-fetch-flow.txt). Direct/RTS Address-stage decisions
-             retain19 supported conditions through Execute; actual CALL-frame
-             pops and ALU/shifter/BTF producer stalls have literal phase,
+             retain 23 supported conditions through Execute; actual CALL-frame
+             pops and ALU/multiplier/shifter/BTF producer stalls have literal phase,
              condition-matrix, real countdown/nested-call and snapshot oracles
              (sharc-branch-pipeline.txt). Bound empty-Execute clocks now mature
              supported IRPTL/IMASK/FLAGS and drained MODE1/SYSCTL effects without
@@ -200,6 +200,14 @@ ID  State    Evidence / remaining work
              sticky-AOS oracles, per-PE conditions and transactional rollback.
              Scalar host arithmetic uses unsigned64, with known-bit alias
              cancellation and ignored unary Ry (sharc-arithmetic.txt).
+             Fixed COMP/COMPU uses signed/unsigned upper32 order, no DREG
+             destination and per-PE AZ/AN/CACC history with shifted knowledge.
+             LT/LE/GE/GT follows AF and saturation-corrected overflow; actual
+             compare/arithmetic branch interlocks retain Address decisions
+             through later unknown flags/mode. Literal histories, partial
+             knowledge, banks, old parallel inputs and later-lane/store rollback
+             have independent tests (sharc-compare.txt). Floating COMP remains
+             guarded; no host SIMD/JIT or full timing qualification follows.
              LSHIFT/ASHIFT register32/immediate8 counts have literal and all256
              immediate-count routing oracles, off-scale/sign/unknown-bit handling,
              per-PE SZ/SV/SS, bank/alias/predicate and rollback/short-loop tests.
@@ -394,6 +402,11 @@ ID  State    Evidence / remaining work
              Floating multiply adds230400 exact Fraction cases, native unit-flag/
              positive-zero/knowledge tests, actual loop and branch continuation,
              conservative dual-forwarding guards and parallel-store rollback.
+             Fixed comparisons add literal signed/unsigned/CACC boundaries and
+             a 32-row flag/saturation table driving 2176 branch/compute scenarios,
+             actual compare/overflow interlocks, retained decisions with later
+             unknown controls, clocked CACC-loop checkpoint continuation and
+             real parallel-load/store rollback (sharc-compare.txt).
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

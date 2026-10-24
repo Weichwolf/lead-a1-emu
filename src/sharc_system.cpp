@@ -116,12 +116,31 @@ void test_flag(SharcState &state, std::optional<bool> result) {
   state.effective[sharc_astat_x] = merge(state.effective[sharc_astat_x], flag, sharc_btf);
 }
 
-bool element_condition(SharcKnown32 flags, unsigned int code) {
+bool relational_condition(SharcKnown32 flags, const SharcState &state, unsigned int base) {
+  constexpr std::uint32_t floating = 0x400;
+  constexpr std::uint32_t negative = 4;
+  constexpr std::uint32_t overflow = 2;
+  constexpr std::uint32_t saturation = 0x2000;
+  const bool float_operation = known_bit(flags, floating);
+  bool less = known_bit(flags, negative);
+  if (float_operation) {
+    // PGR4-93: floating LT excludes zero even when the sign flag is set.
+    if (base == 1) { return less && !known_bit(flags, 1); }
+  } else {
+    const bool correction =
+        known_bit(flags, overflow) && !known_bit(state.effective[sharc_mode1], saturation);
+    less = less != correction;
+  }
+  return base == 1 ? less : less || known_bit(flags, 1);
+}
+
+bool element_condition(SharcKnown32 flags, unsigned int code, const SharcState &state) {
   constexpr std::array<std::uint32_t, 15> masks{
       1, 0, 0, 8, 2, 0x80, 0x40, 0x800, 0x1000, 0, 0, 0, 0, sharc_btf, 0x4000};
   const auto base = code & 15;
+  if (base == 1 || base == 2) { return relational_condition(flags, state, base) != (code >= 16); }
   if (base >= masks.size() || masks[base] == 0) {
-    throw std::runtime_error("SHARC relational/pad/loop condition not implemented");
+    throw std::runtime_error("SHARC pad/loop condition not implemented");
   }
   return known_bit(flags, masks[base]) != (code >= 16);
 }
@@ -225,15 +244,15 @@ void sharc_bit_operation(SharcState &state, std::uint64_t opcode) {
 bool sharc_condition(const SharcState &state, unsigned int code) {
   constexpr unsigned int always = 31;
   if (code == always) { return true; }
-  const bool first = element_condition(state.effective[sharc_astat_x], code);
+  const bool first = element_condition(state.effective[sharc_astat_x], code, state);
   if (!first) { return false; }
   if (!known_bit(state.effective[sharc_mode1], sharc_simd)) { return true; }
-  return element_condition(state.effective[sharc_astat_y], code);
+  return element_condition(state.effective[sharc_astat_y], code, state);
 }
 
 bool sharc_pe_condition(const SharcState &state, unsigned int code, unsigned int element) {
   constexpr unsigned int always = 31;
-  return code == always || element_condition(state.effective[sharc_astat_x + element], code);
+  return code == always || element_condition(state.effective[sharc_astat_x + element], code, state);
 }
 
 void sharc_interrupt_environment_guard(const SharcState &state) {

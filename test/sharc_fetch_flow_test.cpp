@@ -266,7 +266,7 @@ void guarded_control_and_clock_failures() {
   };
 
   constexpr std::array<Boundary, 8> unsupported{{
-      {.opcode = 0x060200000000 | destination, .reason = "relational/FLAG/loop condition"},
+      {.opcode = 0x061200000000 | destination, .reason = "FLAG/loop condition"},
       {.opcode = jump | 0x4000000000 | destination, .reason = "parallel/LA/CI/reserved branch"},
       {.opcode = jump | 0x1000000 | destination, .reason = "parallel/LA/CI/reserved branch"},
       {.opcode = jump | 0x100000, .reason = "internal native address"},

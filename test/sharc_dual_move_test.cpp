@@ -313,6 +313,39 @@ void floating_old_inputs_and_load_priority() {
   floating_store_rollback(float_multiply);
 }
 
+void comparison_old_inputs_and_rollback() {
+  constexpr std::uint64_t compare = 0x0a012;
+  constexpr std::uint32_t history = 0xa5000000;
+  constexpr std::uint32_t alu = 0x43f;
+  constexpr std::uint32_t multiply = 0x3c0;
+  lead_a1::SharcMemory memory;
+  program(memory, instruction(1, 2, 0) | compare);
+  auto state = initial();
+  state.system[6].value = history | alu | multiply;
+  state.effective = state.system;
+  state.data[0][1] = {.value = 512, .known = full40};
+  constexpr std::uint64_t five = 1280;
+  state.data[0][2] = {.value = five, .known = full40};
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, state, &control);
+  static_cast<void>(cpu.step());
+  constexpr std::uint32_t shifted = 0x52000000;
+  require(cpu.state().system[6].value == (shifted | multiply | 4));
+  require(cpu.state().data[0][1].value == dm_input << 8);
+  require(cpu.state().data[0][2].value == pm_input << 8);
+  require(cpu.state().data[0][0] == state.data[0][0]);
+  require(cpu.state().system[8] == state.system[8]);
+  memory.write({.address = base, .width = lead_a1::SharcWidth::wide48},
+               instruction(6, 8, 3) | compare);
+  state.data[0][1] = {};
+  const auto before_control = control.snapshot();
+  lead_a1::Sharc failing(memory, state, &control);
+  rejected([&] { static_cast<void>(failing.step()); }, "Unknown SHARC register operand");
+  require(failing.state() == state && !memory.active() && control.snapshot() == before_control);
+  require(memory.read({.address = dm_address}) == dm_input);
+  require(memory.read({.address = pm_address}) == pm_input);
+}
+
 void flush_follower_and_simd_guards() {
   lead_a1::SharcMemory memory;
   program(memory, instruction(6, 8, 3));
@@ -343,6 +376,7 @@ int main() {
     independent_data_widths();
     late_compute_failure_and_peripheral_guard();
     floating_old_inputs_and_load_priority();
+    comparison_old_inputs_and_rollback();
     flush_follower_and_simd_guards();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

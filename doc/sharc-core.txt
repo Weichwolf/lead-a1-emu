@@ -12,7 +12,8 @@ transfers for reviewed system/sequencer registers. Execution is native-48 only.
 Primary/secondary data/DAG registers, SYSCTL width selection and compute-free
 SISD Type4a indexed NW32/40 RAM transfers are documented in sharc-data.txt.
 Compute-only PASS/AND/OR/XOR/NOT and direct Rx/Sx RAM transfers are documented in
-sharc-compute.txt. Further arithmetic, transfers, loops, cache invalidation,
+sharc-compute.txt. Fixed COMP/COMPU and relational conditions are described in
+sharc-compare.txt. Further arithmetic, transfers, loops, cache invalidation,
 P1I/RTI and ordinary IDLE have separate contracts below. General DAG modes,
 forced LW, VISA and the complete fetch/interrupt/loop pipeline remain pending.
 Unsupported forms fail with PC, fetched opcode and access context.
@@ -26,9 +27,10 @@ unknown until sufficient information exists. BTF is available to the next TF
 branch. This does not implement arithmetic computation or SIMD data movement.
 
 Direct branches implement TRUE and the EQ, AC, AV, MV, MS, SV, SZ, TF and SF
-conditions and complements. SISD uses PEx; SIMD branches AND the two element
-conditions, as specified in 4-106 and 9-33. Relational, external FLAG and loop
-conditions remain explicit unsupported cases. Register moves/bit operations
+conditions and complements, plus LT/LE/GE/GT from AF/AN/AV/AZ and ALUSAT
+(sharc-compare.txt). SISD uses PEx; SIMD branches AND the two element
+conditions, as specified in 4-106 and 9-33. External FLAG and loop conditions
+remain explicit unsupported cases. Register moves/bit operations
 requiring PEy data movement fail when SIMD is enabled or unresolved.
 
 The execution address is 24-bit; relative displacement wraps modulo 2^24.
@@ -96,10 +98,12 @@ reviewed instruction-order effects are modeled.
 Verification and original frontier
 sharc_native_instructions uses owned literal words and independent register/
 PC/frame oracles. It checks native calls, nested relative calls, returns and
-two delay slots; partial bit knowledge; all 19 supported condition encodings
+two delay slots; partial bit knowledge; the original 19 condition encodings
 (144 PEx/PEy/polarity/mode cases plus TRUE in call/return tests); rejected
 remaining conditions; control latency, read-only masks, PC/PCSTK views,
-transactional IOP failure and repair/retry. ASan/UBSan and strict LLVM 19 apply.
+transactional IOP failure and repair/retry. The four additional relational
+conditions have the separate literal truth-table and native integration
+tests in sharc-compare.txt. ASan/UBSan and strict LLVM 19 apply.
 
 The optional original SPI regression executes the existing unchanged ARM
 factory/block writer and loads all four original kernel placements over actual

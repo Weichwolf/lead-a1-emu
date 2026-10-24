@@ -9,7 +9,8 @@ COMPUTE23 retains the three CU bits, eight operation bits and three four-bit
 register selectors. Full native Type2a reserved fields and other execution
 forms remain guarded. Floating add/sub has the separate bounded normal-result
 reference in sharc-floating-point.txt; floating multiplication is separately
-qualified in sharc-floating-multiply.txt. Other floating and compare operations,
+qualified in sharc-floating-multiply.txt. Fixed COMP/COMPU and LT/LE/GE/GT
+conditions are qualified separately in sharc-compare.txt. Other floating operations,
 fixed-point multiplier/multifunction and empty compute-only forms remain unqualified and
 fail visibly when selected. Integer arithmetic and shifters have their separate
 contracts below. No arithmetic exception/timing implementation is

@@ -23,12 +23,13 @@ AZ/AN describe the actual output, including saturation. AV/AC describe the
 arithmetic; AS/AI/AF clear. Other ASTAT bits, including CACC, are preserved.
 Overflow sets AOS (STKY bit2) even with saturation enabled; subsequent ordinary
 results preserve it. The other PE's flags and sticky state are independent.
-No comparison flags, arithmetic exception or data value is invented.
+Fixed COMP/COMPU flags and relational conditions have the separate
+sharc-compare.txt contract. No arithmetic exception or data value is invented.
 
 State, sticky flags, memory and pending control effects commit together.
 Unknown PEy input after tentative PEx overflow rolls back both lanes, including
 the tentative PEx AOS bit. Native one-instruction count loops execute each
-arithmetic body normally. General loops, carry-input forms, comparison,
+arithmetic body normally. General loops, carry-input forms,
 negation/ABS/MIN/MAX, other float (bounded add/sub is in
 sharc-floating-point.txt), multiplier/multifunction and parallel
 compute/moves remain outside this implemented subset and fail when encountered.

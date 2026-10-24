@@ -234,8 +234,7 @@ void condition_matrix() {
 }
 
 void unsupported_condition_fields() {
-  constexpr std::array<unsigned int, 13> unsupported{
-      1, 2, 9, 10, 11, 12, 15, 17, 18, 25, 26, 27, 28};
+  constexpr std::array<unsigned int, 9> unsupported{9, 10, 11, 12, 15, 25, 26, 27, 28};
   for (const auto condition : unsupported) {
     lead_a1::SharcMemory memory;
     map(memory);

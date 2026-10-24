@@ -270,12 +270,12 @@
       "frame": "0x108c016",
       "state_on_failure": "unchanged CPU/control/clock/RAM/transactions; no runtime DMA success"
     },
-    "limits": "Arithmetic, float, compare, multiplier/shifter/multifunction, empty/VISA forms, general/observed loop resources, runtime peripherals and full board/timing/audio remain open"
+    "limits": "Separate contracts cover bounded arithmetic, finite floating/multiply, fixed compare, shifters, loops and runtime SPI; remaining operations including floating COMP, fixed multiplier/multifunction, empty/VISA forms and full board/timing/boot/audio remain open"
   },
   "fetch_flow_reference": {
     "primary": "PGRrev2.4 4-5/8, Table4-5/7 at4-20/21,4-22/23,4-115/117,9-32/34",
     "owner": "Optional bound native F1 cursor; owner grants clocks, supplies actual PM requests and retires actual Execute words",
-    "branches": "Native Type8a absolute/relative JUMP/CALL and plain RTS; nineteen supported Address-stage conditions/targets retained through Execute; original captured opcode and actual PC/CALL-frame push/pop effects",
+    "branches": "Native Type8a absolute/relative JUMP/CALL and plain RTS;23 supported Address-stage conditions/targets retained through Execute, including LT/LE/GE/GT from compare_reference; original captured opcode and actual PC/CALL-frame push/pop effects",
     "suppression": "Immediate branch suppresses n+1/n+2/n+3 Decode inputs; DB retains both real slots and suppresses n+3; absent Execute words do not retire guest NOPs",
     "cache_stall": "Partial conflict-miss stall holds F1 cursor and Decode suppression while Address progresses to Execute; unaccepted target is retried automatically",
     "snapshots": "Cursor, suppression, all retained words and cache phases restore with paired actual CPU/cache state; clock failures preserve all, failed retirement retains its already clocked Execute word",
@@ -283,11 +283,11 @@
     "limits": "Indirect/RTI/general loop/ISR/IDLE sequencing, pending-fill branch arbitration, complete MODE1/DAG/control interlocks and mode/width/flush quiet ordering remain guarded; bounded immediate single loops have single_loop_fetch_reference; no global/physical timing or complete original-stream finalizer/boot/audio acceptance"
   },
   "branch_pipeline_reference": {
-    "primary": "PGRrev2.4 4-5/8,4-19/23,4-106,4-115/118/Table4-55,9-32/34,9-44/46,A-17/20,A-31/35",
+    "primary": "PGRrev2.4 4-5/8,4-19/23,4-92/93,4-106,4-115/118/Table4-55,9-32/34,9-44/46,A-17/20,A-31/35",
     "decision": "Address selects supported condition/internal target; Execute consumes saved taken decision through the original native decoder, without condition-bit rewriting or late ASTAT resampling",
     "return": "Address peeks an ordinary known CALL frame; actual native pop occurs at Execute and must match captured target; false RTS never reads a frame",
     "interlock": "Dependent conditional branch holds F1/F2/Decode, cursor and suppression while the real preceding Address producer progresses to Execute; following Address decision sees retired producer flags",
-    "dependencies": "Structural ALU/shifter/BTF masks for supported compute-only, immediate shift, parallel register/Type1 compute and system bit tests; no unrelated flag-class or unconditional stall; unsupported multiplier and mixed cache/control cases guarded",
+    "dependencies": "Structural ALU/multiplier/shifter/BTF masks for supported compute-only, immediate shift, parallel register/Type1 compute and system bit tests; relational AF/AN/AV/AZ mask with existing MODE1 guards; no unrelated flag-class or unconditional stall; dual-operand forwarding and mixed cache/control cases guarded",
     "snapshots": "Branch decision/target are retained; early/missing/impossible/unsupported decisions and mismatching direct targets reject; failed retirement retains Execute and clock state",
     "owned_evidence": "432 condition/PE/polarity/mode JUMP/CALL/RTS cases, later-unknown ASTAT, eight literal Table4-55 stage columns/checkpoint continuations, real decrement/NE loop and nested native CALL/RTS/DB slots, related/unrelated producers, false DB/unknown-stack returns, failure/repair and malformed-state boundaries",
     "original_prefix": "Each serially loaded original kernel independently executes its first9 actual instructions through the bound sequencer in14 granted fetch clocks; clock13 matures pending IRPTL with no Execute word, clock14 reads actual PMCTL at8c091 into USTAT3=8, reaching8c092/frame108c008 without changing the bound clock device; full-stream CPU starts fresh and retains8c08e",
@@ -364,8 +364,17 @@
     "primary": "PGRrev2.4 3-13/14,3-21/Table3-7,3-37..39,4-111,11-57,12-1/6/Table12-6,A-5,A-18/19,C-1..3",
     "numeric": "Finite packed40 inputs, exact32x32-significand unsigned64 product, common single nearest-even/toward-zero rounding at24/32 significant bits; signed zero/denormal flush, postround tiny/overflow metadata; SharcFloatResult shared with add/sub",
     "native": "CU001/op30 normal and genuine positive-zero products; effective RND32/TRUNC and per-PE conditions/banks, only MN/MV/MU/MI updates, ALU/AF/shifter/CACC/STKY preserved; no guessed negative-zero or exception status",
-    "pipeline": "Multiplier flag mask supports actual MN branch interlock and independent retained AZ; possible adjacent dual-input producers reject atomically, no invented extra partial-stall phase; one-input and explicit-NOP-gap references supported",
+    "pipeline": "Multiplier flag mask supports actual MN branch interlock and independent retained AZ; possible adjacent dual-input producers reject atomically, excluding ignored n in non-writing fixed comparisons but retaining actual parallel outputs; no invented extra partial-stall phase; one-input and explicit-NOP-gap references supported",
     "owned_evidence": "Literal signs/zero/denormal/halfway/max-significand/range values and230400 exact Fraction products; actual native precision/status/known bits/MODE1/conditions/banks, parallel old inputs/load priority and rollback, clocked five-pass doubling with independent checkpoint continuation, MN/AZ branches, dual-forwarding rejection and non-MUL immediate payload",
     "limits": "Negative-zero MN, nonzero range exception/IRQ, NAN/infinity, fixed-point/MR accumulators, complete dual-operand stall/parallel/control/cache/loop composition, multifunction/VISA, original floating application/boot/audio/hardware/performance unqualified"
+  },
+  "compare_reference": {
+    "primary": "PGRrev2.4 3-7/11,4-92/93/Table4-37,10-33,11-7/8,12-1/3/Table12-3,A-17..20; condition footnote overbars visually verified in the original PDF",
+    "native": "CU000/op0a signed COMP and op0b unsigned COMPU; known upper32 operands, irrelevant low8/rounding/saturation, existing banks/per-PE predicates/old capture; no DREG destination or dependency on ignored n",
+    "status": "AZ equal, AN less, AV/AC/AS/AI/AF clear; CACC31..24 shifts right with knowledge, newest bit31 means X>Y; other ASTAT/STKY unchanged, later-PE and parallel-store failures roll back atomically",
+    "conditions": "LT/LE/GE/GT codes1/2/17/18: fixed N=AN XOR(AV AND NOT ALUSAT), LT=N, LE=N OR AZ; floating LT=AN AND NOT AZ, LE=AN OR AZ; AF selects, GE=NOT LT, GT=NOT LE; SIMD computes independently and branches AND both",
+    "pipeline": "AF/AN/AV/AZ producer mask uses existing Address-condition interlock and MODE1 guards; retained decision never resamples later unknown flags or saturation; fixed comparison n does not falsely produce MUL data, actual parallel outputs remain counted",
+    "owned_evidence": "Literal endpoints and eight-entry CACC/knowledge histories;32-row independent truth table driving2176 finite SISD/SIMD branch/compute scenarios; inactive unknown inputs, banks, actual compare and saturated/wrapped overflow branches, true/false retained decision rebind, five-body CACC loop with independent mid-checkpoint CPU/fetch/RAM continuation, adjacent compare/MUL, old parallel register/dual-load inputs and tentative-store rollback",
+    "limits": "Floating COMP/exception semantics, remaining arithmetic/multifunction/VISA, complete mode/forwarding/loop/cache/DAG/global timing, original boot/application/audio/hardware and real-time performance remain unqualified; no SIMD/JIT/concurrency backend"
   }
 }
