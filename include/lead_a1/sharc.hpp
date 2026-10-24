@@ -29,6 +29,15 @@ struct SharcKnown40 {
   bool operator==(const SharcKnown40 &) const = default;
 };
 
+// Private sequencing information when architectural startup-stack timing is
+// unresolved. These frames are never exposed as architectural PCSTK values.
+struct SharcLoopControl {
+  static constexpr unsigned int capacity = 30;
+  std::array<std::optional<std::uint32_t>, capacity> frames{};
+  std::optional<unsigned int> depth;
+  bool operator==(const SharcLoopControl &) const = default;
+};
+
 struct SharcCountLoop {
   std::uint32_t body{};
   std::uint32_t end{};
@@ -37,6 +46,7 @@ struct SharcCountLoop {
   std::uint64_t remaining{};
   unsigned int saved_depth{};
   bool frame_live{};
+  std::optional<SharcLoopControl> control;
   bool operator==(const SharcCountLoop &) const = default;
 };
 
@@ -61,7 +71,7 @@ struct SharcState {
   // Primary/secondary, then I/M/L/B, then register number.
   std::array<std::array<std::array<SharcKnown32, 16>, 4>, 2> dag{};
   // Full 26-bit frames, including CALL/loop/interrupt metadata.
-  static constexpr unsigned int pc_stack_capacity = 30;
+  static constexpr unsigned int pc_stack_capacity = SharcLoopControl::capacity;
   std::array<std::optional<std::uint32_t>, pc_stack_capacity> pc_stack{};
   std::optional<unsigned int> depth;
   std::optional<bool> loops_empty;

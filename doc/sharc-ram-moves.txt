@@ -66,8 +66,9 @@ SW0x1c0300, with exact payload/guard comparisons, final pre-pop and I0 advance.
 The complete record ends at174269/174215 committed instructions, PC0x8c053.
 
 The next original header is also serially received and dispatched. Bundle-part0
-selects tag4,count27,destinationNW0x92180 and stops unchanged at PC0x8c05a:
-the four-instruction count loop is still unsupported. Bundle-part1 receives
+selects tag4,count27,destinationNW0x92180 and reaches DO4 at PC0x8c05a.
+The subsequent cooperative transfer is described in sharc-four-loops.txt.
+Bundle-part1 receives
 tag1,count420/580,destination0x92180 and executes the actual two-instruction
 skip back to PC0x8c015. Those bundle/transport facts identify no physical
 DSP, slot, product variant or audio responsibility.
@@ -77,4 +78,5 @@ word, including select/release, and pauses DSP execution during those calls.
 It grants DMA between edges/instructions. This is not the complete original
 uploader with continuous transfers, physical FLAG/pad/clock timing, complete
 stream/application boot or original audio. No host payload copy or ready/status
-substitute is used. Remaining acceptance requirements stay in coverage.txt.
+substitute is used. The separate follow-on reference above continues within
+one ARM call. Remaining acceptance requirements stay in coverage.txt.

@@ -24,7 +24,11 @@ void pop(SharcState &state, SharcCountLoop &loop) {
 void sharc_validate_count_loop(const SharcState &state) {
   const auto loop = state.count_loop;
   if (!loop) { return; }
-  if (state.branch || !state.depth || !state.loops_empty || loop->total == 0 ||
+  if (sharc_four_loop(state)) {
+    sharc_validate_four_loop(state);
+    return;
+  }
+  if (loop->control || state.branch || !state.depth || !state.loops_empty || loop->total == 0 ||
       loop->total > full_counter || loop->remaining == 0 || loop->remaining > loop->total ||
       loop->saved_depth >= before_almost_full || loop->end < loop->body ||
       loop->end > sharc_pc_mask || (loop->end != loop->body && loop->end - loop->body < 4) ||
@@ -62,8 +66,8 @@ void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode) {
   const auto end =
       (state.pc + (static_cast<std::uint32_t>(opcode) & sharc_pc_mask)) & sharc_pc_mask;
   const auto body = (state.pc + 1) & sharc_pc_mask;
-  if (end < body || (end != body && end - body < 4)) {
-    throw std::runtime_error("SHARC wrapped/two-to-four-instruction count loops not implemented");
+  if (end < body || (end != body && end - body < 3)) {
+    throw std::runtime_error("SHARC wrapped/two-to-three-instruction count loops not implemented");
   }
   constexpr unsigned int class_shift = 40;
   constexpr unsigned int immediate_class = 12;
@@ -86,7 +90,8 @@ void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode) {
                                     .total = iterations,
                                     .remaining = iterations,
                                     .saved_depth = *state.depth,
-                                    .frame_live = true};
+                                    .frame_live = true,
+                                    .control = {}};
   state.pc_stack[*state.depth] = body; // Bit24=0: loop frame, not a CALL.
   ++*state.depth;
   state.loops_empty = false;

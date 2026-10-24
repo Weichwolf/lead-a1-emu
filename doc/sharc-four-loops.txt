@@ -1,0 +1,104 @@
+Native SHARC four-instruction counter loops
+
+The functional native-48 reference executes Type12a four-instruction
+DO/UNTIL LCE loops through the ordinary instruction decoder. Immediate and
+UREG counts share the existing zero-means-2^32 rule. No body, callee, polling
+loop or memory transfer is summarized or replaced by a host operation.
+
+Straight loops follow PGR4-67, table4-27: the initial iteration has one bubble
+after its first body instruction. For count1, the PC/loop stacks pop in that
+bubble, before operands of the second body instruction. For larger counts,
+the final iteration pops before operands of e-3, following PGR4-47. Here e is
+the inclusive end. Minimum cycles for a straight loop are4N+2 including DO;
+branch, cache, bus, peripheral and complete pipeline timing remain open.
+
+CALL(DB) is supported at e-3, with two real delay-slot instructions. Its callee
+can use ordinary immediate CALLs, nested subroutines, conditional polling and
+plain RTS. Return resumes at e, without consuming an iteration in the callee.
+PGR4-71..75's final-three-position restrictions concern e-2,e-1,e; e-3 is the
+fourth-from-last position. For the final steady iteration, loop resources pop
+before the CALL frame is pushed. PCSTK bit25 marks the CALL whose Address stage
+coincides with true loop termination, per A-10. Only that matched frame may
+return through the special-frame guard. Ordinary outer/nested calls retain
+their existing frame rules.
+
+Count1 CALL startup qualification
+
+Table4-27 documents the startup bubble and pop, but does not fully specify
+arbitration between this pop and a simultaneous delayed CALL/frame push.
+The reference does not expose a guessed architectural stack in that case.
+It retains separate functional call/return bookkeeping, executes the real
+instructions and keeps the architectural depth, affected PC-stack entries,
+loop-empty state and STKYx sequencer-stack status unknown during the loop.
+Parent frames remain known. A guest PCSTK/PCSTKP read fails; status bit reads
+retain unknown-bit tracking. STKYy is not assigned sequencer-stack flags.
+After the final body instruction and matched returns, the known parent depth
+and empty-loop state are restored; overwritten physical entries remain unknown.
+This is partial functional execution, not qualification of that startup's
+architectural stack/pipeline behavior. The hardware/manual gap remains open.
+
+An independent read-only explicit-UREG-field audit of all256 native kernel
+instructions at all four hash-pinned placements finds no PCSTK/PCSTKP,
+STKYx/STKYy, LADDR or CURLCNTR read. The only explicit use in that resource
+set is the later PCSTK write at0x8c084. CALL/RTS still use the stack implicitly;
+absence of explicit observers does not qualify the unknown startup arbitration
+or later application observers. This corroborates the private factual audit
+at reconstruction94db634fa3f85b3b1e4ad4d71af862ebae13a25e, without importing
+its decoder or implementation.
+
+State restoration validates body/callee/delay-slot context, active versus
+popped loop resources, special frames, parent frames and the unknown-startup
+contract. Failed instructions preserve CPU, loop, stack, delayed branch,
+pending controls and memory. A restored checkpoint in a delayed CALL resumes
+both delay slots and the real callee. Body jumps/plain CALL/RTS, calls in the
+last three positions, delayed callee control, branches in delay slots, nested
+DO, two/three-instruction loops and loop-resource writes remain guarded.
+CURLCNTR/LCNTR/LADDR/FADDR/DADDR, speculative fetch, interrupt entry and
+complete physical scheduling are still unimplemented.
+
+Owned sharc_four_instruction_loops covers straight counts1/2/3/4/27, final
+PCSTK/PCSTKP/STKY operand reads, preserved parent frames and minimum cycles;
+CALL(DB) with dependent arithmetic in both delay slots, three-pass callee
+polling, nested CALL/RTS and actual indexed RAM stores; final bit25 metadata;
+unknown count1 architectural reads and repair/retry; failed delay-slot IOP
+access rollback; false startup CALL; malformed inherited state; checkpoint
+continuation; and a bounded two-iteration prefix of count0/2^32.
+
+Primary evidence: ADI Programming Reference rev2.4,4-20..22,4-47..48,4-67
+(actual table4-27),4-71..75,A-10,A-21; provenance in reference/sharc.json.
+Manuals, original firmware and private reconstruction implementations are
+not public build inputs.
+
+Original cooperative stream reference
+
+The optional original SPI reference retains the separately paced bootstrap,
+RAM-clear, first header and complete first tag3-record assertions. It then
+executes one unchanged ARM block-writer call over the remaining original
+array, holding endpoint select. After each committed ARM instruction, the
+owner advances explicit TI serial events, grants requested SHARC receive DMA,
+latches/acknowledges the masked P1I event and executes one DSP instruction.
+This single-thread functional interleaving is an owned test profile, not a
+physical CPU-clock ratio, full uploader or readiness/FLAG wiring model.
+
+An independent read-only oracle walks tag1/3/4 headers with their original
+padding, accumulates the last payload halfword for each physical cell and
+compares every such final cell against actual DSP RAM. It does not copy any
+payload into DSP memory. Tag1 remains the original skip, not a host zero fill.
+The terminal header's following1536 vector bytes are excluded: execution
+stops on unsupported PX=PM at native word PC0x8c07e before loading them.
+The ARM writer has not returned at this frontier; in-flight serial state is
+not reported as a completed whole-array transfer.
+
+All four original placements reach that frontier. Record counts include the
+terminal header; payload-cell counts are final last-write-wins comparisons:
+
+Part  Transport  Records  Payload cells  Committed DSP instructions
+0     0          608      51869          6415775
+0     1          600      51755          6397470
+1     0           26       4042           617459
+1     1           21       1652           344000
+
+This covers1251 nonterminal records and109318 final-cell comparisons across
+the placements. Architectural count1 startup stack arbitration above,
+finalizer/vector loading, VISA application execution, physical timing/routing,
+full boot, slot allocation and audio remain open.

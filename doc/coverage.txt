@@ -64,6 +64,13 @@ ID  State    Evidence / remaining work
              final e-3 pre-pop, PCSTK/PCSTKP reads and failed pre-pop/pending-effect
              rollback have independent tests (sharc-long-loops.txt). Other loop
              forms, counter readback and full pipeline timing remain open.
+             Four-instruction loops execute real delayed CALLs, both delay
+             slots, nested callees/polling and indexed stores; final steady
+             bit25 frames, startup bubbles and rollback have owned tests
+             (sharc-four-loops.txt). Count1 CALL stack arbitration is explicitly
+             unqualified: functional return bookkeeping exposes unknown guest
+             stack/resources until the loop retires. No guessed PCSTK/status
+             value or complete pipeline timing is claimed.
              Core FLAGS direction/latches, explicit unknown/known signal samples,
              delayed output effects and partial-bit operations have owned tests.
              HWR24-28 qualifies four reset-input directions against A-5 fields;
@@ -190,9 +197,17 @@ ID  State    Evidence / remaining work
              Real short-word reads/Type3a stores then write all274/268 short words
              at0x1c0300, with exact original payload/guard checks and final pre-pop.
              PC0x8c053 is reached after174269/174215 instructions. Next actual
-             header dispatch selects part0 tag4/count27, stopping unchanged on
-             four-instruction loop PC0x8c05a; part1 tag1/count420/580 is skipped by
+             header dispatch selects part0 tag4/count27 at four-instruction loop
+             PC0x8c05a; part1 tag1/count420/580 is skipped by
              real DEC/branch to PC0x8c015 (sharc-ram-moves.txt).
+             A separate one-DSP-step-per-ARM-instruction cooperative reference
+             now qualifies all four placements' remaining ordinary records:
+             1251 nonterminal records and109318 final payload-cell comparisons.
+             Each reaches finalizer PX at PC0x8c07e; per-placement counts and
+             committed-instruction totals are in sharc-four-loops.txt.
+             Final vectors are excluded and the ARM writer has not returned.
+             Count1 architectural stack arbitration and physical timing remain
+             unqualified (sharc-four-loops.txt).
              This paced composition supplies no
              physical ready wiring or full-uploader schedule (sharc-spi.txt).
              This does not qualify physical MHz, bridge/mux timing or board reset; general

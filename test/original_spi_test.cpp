@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <optional>
 #include <source_location>
 #include <span>
@@ -158,6 +159,7 @@ std::vector<std::byte> read_image(const std::filesystem::path &path) {
 }
 
 struct Fixture {
+  std::span<const std::byte> reference_image;
   std::uint64_t ticks{};
   Recorded<lead_a1::Spi> spi0{lead_a1::SpiResetReference{.chip_selects = 3, .previous_hold = {}},
                               ticks};
@@ -177,8 +179,9 @@ struct Fixture {
   std::vector<unsigned int> dma_grants;
   lead_a1::SharcMemory dsp_memory;
   unsigned int dsp_channel{};
+  lead_a1::Sharc *cooperative_dsp{};
 
-  Fixture(std::span<const std::byte> image, Placement placement) {
+  Fixture(std::span<const std::byte> image, Placement placement) : reference_image(image) {
     constexpr std::uint32_t bin_bytes = 1040;
     const std::array<lead_a1::MemoryAccess, 2> data{
         {{.address = placement.clock, .size = 4}, {.address = placement.bins, .size = bin_bytes}}};
@@ -238,9 +241,15 @@ struct Fixture {
     if (runtime) {
       runtime->device.observe(dsp_memory, lines);
       // Explicit functional owner grant between ARM instructions/serial edges.
-      // No physical IOP bus timing or concurrent DSP execution is asserted.
+      // Cooperative stepping below is an explicit functional reference,
+      // not physical IOP bus timing or a measured processor-clock ratio.
       const auto count = runtime->device.service_dma(dsp_memory);
       if (count != 0) { dma_grants.push_back(count); }
+      if (cooperative_dsp != nullptr && runtime->device.state().interrupt_pending) {
+        constexpr std::uint32_t primary_spi = 0x1000;
+        cooperative_dsp->latch_interrupt(primary_spi);
+        runtime->device.acknowledge_interrupt();
+      }
     } else {
       dsp->observe(dsp_memory, lines);
     }
@@ -313,6 +322,10 @@ lead_a1::ArmState call(Fixture &fixture,
   while (cpu.state().registers[15] != sentinel && count < limit) {
     require(!cpu.step().exception);
     fixture.progress();
+    if (fixture.cooperative_dsp != nullptr) {
+      static_cast<void>(fixture.cooperative_dsp->step());
+      ++fixture.dsp_steps;
+    }
     ++count;
   }
   const auto result = cpu.state();
@@ -640,6 +653,8 @@ struct HeaderInput {
   std::uint32_t routine;
   std::uint32_t endpoint;
   std::uint32_t source;
+  std::uint32_t end;
+  unsigned int records;
 };
 
 void integer_dispatch(Fixture &fixture, lead_a1::Sharc &cpu) {
@@ -790,6 +805,110 @@ void later_code_word(Fixture &fixture,
   require(cpu.state().pc == resume && cpu.state().depth == 1);
 }
 
+std::uint32_t reference_word(const Fixture &fixture, std::uint32_t address, unsigned int bytes) {
+  require(address >= code && bytes > 0 && bytes <= 4);
+  const auto offset = address - code;
+  require(std::uint64_t{offset} + bytes <= fixture.reference_image.size());
+  std::uint32_t value{};
+  for (unsigned int index = 0; index < bytes; ++index) {
+    value |= std::to_integer<std::uint32_t>(fixture.reference_image[offset + index]) << (index * 8);
+  }
+  return value;
+}
+
+std::size_t verify_stream_payload(Fixture &fixture, HeaderInput input) {
+  std::map<std::uint32_t, std::uint16_t> expected;
+  auto cursor = input.source;
+  unsigned int records{};
+  bool terminal{};
+  while (cursor < input.end) {
+    const auto tag = reference_word(fixture, cursor, 4);
+    const auto count = reference_word(fixture, cursor + 4, 4);
+    const auto destination = reference_word(fixture, cursor + 8, 4);
+    ++records;
+    constexpr std::uint32_t header_bytes = 12;
+    constexpr std::uint32_t vectors = 1536;
+    if (tag == 0) {
+      require(cursor + header_bytes + vectors == input.end);
+      terminal = true;
+      break;
+    }
+    require(tag == 1 || tag == 3 || tag == 4);
+    const auto cells = tag == 3 ? std::uint64_t{count} : std::uint64_t{count} * 2;
+    const auto payload = tag == 1 ? 0 : cells * 2;
+    const auto wire_bytes = (payload + 3) & ~std::uint64_t{3};
+    require(std::uint64_t{cursor} + header_bytes + wire_bytes <= input.end);
+    if (tag != 1) {
+      constexpr std::uint32_t short_base = 0x100000;
+      constexpr std::uint32_t normal_base = 0x80000;
+      constexpr std::uint32_t bank_span = 0x20000;
+      std::uint32_t first = destination;
+      if (tag == 4) {
+        require(destination >= normal_base && destination < short_base);
+        const auto offset = destination - normal_base;
+        first = short_base + ((offset / bank_span) * bank_span * 2) + ((offset % bank_span) * 2);
+      }
+      for (std::uint64_t index = 0; index < cells; ++index) {
+        const auto cell = static_cast<std::uint32_t>(index);
+        expected[first + cell] = static_cast<std::uint16_t>(
+            reference_word(fixture, cursor + header_bytes + (cell * 2), 2));
+      }
+    }
+    cursor += header_bytes + static_cast<std::uint32_t>(wire_bytes);
+  }
+  require(terminal && records == input.records);
+  for (const auto &[address, value] : expected) {
+    require(fixture.dsp_memory.read({.address = address, .width = lead_a1::SharcWidth::short16}) ==
+            value);
+  }
+  return expected.size();
+}
+
+void continuous_stream(Fixture &fixture,
+                       lead_a1::Sharc &cpu,
+                       const std::filesystem::path &spec,
+                       HeaderInput input,
+                       std::uint32_t source) {
+  require(fixture.cooperative_dsp == nullptr && source < input.end &&
+          (input.end - source) % 4 == 0);
+  const auto words = (input.end - source) / 4;
+  constexpr unsigned int maximum_words = 65536;
+  constexpr unsigned int steps_per_word_limit = 512;
+  constexpr unsigned int setup_limit = 20000;
+  require(words <= maximum_words);
+  const auto limit = setup_limit + (steps_per_word_limit * words);
+  bool stopped{};
+  fixture.cooperative_dsp = &cpu;
+  try {
+    // One unchanged ARM call, select held through the remaining stream.
+    // Explicit functional interleaving: one DSP instruction per ARM instruction.
+    static_cast<void>(call(
+        fixture, spec, input.routine, {input.endpoint, fixture.dsp_channel, source, words}, limit));
+  } catch (const std::exception &error) {
+    fixture.cooperative_dsp = nullptr;
+    const std::string message(error.what());
+    require(message.find("native48 pc=0x8c07e") != std::string::npos);
+    require(message.find("non-data UREG") != std::string::npos);
+    stopped = true;
+  }
+  fixture.cooperative_dsp = nullptr;
+  constexpr std::uint32_t frontier = 0x8c07e;
+  require(stopped && cpu.state().pc == frontier && !fixture.dsp_memory.active());
+  require(cpu.state().depth == 0 && !cpu.state().count_loop && cpu.state().loops_empty == true);
+  constexpr std::uint32_t saved_instruction = 0x8c030;
+  constexpr std::uint64_t template_value = 0xb16b000000;
+  require(cpu.state().dag[0][0][8].value == saved_instruction);
+  require(cpu.state().data[0][9].value == template_value);
+  if (!fixture.runtime) { throw std::logic_error("Missing cooperative runtime SPI"); }
+  const auto runtime = fixture.runtime->device.state();
+  require(!runtime.overflow && runtime.serial.remaining == 0);
+  const auto cells = verify_stream_payload(fixture, input);
+  std::cout << "Cooperative original ARM/DSP transfer: " << input.records << " records, " << cells
+            << " final payload cells, " << fixture.dsp_steps
+            << " committed DSP instructions; finalizer PX remains unsupported\n"
+            << std::flush;
+}
+
 void next_record(Fixture &fixture,
                  lead_a1::Sharc &cpu,
                  const std::filesystem::path &spec,
@@ -816,6 +935,8 @@ void next_record(Fixture &fixture,
     require(tag == 1 && count == (fixture.dsp_channel == 0 ? count0 : count1));
     dsp_instructions(fixture, cpu, 2); // Original tag1 skips this declaration.
     require(cpu.state().pc == header_loop && !cpu.state().count_loop);
+    constexpr std::uint32_t header_bytes = 12;
+    continuous_stream(fixture, cpu, spec, input, source + header_bytes);
     return;
   }
   constexpr unsigned int table_words = 27;
@@ -823,17 +944,8 @@ void next_record(Fixture &fixture,
   dsp_instructions(fixture, cpu, 9); // Select tag4 and copy R3 into I0.
   constexpr std::uint32_t setup = 0x8c05a;
   require(cpu.state().pc == setup && cpu.state().dag[0][0][0].value == table_address);
-  const auto before = cpu.state();
-  bool stopped{};
-  try {
-    static_cast<void>(cpu.step());
-  } catch (const std::exception &error) {
-    const std::string message(error.what());
-    require(message.find("native48 pc=0x8c05a") != std::string::npos);
-    require(message.find("two-to-four-instruction count loops") != std::string::npos);
-    stopped = true;
-  }
-  require(stopped && cpu.state() == before && !fixture.dsp_memory.active());
+  constexpr std::uint32_t header_bytes = 12;
+  continuous_stream(fixture, cpu, spec, input, source + header_bytes);
 }
 
 void runtime_code_record(Fixture &fixture,
@@ -998,6 +1110,8 @@ void kernel_transfer(std::span<const std::byte> image,
                      unsigned int part) {
   constexpr std::array<std::array<std::uint32_t, 2>, 2> offsets{
       {{0x2c6d78, 0x2ab0f8}, {0x71bc8, 0x701d8}}};
+  constexpr std::array<std::array<std::uint32_t, 2>, 2> lengths{{{114112, 113788}, {11476, 6636}}};
+  constexpr std::array<std::array<unsigned int, 2>, 2> records{{{608, 600}, {26, 21}}};
   constexpr unsigned int kernel_bytes = 1536;
   constexpr unsigned int kernel_words = 384;
   constexpr unsigned int instruction_bytes = 6;
@@ -1050,10 +1164,12 @@ void kernel_transfer(std::span<const std::byte> image,
                 spec,
                 {.routine = placements[part].endpoint + write_block_entry,
                  .endpoint = endpoint,
-                 .source = code + offsets[part][channel] + kernel_bytes});
+                 .source = code + offsets[part][channel] + kernel_bytes,
+                 .end = code + offsets[part][channel] + lengths[part][channel],
+                 .records = records[part][channel]});
     std::cout << "Part " << part << " transport " << channel
               << ": original ARM/SPI first code record stored through native SW reads and indexed "
-                 "writes; next header dispatch reached\n";
+                 "writes; cooperative remaining records reach finalizer PX frontier\n";
   }
 }
 

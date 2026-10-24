@@ -124,7 +124,7 @@ void failure_and_repair() {
   memory.write({.address = base, .width = lead_a1::SharcWidth::wide48}, multiple_instructions);
   lead_a1::Sharc multi(memory, lead_a1::Sharc::reset_reference_214xx(base));
   const auto untouched = multi.state();
-  rejected([&] { static_cast<void>(multi.step()); }, "two-to-four-instruction count loops");
+  rejected([&] { static_cast<void>(multi.step()); }, "two-to-three-instruction count loops");
   require(multi.state() == untouched);
   constexpr std::uint64_t reserved = 0x0df000000001;
   memory.write({.address = base, .width = lead_a1::SharcWidth::wide48}, reserved);

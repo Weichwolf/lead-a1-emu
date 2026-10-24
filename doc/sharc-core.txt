@@ -111,7 +111,8 @@ CALLs then reach171817/PC0x8c04f after genuine serial receipt of the first
 code-record word and RTS (sharc-long-loops.txt). Short-word and Type3a indexed
 moves then store the complete first code record in137/134 actual iterations,
 reaching174269/174215 instructions at PC0x8c053. The next header dispatch is
-qualified separately in sharc-ram-moves.txt; four-instruction loops remain guarded.
+qualified separately in sharc-ram-moves.txt. Four-instruction loops now have
+the separate functional/unknown-startup contract in sharc-four-loops.txt.
 The unconfigured-clock prefix above remains separate.
 Other loop forms, counter-register
 readback, other bodies and full pipeline/board timing remain pending.

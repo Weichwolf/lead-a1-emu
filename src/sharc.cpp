@@ -90,14 +90,7 @@ std::optional<std::uint32_t> direct_branch(SharcState &state, std::uint64_t opco
   }
   const bool db = (opcode & delayed) != 0;
   if ((opcode & call_flag) != 0) {
-    if (!state.depth) { throw std::runtime_error("Unknown SHARC PC stack depth"); }
-    constexpr unsigned int before_almost_full = 28;
-    if (*state.depth >= before_almost_full) {
-      throw std::runtime_error("SHARC stack-full interrupt boundary not implemented");
-    }
-    state.pc_stack[*state.depth] =
-        detail::sharc_call_frame | ((state.pc + (db ? 3U : 1U)) & detail::sharc_pc_mask);
-    ++*state.depth;
+    detail::sharc_push_call(state, (state.pc + (db ? 3U : 1U)) & detail::sharc_pc_mask);
   }
   auto target = static_cast<std::uint32_t>(opcode) & detail::sharc_pc_mask;
   constexpr unsigned int relative = 7;
@@ -114,15 +107,7 @@ std::optional<std::uint32_t> return_branch(SharcState &state, std::uint64_t opco
   if (state.branch) {
     throw std::runtime_error("SHARC taken return in delay slot not implemented");
   }
-  if (!state.depth) { throw std::runtime_error("Unknown SHARC PC stack depth"); }
-  if (*state.depth == 0) { throw std::runtime_error("SHARC empty-stack RTS not qualified"); }
-  const auto frame = state.pc_stack[*state.depth - 1];
-  if (!frame) { throw std::runtime_error("Unknown SHARC return frame"); }
-  if ((*frame & detail::sharc_special_frame) != 0 || (*frame & detail::sharc_call_frame) == 0) {
-    throw std::runtime_error("SHARC loop/interrupt return frame not implemented");
-  }
-  --*state.depth;
-  return schedule(state, *frame & detail::sharc_pc_mask, (opcode & delayed) != 0);
+  return schedule(state, detail::sharc_pop_call(state), (opcode & delayed) != 0);
 }
 
 void direct_move(SharcMemory &memory,
@@ -240,6 +225,27 @@ unsigned int execute_loop(SharcMemory &memory,
   return detail::sharc_count_loop_step(state, opcode);
 }
 
+void finish_control(const SharcState &previous, SharcState &next) {
+  for (unsigned int index = 0; index < previous.pending.size(); ++index) {
+    const auto effect = previous.pending[index];
+    if (effect) { next.effective[index] = *effect; }
+  }
+  if (previous.branch) {
+    if (!next.branch) { throw std::logic_error("Lost SHARC delayed branch"); }
+    --next.branch->slots;
+    if (next.branch->slots == 0) {
+      next.pc = next.branch->target;
+      next.branch.reset();
+    }
+  }
+  if (detail::sharc_four_loop(previous)) {
+    detail::sharc_four_loop_finish(previous, next);
+  } else if (previous.count_loop && previous.count_loop->body != previous.count_loop->end) {
+    detail::sharc_long_loop_finish(previous, next);
+  }
+  detail::sharc_stack_status(next);
+}
+
 void execution_guard(const SharcState &state) {
   constexpr unsigned int almost_full = 29;
   if (state.depth && *state.depth >= almost_full) {
@@ -309,23 +315,15 @@ SharcStep Sharc::step() {
     if (state_.count_loop && state_.count_loop->body == state_.count_loop->end) {
       minimum_cycles = execute_loop(memory_, next, *opcode, control_);
     } else {
-      detail::sharc_long_loop_prepare(next, *opcode);
+      if (detail::sharc_four_loop(next)) {
+        minimum_cycles = detail::sharc_four_loop_prepare(next, *opcode);
+      } else {
+        detail::sharc_long_loop_prepare(next, *opcode);
+      }
       const auto target = execute(memory_, next, *opcode, control_);
       next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
-      detail::sharc_long_loop_finish(state_, next);
     }
-    for (unsigned int index = 0; index < state_.pending.size(); ++index) {
-      const auto effect = state_.pending[index];
-      if (effect) { next.effective[index] = *effect; }
-    }
-    detail::sharc_stack_status(next);
-    if (state_.branch) {
-      --next.branch->slots;
-      if (next.branch->slots == 0) {
-        next.pc = next.branch->target;
-        next.branch.reset();
-      }
-    }
+    finish_control(state_, next);
     memory_.commit_instruction();
     transaction = false;
     if (control_transaction) {

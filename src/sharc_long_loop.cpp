@@ -58,7 +58,8 @@ void sharc_long_loop_prepare(SharcState &state, std::uint64_t opcode) {
   if (!body_address(loop, state.pc)) {
     throw std::runtime_error("SHARC count-loop execution address mismatch");
   }
-  // PGR4-55/74: late calls require RTS(LR) and additional fetch-counter state.
+  // Calls from e-3 need PCSTK bit25 handling; the final three instruction
+  // positions have additional re-entry restrictions (PGR4-55/74,A-10).
   // An immediate CALL at e-4 redirects Fetch1 before e is fetched (4-20).
   if (branch && ((opcode & call) == 0 || state.pc > loop.end - 4)) {
     throw std::runtime_error("SHARC loop-body JUMP/late CALL re-entry not qualified");

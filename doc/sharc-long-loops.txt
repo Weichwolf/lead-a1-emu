@@ -22,16 +22,20 @@ immediate CALL at e-4 redirects Fetch1 before e can be fetched (PGR4-20,
 table4-5). The loop resources remain live throughout that callee. On the final
 return, the stack pop occurs before the resumed e-3 instruction, without popping
 its CALL frame or decrementing the functional count twice. This path does not
-need RTS(LR): late CALLs at e-3..e, including the special PCSTK bit25 boundary,
-remain guarded. A CALL target cannot overlap its active body.
+need RTS(LR). CALL at e-3 has an additional PCSTK bit25 boundary; the final
+three positions e-2,e-1,e have further loop-reentry restrictions. These cases
+remain guarded in long loops. The separately qualified four-instruction
+CALL(DB) case is described in sharc-four-loops.txt. A CALL target cannot
+overlap its active body.
 
 Execution phases join the existing CPU/memory/control transaction. A failed
 instruction rolls back the tentative pre-pop, pending controls, registers and
 device accesses. PCSTK writes inside a count loop are rejected rather than
 silently replacing a loop or return frame. Unknown/special return frames fail.
 
-Two-to-four-instruction loops, wrapped bodies, nested DO, body JUMPs/RTS,
-delayed control flow inside a loop and late CALL/RTS(LR) are still guarded.
+Two/three-instruction loops, wrapped bodies, nested DO, body JUMPs/RTS,
+delayed control flow inside long loops and late long-loop CALL/RTS(LR) remain
+guarded. Four-instruction loops have the separate contract above.
 Unsupported body operations use their usual PC/opcode/address diagnostics.
 CURLCNTR, LCNTR, LADDR, FADDR/DADDR, explicit resource manipulation, conditional
 LCE latency, speculative fetch, caches, interrupt entry and complete cycle/bus
