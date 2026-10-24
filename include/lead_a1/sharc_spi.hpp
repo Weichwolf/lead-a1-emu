@@ -4,6 +4,7 @@
 #include "lead_a1/memory.hpp"
 #include "lead_a1/sharc_boot.hpp"
 #include "lead_a1/sharc_memory.hpp"
+#include "lead_a1/sharc_memory_bus.hpp"
 
 #include <array>
 #include <cstdint>
@@ -21,6 +22,8 @@ struct SharcSpiState {
   bool overflow{};
   // Unacknowledged peripheral event, independent of the processor's mask/latch.
   bool interrupt_pending{};
+  // Remaining words in a started, explicitly arbitrated RX FIFO group.
+  unsigned int burst_remaining{};
   bool operator==(const SharcSpiState &) const = default;
 };
 
@@ -41,6 +44,10 @@ public:
   // Services exactly one requested group (up to four words), atomically.
   // Returns zero without a request; no implicit memory/clock arbitration.
   unsigned int service_dma(SharcMemory &memory);
+  // HWR3-37..40 places SPI on IOD0. After its FIFO group becomes ready,
+  // a memory-bus owner requests and services each normal32 word separately.
+  [[nodiscard]] std::optional<SharcMemoryRequest> dma_word_request() const;
+  void service_dma_word(SharcMemoryBus &bus);
   void acknowledge_interrupt();
 
   [[nodiscard]] std::uint64_t read(MemoryAccess access) override;

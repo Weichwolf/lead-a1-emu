@@ -58,7 +58,8 @@ void receive_word(SharcSpiState &state) {
 }
 
 void parameter_write(SharcSpiState &state, MemoryAccess access, std::uint32_t value) {
-  if (state.serial.remaining != 0 && (state.control & enabled) != 0) {
+  if (state.burst_remaining != 0 ||
+      (state.serial.remaining != 0 && (state.control & enabled) != 0)) {
     throw std::runtime_error("SHARC active SPI DMA parameter change not qualified");
   }
   if (access.address == 0) {
@@ -166,7 +167,9 @@ void SharcSpi::observe(SharcMemory &memory, SharcBootLines lines) try {
 
 unsigned int SharcSpi::dma_request() const {
   const auto &next = state();
-  if ((next.control & enabled) == 0 || next.serial.remaining == 0) { return 0; }
+  if ((next.control & enabled) == 0 || next.serial.remaining == 0 || next.burst_remaining != 0) {
+    return 0;
+  }
   constexpr unsigned int group = 4;
   const auto count = std::min(group, next.serial.remaining);
   return next.occupied >= count ? count : 0;
@@ -174,6 +177,9 @@ unsigned int SharcSpi::dma_request() const {
 
 unsigned int SharcSpi::service_dma(SharcMemory &memory) try {
   external_event(memory);
+  if (current_.burst_remaining != 0) {
+    throw std::runtime_error("SHARC active arbitrated SPI group requires word grants");
+  }
   const auto count = dma_request();
   if (count == 0) { return 0; }
   auto next = current_;

@@ -29,8 +29,10 @@ grant services one whole group transactionally through SharcMemory, using
 write anywhere in the group rolls back memory, count, cursor, FIFO and IRQ.
 Neither status reads nor incomplete wire words grant memory access. Core
 instructions and external serial/grant events cannot overlap transactions.
-This functional grant API does not yet establish IOP arbitration/retirement
-timing or simultaneous core/DMA bus priorities.
+This functional grant API does not establish IOP arbitration/retirement timing.
+A separate per-word API now consumes exact IO0 grants from SharcMemoryBus;
+see sharc-memory-bus.txt for phase/priority, partial-transfer failure and scope.
+That API does not change the existing original functional fixtures.
 
 SPIDMAC supports enable, receive, completion-IRQ enable and error-IRQ enable.
 Its reads expose actual count-derived busy, FIFO empty/partial/full and

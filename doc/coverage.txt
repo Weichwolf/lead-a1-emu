@@ -151,7 +151,19 @@ ID  State    Evidence / remaining work
              composition now checks the first48768 zero stores, preserved
              kernel and native frame at57065 instructions/57077 grants, PC8c0b9.
              Same-block arbitration and the next DAG/DO overlap remain open;
-             these grants do not qualify physical CCLK timing.
+             these grants do not qualify physical CCLK timing. A separate
+             internal RAM-port reference now grants IO0>IO1>DM>PM per block,
+             retains losing IO1 into the following clock and alternates new
+             I/O launch eligibility from an explicit owner phase. Actual reads,
+             fetches and writes preserve failed grants for repair; typed bus
+             continuation and malformed-state guards are checked. SPI RX can
+             consume exact per-word IO0 grants after the existing group threshold;
+             cursor/count/FIFO/IRQ advance only after each successful RAM word.
+             Partial-transfer failure preserves earlier committed words.
+             Full native Fetch coupling, shadow-write FIFOs, PM-data selection,
+             peripheral channel arbitration and physical timing remain open
+             (sharc-memory-bus.txt). Existing original fixtures keep their
+             functional group grants and do not gain timing qualification.
              Four-instruction loops execute real delayed CALLs, both delay
              slots, nested callees/polling and indexed stores; final steady
              bit25 frames, startup bubbles and rollback have owned tests
@@ -350,6 +362,11 @@ ID  State    Evidence / remaining work
              native LZO/SLEIGH/zlib instrumentation/object hooks and hardening
              checked. Complete CPU/boot/MIDI/audio/update, fuzz harnesses and
              performance remain pending.
+             Internal RAM tests cover all16 finite priority masks, carried IO1,
+             independent blocks, actual alias/fetch ordering, failure/repair and
+             typed continuation. SPI per-word tests drive actual serial edges,
+             exact grant binding, tail/receive-ahead behavior, core contention,
+             partial-transfer failure, pause/resume and signed wrap/zero stride.
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

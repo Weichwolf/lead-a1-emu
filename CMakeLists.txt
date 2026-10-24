@@ -37,12 +37,19 @@ target_sources(lead_a1_sharc PRIVATE src/sharc_fetch.cpp src/sharc_fetch_cache.c
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_loop.cpp src/sharc_fetch_loop_state.cpp src/sharc_fetch_loop_retirement.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_dag.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_dag.cpp src/sharc_fetch_operand.cpp)
+target_sources(lead_a1_sharc PRIVATE src/sharc_memory_view.cpp src/sharc_memory_bus.cpp src/sharc_spi_bus.cpp)
 target_include_directories(lead_a1_sharc PUBLIC include)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-memory-bus-test test/sharc_memory_bus_test.cpp)
+  target_link_libraries(lead-a1-sharc-memory-bus-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_ram_bus_arbitration COMMAND lead-a1-sharc-memory-bus-test)
+  add_executable(lead-a1-sharc-spi-bus-test test/sharc_spi_bus_test.cpp)
+  target_link_libraries(lead-a1-sharc-spi-bus-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_spi_word_grants COMMAND lead-a1-sharc-spi-bus-test)
   add_executable(lead-a1-sharc-operand-test test/sharc_operand_test.cpp)
   target_link_libraries(lead-a1-sharc-operand-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_captured_dag_addresses COMMAND lead-a1-sharc-operand-test)
@@ -379,7 +386,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-quiet-clock-test
       lead-a1-sharc-fetch-loop-test
       lead-a1-sharc-dag-stall-test
-      lead-a1-sharc-operand-test
+      lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
       lead-a1-memory-test lead-a1-original-arm-test lead-a1-mmu-walk-test
       lead-a1-mmu-cpu-test lead-a1-arm-data-test lead-a1-original-cache-test

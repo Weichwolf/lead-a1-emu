@@ -1,0 +1,96 @@
+SHARC internal RAM bus reference
+
+Primary evidence: ADI Programming Reference rev2.4,7-10/11 and7-20..23;
+ADSP-214xx Hardware Reference rev1.1,3-37..40/Table3-29. Manuals remain
+local; pinned URLs/hashes are in reference/sharc.json.
+
+SharcMemoryBus accepts requests from the already selected IOD0, IOD1, DMD
+and PMD buses. The fixed RAM-block priority is IO0>IO1>DM>PM. Up to four
+independent physical blocks can grant accesses on one owner-supplied core
+clock. Different addresses and short/normal/extended/native48/long views of
+the same block conflict even if they touch distinct cells. The public pure
+sharc_memory_view function shares the existing physical geometry with
+SharcMemory; it establishes no mapping, permission or known data. The bus
+rejects an out-of-block span before queueing it. Reads/fetches must have
+zero payload; writes must fit the width. Fetch requires PM/native48. This
+bounded I/O profile accepts normal32 only; wider I/O/accelerator traffic
+requires a separately qualified extension.
+
+The owner supplies the initial active/gap phase explicitly. New I/O
+requests launch on alternating core clocks, reflecting PCLK=CCLK/2 without
+asserting a measured Nord frequency or reset phase. A losing launched IO1
+request carries eligibility into the immediately following gap clock:
+IO0/IO1 contention resolves IO0 first, IO1 second, as PGR7-21 requires.
+New IO0 queued during that gap waits for the next active clock. In the
+absence of a carried I/O request, DM/PM can progress on the intervening
+clock. This phase profile is not an inferred complete board clock tree.
+
+Only one request per bus may be pending. Grant capture removes that request
+from the pending queue; losers remain. All grants must be consumed before
+new requests or another clock. execute performs the actual SharcMemory
+read, fetch or write; the request carries no fabricated read result. A
+failed operation preserves its exact grant and other pending/granted
+requests. Memory checks knowledge, mapping and permissions. A successful
+single-word write prevalidates all cells and then commits. Foreign native
+instruction transactions reject without being consumed or aborted. The
+owner must bind grants to the correct real requester and consume all of
+them before advancing any next cycle.
+
+Typed bus snapshots retain pending and unconsumed grants, the carried IO1
+request, next launch phase and clock counter. Independent memory rebinding
+is supported; RAM contents themselves remain the memory owner's concern.
+Constructors validate request widths/operations/values/spans, phase, carried
+request shape, same-block duplicate grants, own pending+grant, zero-clock
+or IO0 gap grants and higher-priority eligible pending requests. Grant
+consumption history is not fabricated from a snapshot; a gap IO1 grant may
+be a previously carried request. Clock overflow rejects atomically. This
+is not complete board/disk serialization or a new SPI restore constructor.
+
+SPI per-word integration
+
+HWR3-37..40 places the SPI peripheral group on IOD0, after channel/group
+selection. The existing slave receive path must first collect min(4,count)
+FIFO words. dma_word_request then describes its actual normal32 FIFO head,
+address and value. The owner submits this to IO0 and calls service_dma_word
+only with the exact matching grant. Each successful word alone consumes
+FIFO, advances the signed16/wrapped19-bit cursor and decrements count. A
+started group's remaining-word count retains eligibility as its FIFO falls
+below the initial threshold. Receive-ahead data refills released FIFO space;
+completion IRQ is recorded only after the actual final write with INTEN.
+Each next IO0 word must wait for its next eligible bus launch clock.
+
+If a later word faults, earlier writes remain committed; the failing word's
+grant, FIFO, cursor, count and IRQ remain unchanged for repair/retry. A
+paused group retains its state; disabling blocks service and re-enabling
+permits the same grant again. Reprogramming DMA parameters during a started
+group remains guarded even while disabled. Serial edges and DMA grants are
+separate owner events and cannot overlap native transactions. The previous
+whole-group functional service_dma API remains available between groups;
+it rejects mid-group mixing. Existing original fixtures still use that
+functional API and do not gain physical timing qualification from this work.
+
+Evidence and limits
+
+sharc_ram_bus_arbitration checks all sixteen finite priority masks, carried
+IO1 and gap fairness, all four banks and five width geometries, simultaneous
+independent grants in opposite consumption order, normal/short/native48
+alias conflicts, actual DMA-before-fetch visibility, unknown/unmapped and
+permission failures, repair, foreign transactions, typed continuation and
+malformed requests/snapshots. sharc_spi_word_grants drives actual serial
+edges and checks group/tail thresholds, finite receive-ahead storage,
+each actual RAM word/count/IRQ, real DM/PM contention, partial-transfer
+failure/repair, exact grant rejection, pause/resume, transaction ownership,
+signed address wrap and zero stride. These are deterministic owned inputs,
+not fuzz or physical hardware traces.
+
+This component does not yet drive SharcFetch or advance a processor,
+PMCTL/SYSCTL or interrupt controller. It does not select between PM data
+and instruction fetch, define full pipeline partial stalls, retire a CPU
+instruction or resolve mixed loop/DAG/cache hazards. IOP-register arbitration
+uses a DIFFERENT priority (DM>PM>IO), so IOP addresses are excluded. Earlier
+peripheral channel/group arbitration, DCPR rotation, external memory, DMA
+chaining, audio serial paths and the four physical shadow-write FIFOs are
+not implemented here. Logical writes are immediately visible at successful
+grant consumption; no physical FIFO drain timing or silicon anomaly is
+claimed. No clocked original-boot, terminal-vector, uploader-return, synth
+audio, real-time performance or physical Nord timing acceptance follows.

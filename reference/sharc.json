@@ -338,5 +338,17 @@
     "original_prefix": "Each of8 existing direct-stream invocations owns a separate fresh sequenced fixture: six PLL waits plus first48768 actual NW32 zero stores92180..9dfff, all384 kernel words preserved, index9e000/frame108c008, PC8c0b9 after57065 instructions/57077 available-bus grants; next original I0/DO/store DAG hazard rejects atomically",
     "bus_inputs": "Owner explicitly supplies available-bus grants. Original code and first-clear data share candidate block0; these grant counts do not qualify required block/DMA arbitration or physical CCLK timing. No new all4 coupled or global board schedule evidence.",
     "limits": "Other RAM/PM/conditional/parallel/dual loop paths, DREG/memory response-latch timing, full mode/width transitions, physical DAG readback, loop/DAG/block/cache arbitration and original delayed-IDLE finalizer remain open; complete uploader/boot/audio/hardware not achieved"
+  },
+  "internal_ram_bus_reference": {
+    "primary": "PGRrev2.4 7-10/11,7-20..23; HWRrev1.1 3-37..40/Table3-29",
+    "priority": "Already selected IO0>IO1>DM>PM buses, one logical grant per physical block; independent blocks may grant concurrently; IO profile normal32 only",
+    "phase": "Owner-supplied initial active/gap phase alternates new I/O launch clocks; losing launched IO1 carries into next core clock, ahead of fresh gap-queued IO0; no physical Nord reset phase/MHz assertion",
+    "memory": "Existing owned address geometry factored into pure shared views; actual SharcMemory read/fetch/write on grant consumption, mapping/permissions/knowledge remain authoritative; failed grant retained for repair",
+    "ownership": "One pending request per bus, no new queue or clock while grants remain; no event during foreign memory transaction; no implicit core or device clock",
+    "snapshots": "Pending/granted requests, carried IO1, next phase and clock counter; typed validation and independent memory binding, not full board or SPI disk serialization",
+    "spi": "Existing FIFO group threshold starts per-word normal32 IO0 service; exact address/value/kind grant required; each successful word advances real FIFO/cursor/count, final IRQ only after actual last write; earlier words survive a later fault",
+    "owned_evidence": "All16 finite masks, carried IO1/gap/new-IO0 sequence, four independent blocks, all five view geometries, real alias/fetch ordering, permissions/knowledge/unmapped failures and repair, transaction ownership and typed continuation; actual SPI serial edges/group/tail/receive-ahead, core contention, mismatched grants, pause/resume, partial-transfer repair, signed wrap/zero stride",
+    "original_evidence": "No changed original schedule; existing serial record-stream fixtures retain their 8c08e frontier and historical functional whole-group grants, separate available-bus first-clear prefix unchanged",
+    "limits": "No native Fetch/PM-data bus selection or pipeline stall coupling, shadow-write FIFO, earlier peripheral channel arbitration, external-memory/audio DMA, complete boot/finalizer/global physical timing or real-time performance qualification"
   }
 }

@@ -2,6 +2,7 @@
 #include "lead_a1/sharc_memory.hpp"
 
 #include "lead_a1/memory.hpp"
+#include "lead_a1/sharc_memory_view.hpp"
 
 #include <algorithm>
 #include <array>
@@ -19,10 +20,7 @@
 namespace lead_a1 {
 namespace {
 
-constexpr std::uint32_t short_base = 0x100000;
-constexpr std::uint32_t normal_base = 0x80000;
 constexpr std::uint32_t long_base = 0x40000;
-constexpr std::uint32_t memory_end = 0x200000;
 constexpr std::uint32_t bank_cells = 0x40000;
 constexpr unsigned int half_bits = 16;
 
@@ -47,45 +45,6 @@ context(std::uint32_t pc, SharcAccess access, AccessKind kind, const std::string
        << access.address << std::dec << " bits=" << static_cast<unsigned int>(access.width) << ": "
        << reason;
   return text.str();
-}
-
-struct View {
-  unsigned int bank;
-  std::uint32_t cell;
-  unsigned int cells;
-  unsigned int shift;
-};
-
-View decode(SharcAccess access) {
-  const auto address = access.address;
-  if (address >= short_base && address < memory_end && access.width == SharcWidth::short16) {
-    return {.bank = (address - short_base) / bank_cells,
-            .cell = (address - short_base) % bank_cells,
-            .cells = 1,
-            .shift = 0};
-  }
-  if (address >= normal_base && address < short_base && access.width != SharcWidth::short16) {
-    constexpr std::uint32_t span = 0x20000;
-    const auto offset = (address - normal_base) % span;
-    auto columns = access.width == SharcWidth::normal32 ? 2U : 3U;
-    auto cell = offset * columns;
-    if (access.width == SharcWidth::long64) {
-      columns = 4;
-      cell = (offset & ~1U) * 2;
-    }
-    return {.bank = (address - normal_base) / span,
-            .cell = cell,
-            .cells = columns,
-            .shift = access.width == SharcWidth::extended40 ? 8U : 0U};
-  }
-  if (address >= long_base && address < normal_base && access.width == SharcWidth::long64) {
-    constexpr std::uint32_t span = 0x10000;
-    return {.bank = (address - long_base) / span,
-            .cell = ((address - long_base) % span) * 4,
-            .cells = 4,
-            .shift = 0};
-  }
-  throw std::runtime_error("Unsupported SHARC address/width view or external memory");
 }
 
 std::uint64_t mask(SharcWidth width) {
@@ -207,7 +166,7 @@ std::uint64_t SharcMemory::read(SharcAccess access, AccessKind kind) const try {
     }
     return value;
   }
-  const auto view = decode(access);
+  const auto view = sharc_memory_view(access);
   const auto required = mask(access.width) << view.shift;
   std::uint64_t value{};
   for (unsigned int index = 0; index < view.cells; ++index) {
@@ -235,7 +194,7 @@ void SharcMemory::write(SharcAccess access, std::uint64_t value) try {
     entry->device->write({.address = (access.address - entry->first_word) * 4, .size = 4}, value);
     return;
   }
-  const auto view = decode(access);
+  const auto view = sharc_memory_view(access);
   std::array<Write, 4> next{};
   const auto bits = value << view.shift;
   const auto selected = mask(access.width) << view.shift;
