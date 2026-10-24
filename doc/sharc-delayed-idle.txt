@@ -60,8 +60,9 @@ retained-slot snapshots. These are finite owned cases, not physical timing.
 
 This bounded unlooped component does not extend deferred arithmetic loops,
 interrupted loop reentry or finalizer self-modification/draining. Original
-functional streams still stop at8c08e; the separate granted-clock RAM-clear
-prefix still stops at8c0b9. No terminal vector acceptance or original cold boot
+functional streams still stop at8c08e. The separate granted-clock RAM-clear
+prefix now completes all four clears and returns to8c008 (sharc-dag-loop.txt).
+No terminal vector acceptance or original cold boot
 follows. Minimum four-clock entry bookkeeping and the subsequent fetched
 handler pipeline are not qualified as nonoverlapping physical IRQ intervals;
 their sum is not a measured CCLK latency or global schedule. Remaining source

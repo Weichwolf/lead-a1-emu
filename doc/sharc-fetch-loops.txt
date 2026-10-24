@@ -41,6 +41,8 @@ bounds precede continuation addition, including corrupt32-bit snapshot inputs.
 This is a bounded pipeline reference. UREG-count DO, count1, longer bodies,
 Other RAM/DAG/PM loop bodies, nested/delayed DO, loop-resource operations, combined
 cache/control stalls, MODE1 hazards and interrupt/IDLE redirects stay guarded.
+The further qualified DAG-load overlap at single-loop entry has the
+sharc-dag-loop.txt contract; its zero-issued startup states retain actual words.
 Count1 Table4-21's F1 row and note4 disagree about the continuation clock; that
 discrepancy is not resolved by the instruction-only helper's aggregate cycle
 lower bound. Physical Nord clocks and complete Decode operand capture remain

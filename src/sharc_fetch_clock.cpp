@@ -120,7 +120,10 @@ SharcFetchEvent clock_transport(SharcMemory &memory,
                                 SharcFetchBus bus,
                                 bool sequenced) {
   if (sequenced && detail::sharc_fetch_dag_stall(cpu, previous, bus)) {
-    return dag_stalled_clock(previous, next);
+    const auto event = dag_stalled_clock(previous, next);
+    // The unrelated DO still reaches Address while its body waits before Decode.
+    detail::sharc_fetch_loop_flow(cpu, previous, next);
+    return event;
   }
   const auto interlock =
       sequenced ? detail::sharc_fetch_interlock(cpu, previous) : detail::SharcFetchInterlock::none;

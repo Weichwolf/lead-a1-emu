@@ -147,17 +147,22 @@ ID  State    Evidence / remaining work
              two/one clocks while older D/A words advance. Literal tables,
              I/B/L/M and primary/secondary-bank cases, actual transfers,
              snapshots, IOP repair and clock ownership have independent oracles
-             (sharc-dag-stalls.txt). Full operand capture and mixed short-loop/
-             DAG arbitration remain open. Qualified Type3/Type4 Decode now
+             (sharc-dag-stalls.txt). The bounded DAG-load/DO entry overlap now
+             retains its raw F2 body while DO advances; real Decode capture
+             follows actual producer retirement, with a separate startup hold
+             (sharc-dag-loop.txt). Broader mixed arbitration remains open.
+             Qualified Type3/Type4 Decode now
              retains resolved DAG bank/index/modifier/address/width and forwards
              older unconditional post-modifies. Actual RAM execution consumes
              captured addresses; snapshots retain them across later-unknown DAG
              state. Width mismatch/repair, real DM RAM loop bodies, pending-pop
              failures and malformed operands have independent expectations
              (sharc-dag-operands.txt). Its separate available-bus original
-             composition now checks the first48768 zero stores, preserved
-             kernel and native frame at57065 instructions/57077 grants, PC8c0b9.
-             Same-block arbitration and the next DAG/DO overlap remain open;
+             composition checks all four original clear loops,163453 actual
+             zero stores, preserved kernel, three untouched unknown tail cells
+             and native return to8c008 with popped frame. Full prefix retires
+             171758 instructions in171776 available-bus grants; the first-clear
+             checkpoint remains57065/57077 at8c0b9. Same-block arbitration remains open;
              these grants do not qualify physical CCLK timing. A separate
              internal RAM-port reference now grants IO0>IO1>DM>PM per block,
              retains losing IO1 into the following clock and alternates new
@@ -447,7 +452,14 @@ ID  State    Evidence / remaining work
              kernel, retained final slot, real P1I/RTI/new-target continuation,
              independent restored memories, captured return decisions and
              atomic mask/ownership/frame/snapshot failures. This unlooped
-             component leaves original8c08e/8c0b9 frontiers unchanged.
+             component does not itself extend the original stream frontier.
+             DAG/DO entry tests add a literal13-column composition,80 finite
+             count/bank/producer/modifier cases, eight independent rebound
+             continuations with changed RAM, quiet clock-owner repair and actual
+             failed store with pending pre-pop, plus malformed startup snapshots.
+             All eight optional original fixtures now execute all four clear
+             loops and native initialization return (sharc-dag-loop.txt);
+             their separate direct record streams retain the8c08e frontier.
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

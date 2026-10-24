@@ -16,7 +16,9 @@ direct DM IOP-read and unconditional register-transfer UREG writes. Qualified
 consumers are unconditional compute-free, non-LW indirect transfers.
 
 When the consumer is retained in Fetch2, each stall holds F1/F2 and the F1
-cursor/suppression state. Older Decode advances to Address and Address advances
+linear cursor/suppression state. A qualified unrelated DO can update its
+pending loop cursor as described in sharc-dag-loop.txt, while F1/F2 stay held.
+Older Decode advances to Address and Address advances
 to Execute; the new Decode is absent. This differs from the later conditional
 branch stall, which holds Decode and leaves Address absent. The owner still
 retires each actual occupied Execute word. Bubbles never execute guest NOPs. The
@@ -34,16 +36,15 @@ inside the existing CPU-PC/F1/bus diagnostic context.
 Captured Type3/Type4 addresses have the further sharc-dag-operands.txt contract.
 This is a load-dependency timing reference, not full DAG operand capture,
 Address/Execute operand forwarding, bus arbitration or physical Nord timing.
-Combined loop/branch/PM/cache stalls, pending or in-flight MODE1 changes,
+Combined branch/PM/cache stalls, live-loop dependencies, pending or in-flight MODE1 changes,
 conditional producer/consumer cases, parallel/LW/dual consumers with a load
 hazard and other explicit/implicit DAG producers remain guarded or open. A DAG
 episode followed later by an ordinary PM conflict-cache miss is separately
 qualified; simultaneous DAG/cache conditions remain guarded. Conditional
 post-modify control hazards have the separate PGR4-117/118 requirements and
-remain open. No original short-loop/DAG-stall merging is inferred from these
-linear tables. Broader RAM loop capture and complete original memory
-initialization through the pipeline remain unfinished, as do full cold boot and
-audio.
+remain open. The bounded single-loop entry overlap and original four-loop
+RAM initialization now have the sharc-dag-loop.txt contract. Complete timing/
+bus composition, original cold boot and audio remain unfinished.
 
 Owned tests compare literal five-stage Tables4-51/52, actual memory contents and
 index changes. The144-case I/B/L/M, producer, distance and register-bank matrix

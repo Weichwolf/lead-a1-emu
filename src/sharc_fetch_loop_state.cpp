@@ -62,6 +62,20 @@ void metadata(const SharcFetchLoop &loop) {
   }
 }
 
+void body_phase(const SharcFetchLoop &loop, const SharcFetchState &transport) {
+  if ((loop.phase == SharcFetchLoopPhase::hold || loop.phase == SharcFetchLoopPhase::seed) &&
+      loop.issued == 0 &&
+      (!loop.held || !transport.decode || transport.decode->address != loop.body ||
+       transport.decode->opcode != loop.held->opcode)) {
+    throw std::invalid_argument("Invalid SHARC DAG-delayed loop Decode phase");
+  }
+  if (loop.phase == SharcFetchLoopPhase::stream &&
+      (loop.issued == 0 || (loop.issued == 1 && (loop.retired != 0 || !transport.address ||
+                                                 !transport.address->loop_body)))) {
+    throw std::invalid_argument("Invalid SHARC inherited loop stream phase");
+  }
+}
+
 void phase(const SharcFetchLoop &loop, const SharcFetchState &transport) {
   const auto in_flight =
       static_cast<unsigned int>(transport.address && transport.address->loop_body) +
@@ -73,19 +87,17 @@ void phase(const SharcFetchLoop &loop, const SharcFetchState &transport) {
       (loop.issued != 0 || loop.retired != 0 || loop.saved_depth)) {
     throw std::invalid_argument("Invalid SHARC inherited loop setup phase");
   }
-  if (loop.phase == SharcFetchLoopPhase::hold && (loop.issued != 1 || loop.retired != 0)) {
+  if (loop.phase == SharcFetchLoopPhase::hold && (loop.issued > 1 || loop.retired != 0)) {
     throw std::invalid_argument("Invalid SHARC inherited loop hold phase");
   }
   if (loop.phase <= SharcFetchLoopPhase::hold &&
       (loop.fetch_remaining != loop.total || loop.terminal)) {
     throw std::invalid_argument("Invalid SHARC inherited early loop counter");
   }
-  if (loop.phase == SharcFetchLoopPhase::seed && loop.issued != 1) {
+  if (loop.phase == SharcFetchLoopPhase::seed && loop.issued > 1) {
     throw std::invalid_argument("Invalid SHARC inherited loop seed phase");
   }
-  if (loop.phase == SharcFetchLoopPhase::stream && loop.issued < 2) {
-    throw std::invalid_argument("Invalid SHARC inherited loop stream phase");
-  }
+  body_phase(loop, transport);
   constexpr unsigned int no_tail_stalls = 4;
   const auto threshold = loop.total >= no_tail_stalls ? no_tail_stalls : 1U;
   if (loop.fetch_remaining < threshold || (loop.terminal && loop.fetch_remaining != threshold)) {

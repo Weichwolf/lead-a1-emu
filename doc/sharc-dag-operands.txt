@@ -56,15 +56,17 @@ numerical/phase oracles. No manufacturer/private implementation is a build
 input.
 
 The optional original test extends its fresh sequenced PLL fixture through the
-FIRST unchanged RAM-clear loop. It performs48768 actual NW32 zero stores from
+first unchanged RAM-clear loop. It performs48768 actual NW32 zero stores from
 92180 to9dfff, reaches PC8c0b9 after57065 instructions/57077 granted fetch
 clocks, checks each cleared word, all384 original kernel words, index9e000 and
 parent frame108c008. The owner supplies available-bus grants in this fixture.
 Code and clear data share candidate block0; block/DMA arbitration is not modeled
 by these grants, which are not physical CCLK timing. The next actual clock
-encounters I0 at8c0b9, DO at8c0ba and the RAM body8c0bb: combined
-DAG-load/short-loop startup remains explicitly guarded, with whole CPU/transport
-unchanged. This is not the other three clear loops, complete loader, board
+encounters I0 at8c0b9, DO at8c0ba and the RAM body8c0bb. The further entry
+composition in sharc-dag-loop.txt now executes all three remaining original
+clear loops and the native RTS to8c008:171758 instructions/171776 available-bus
+grants,163453 actual stores total, preserved kernel, popped parent frame and
+three untouched unknown tail words. This is not a complete loader, board
 schedule, application boot or audio. The complete record streams still use
 separate fresh functional CPU/device fixtures and retain8c08e.
 

@@ -371,7 +371,7 @@ void immediate_modifier_and_guards() {
     require(other_cpu.state().dag[0][0][2].value == target + 1);
   }
   constexpr std::array<std::uint64_t, 4> blocked{
-      0x0c0005000001, 0x063e000c0010, 0x0f7200000010, 0x126b00080000};
+      0x0c0001000001, 0x063e000c0010, 0x0f7200000010, 0x126b00080000};
   for (const auto opcode : blocked) {
     lead_a1::SharcMemory fixture;
     program(fixture, 1);

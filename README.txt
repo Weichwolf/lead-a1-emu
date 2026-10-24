@@ -16,7 +16,9 @@ snapshot viewer work. Complete CPU/board/DSP boot, MIDI, audio and a parameter-s
 remain pending. The UI starts with unknown values and waits for snapshots.
 See doc/arm-reference.txt, doc/arm-exceptions.txt and doc/aintc.txt.
 Native SHARC references execute original loader streams through the finalizer
-prefix. P1I/RTI, ordinary delayed branches and unlooped fetched DB/IDLE wake
+prefix. A separate fetched initialization fixture executes all four original
+RAM-clear loops and their native return (doc/sharc-dag-loop.txt).
+P1I/RTI, ordinary delayed branches and unlooped fetched DB/IDLE wake
 have bounded references; self-modifying loop/fetch visibility, loop IDLE and VISA
 still block DSP application boot. See doc/sharc-stream-reference.txt and
 doc/sharc-delayed-idle.txt for execution boundaries, and doc/dsp-roles.txt for synthesis/routing

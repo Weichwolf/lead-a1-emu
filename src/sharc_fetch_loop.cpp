@@ -23,16 +23,21 @@ bool body_supported(std::uint64_t opcode) {
          sharc_dag_loop_body(opcode);
 }
 
-void begin(const SharcState &cpu, const SharcFetchFlow &previous, SharcFetchState &next) {
-  if (!next.address || !next.flow) { throw std::logic_error("Missing SHARC loop setup phase"); }
+void begin(const SharcState &cpu, const SharcFetchState &previous, SharcFetchState &next) {
+  if (!next.address || !next.flow || !previous.flow) {
+    throw std::logic_error("Missing SHARC loop setup phase");
+  }
   const auto word = *next.address;
+  // A DAG hold can leave Decode absent as the unrelated DO advances to Address.
+  // Keep the actual F2 word; its operands wait until it really enters Decode.
+  const auto held = next.decode ? next.decode : previous.fetch2;
   const auto total = (word.opcode >> counter_shift) & counter_mask;
   if ((word.opcode & sharc_pc_mask) != 1 || total == 1) {
     throw std::runtime_error("SHARC sequenced loop length/count-one timing not qualified");
   }
-  if (cpu.branch || cpu.count_loop || previous.discard_decode != 0 ||
-      next.flow->discard_decode != 0 || !next.decode || next.decode->address != word.address + 1 ||
-      !body_supported(next.decode->opcode)) {
+  if (cpu.branch || cpu.count_loop || previous.flow->discard_decode != 0 ||
+      next.flow->discard_decode != 0 || !held || held->address != word.address + 1 ||
+      !body_supported(held->opcode)) {
     throw std::runtime_error("SHARC sequenced loop setup/body context not qualified");
   }
   sharc_fetch_address(word.address + 2);
@@ -41,7 +46,7 @@ void begin(const SharcState &cpu, const SharcFetchFlow &previous, SharcFetchStat
                                    .body = word.address + 1,
                                    .total = iterations,
                                    .fetch_remaining = iterations,
-                                   .held = next.decode};
+                                   .held = held};
   next.flow->next = word.address + 1;
 }
 
@@ -89,7 +94,7 @@ void sharc_fetch_loop_flow(const SharcState &cpu,
   if (!previous.flow || !next.flow) { throw std::logic_error("Missing SHARC loop flow"); }
   if (!previous.flow->loop) {
     if (next.address && (next.address->opcode >> class_shift) == immediate_loop) {
-      begin(cpu, *previous.flow, next);
+      begin(cpu, previous, next);
     }
     return;
   }
@@ -134,7 +139,9 @@ void sharc_fetch_loop_clock(SharcState &cpu,
     }
   }
   if (startup_stall) { loop.phase = SharcFetchLoopPhase::seed; }
-  if (old_loop.phase != SharcFetchLoopPhase::setup) { counter(flow, loop, next.fetch1); }
+  if (old_loop.phase != SharcFetchLoopPhase::setup && loop.issued != 0) {
+    counter(flow, loop, next.fetch1);
+  }
   next.flow = flow;
   sharc_fetch_loop_finish(next);
 }

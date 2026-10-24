@@ -93,7 +93,11 @@ void guard(const SharcState &cpu, const SharcFetchState &state, SharcFetchBus bu
   for (const auto &word : {state.decode, state.address}) {
     if (!word) { continue; }
     const auto type = word->opcode >> class_shift;
-    if ((type >= 6 && type <= 14) || (type == 0 && word->opcode != 0) ||
+    constexpr unsigned int immediate_do = 12;
+    const bool entering_do = type == immediate_do && state.decode &&
+                             word->address == state.decode->address &&
+                             (word->opcode & sharc_pc_mask) == 1;
+    if (((type >= 6 && type <= 14) && !entering_do) || (type == 0 && word->opcode != 0) ||
         sharc_cache_pm_encoding(word->opcode) || sharc_fetch_destination(word->opcode) == mode1) {
       throw std::runtime_error("SHARC DAG stall with control/PM instruction not qualified");
     }

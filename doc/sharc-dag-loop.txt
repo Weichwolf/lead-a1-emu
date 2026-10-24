@@ -1,0 +1,62 @@
+DAG-load and single-counter-loop composition
+
+PGRrev2.4,4-110..113/Table4-52 permits an unrelated DO to advance while its
+dependent RAM body remains before Decode. The single-body rules in4-57,
+4-61..63/Tables4-17..20 retain the body, redirect at DO Address and introduce
+a distinct startup hold. Pages4-118/119 warn that stalls need not merge.
+This composition is a reference interpretation of these rules, tested against
+independent instruction/data expectations and original execution. It is not
+a manufacturer-provided combined waveform, simulator measurement or physical
+silicon timing qualification.
+
+During the qualified DAG hold, immediate single-body DO reaches Address and
+retains the already fetched raw F2 body. The pending loop cursor redirects
+without accepting a new F1; existing F1/F2 words remain held. Body operands
+are captured only upon actual Decode entry, after the real DAG producer
+retires. DO itself executes normally. Its separate startup hold remains.
+When no body copy has issued yet, the loop fetch counter waits for that first
+issue. Existing stages and counts retain this state; no hidden timer,
+synthetic instruction, host memory clearing or guessed register value is used.
+
+Typed restore validation covers the zero-issued hold/seed shapes and first-
+issued stream shape, including actual Decode/Address words and issued-minus-
+retired latches. Zero-issued Decode must match the retained body opcode.
+Native DO/loop retirement, actual frame push/pop, data operations and DAG
+post-modifies still perform all architectural changes. Failed quiet controller
+ownership or a body store with pending pre-pop preserves the staged boundary;
+earlier committed stores remain committed and repair resumes the captured word.
+
+The existing count1/longer-loop, live-loop dependency, branch, PM/cache,
+pending/in-flight MODE1, width and unsupported body/producer guards remain.
+This extends only the qualified entry overlap, not arbitrary merging of stalls.
+
+Owned tests contain a literal13-column composed waveform,80 finite cases
+across I/B/L/M producers, counts2/3/4/5/16, primary/secondary banks and register/
+immediate modifiers. They check real addresses, payloads, iteration counts,
+tail suppression and native continuation/stack state. An unrelated M load
+does not acquire a false immediate-modifier dependency. Eight independently
+rebound RAM/controller/CPU/transport continuations cover before/after Execute
+around delayed setup; actual instruction-RAM replacement gives two or three
+retained old body copies followed by refetched replacements. Quiet clock-owner
+repair, failed actual store/pre-pop repair and malformed Decode snapshots have
+separate checks. No manufacturer/private instructions are public test inputs.
+
+Each of eight optional original-stream invocations also owns a fresh sequenced
+RAM/PMCTL initialization fixture. After six PLL waits and the first48768 stores,
+the unchanged original executes all three remaining clear loops:49151/32767/
+32767 actual stores, totaling163453 stores over all four loops. All cleared
+words are checked; the three excluded final normal words remain
+unknown. All384 kernel words survive, and the actual RTS pops its original
+CALL frame and returns to8c008 with depth0 and I0=e7fff. No host initialization
+or loop summary substitutes for these operations.
+
+The full prefix retires171758 instructions using171776 AVAILABLE-BUS grants.
+Its earlier first-clear checkpoint remains57065/57077 at8c0b9. Code/data block
+arbitration is still not coupled to these granted fetch clocks; they are not
+physical CCLK, MHz or a board schedule. Direct serial record-stream fixtures
+remain separate and stop at8c08e. No original terminal-vector acceptance,
+complete uploader/application boot, MIDI/audio/update/recovery or hardware
+comparison follows. Those remain part of the full objective.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_dag_load_and_single_loop|original_sharc_images)$' --output-on-failure

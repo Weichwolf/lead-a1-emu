@@ -171,6 +171,86 @@ void sequenced_kernel_prefix(lead_a1::SharcMemory &memory, ObservedClock &clock)
   require(!memory.active());
 }
 
+struct ClearRange {
+  std::uint32_t first;
+  unsigned int words;
+  std::uint32_t body;
+};
+
+constexpr std::array<ClearRange, 3> remaining_clears{
+    {{.first = 0xb2000, .words = 49151, .body = 0x8c0bb},
+     {.first = 0xc0000, .words = 32767, .body = 0x8c0be},
+     {.first = 0xe0000, .words = 32767, .body = 0x8c0c1}}};
+
+void observe_clear(const lead_a1::SharcFetchWord &executing, std::array<unsigned int, 3> &writes) {
+  for (unsigned int index = 0; index < remaining_clears.size(); ++index) {
+    const auto range = remaining_clears[index];
+    if (executing.address != range.body) { continue; }
+    const auto address = executing.dag;
+    require(address && address->address == range.first + writes[index] && address->index == 0 &&
+            address->post && address->width == lead_a1::SharcWidth::normal32);
+    ++writes[index];
+  }
+}
+
+void verify_clear_ranges(const lead_a1::SharcMemory &memory,
+                         const std::array<unsigned int, 3> &writes) {
+  for (unsigned int index = 0; index < remaining_clears.size(); ++index) {
+    const auto range = remaining_clears[index];
+    require(writes[index] == range.words);
+    for (unsigned int word_index = 0; word_index < range.words; ++word_index) {
+      require(memory.read({.address = range.first + word_index}) == 0);
+    }
+    bool unknown{};
+    try {
+      static_cast<void>(memory.read({.address = range.first + range.words}));
+    } catch (const std::exception &error) {
+      require(std::string(error.what()).find("Unknown SHARC memory bits") != std::string::npos);
+      unknown = true;
+    }
+    require(unknown); // The original leaves one normal word untouched in these banks.
+  }
+}
+
+void sequenced_remaining_clears(lead_a1::SharcMemory &memory,
+                                lead_a1::Sharc &cpu,
+                                lead_a1::SharcFetch &fetch,
+                                ObservedClock &clock) {
+  constexpr std::uint32_t return_pc = 0x8c008;
+  constexpr unsigned int stores = 114685;
+  constexpr unsigned int instruction_limit = stores + 8;
+  constexpr unsigned int clock_limit = instruction_limit + 6;
+  std::array<unsigned int, 3> writes{};
+  unsigned int retired{};
+  unsigned int clocks{};
+  unsigned int loop_stalls{};
+  unsigned int dag_stalls{};
+  while (cpu.state().pc != return_pc && clocks < clock_limit) {
+    clock.accessed = false;
+    const auto event = fetch.advance_sequenced(cpu);
+    ++clocks;
+    loop_stalls += event.loop_stall ? 1U : 0U;
+    dag_stalls += event.dag_stall ? 1U : 0U;
+    require(event.stalled == (event.loop_stall || event.dag_stall));
+    const auto executing = fetch.state().execute;
+    if (executing) {
+      observe_clear(*executing, writes);
+      require(cpu.step(fetch).minimum_core_cycles == 1);
+      ++retired;
+    }
+    require(!clock.accessed);
+    clock.device.advance({.core_cycles = 1});
+  }
+  require(cpu.state().pc == return_pc && retired == instruction_limit && clocks == clock_limit);
+  require(loop_stalls == 3 && dag_stalls == 3 && cpu.state().depth == 0);
+  require(!cpu.state().count_loop && cpu.state().loops_empty == true);
+  constexpr std::uint32_t after = 0xe7fff;
+  constexpr std::uint32_t parent = 0x108c008;
+  require(cpu.state().dag[0][0][0].value == after && cpu.state().pc_stack[0] == parent);
+  verify_clear_ranges(memory, writes);
+  require(!memory.active());
+}
+
 void sequenced_first_clear(lead_a1::SharcMemory &memory,
                            lead_a1::Sharc &cpu,
                            lead_a1::SharcFetch &fetch,
@@ -216,22 +296,12 @@ void sequenced_first_clear(lead_a1::SharcMemory &memory,
   for (unsigned int index = 0; index < stores; ++index) {
     require(memory.read({.address = first + index}) == 0);
   }
+  sequenced_remaining_clears(memory, cpu, fetch, clock);
   constexpr std::uint32_t kernel = 0x92000;
   constexpr unsigned int words = kernel_bytes / 4;
   for (unsigned int index = 0; index < words; ++index) {
     require(memory.read({.address = kernel + index}) == word(stream, std::size_t{index} * 4));
   }
-  const auto before = cpu.state();
-  const auto transport = fetch.state();
-  bool guarded{};
-  try {
-    static_cast<void>(fetch.advance_sequenced(cpu));
-  } catch (const std::exception &error) {
-    require(std::string(error.what()).find("DAG stall with control/PM instruction") !=
-            std::string::npos);
-    guarded = true;
-  }
-  require(guarded && cpu.state() == before && fetch.state() == transport && !memory.active());
 }
 
 void sequenced_clock_setup(std::span<const std::byte> stream) {
@@ -500,8 +570,8 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
                "actual PMCTL read, next PC0x8c092\n"
             << "  Separate sequenced clock setup:8291 instructions/8302 granted fetch clocks; "
                "six actual wait loops, next PC0x8c0b2\n"
-            << "  Same sequenced fixture:57065 instructions/57077 fetch clocks; "
-               "48768 actual zero stores, mixed DAG/DO frontier PC0x8c0b9\n"
+            << "  Same sequenced fixture:171758 instructions/171776 available-bus clocks; "
+               "163453 actual zero stores, all four RAM clears and native return PC0x8c008\n"
             << std::flush;
 }
 
