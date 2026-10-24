@@ -21,7 +21,7 @@ void sharc_fetch_reserve(SharcCacheState &cache, SharcFetchState &state);
                                               const SharcFetchState &state,
                                               bool &forwarded);
 void sharc_fetch_fill(SharcCacheState &cache, const SharcFetchState &state);
-void sharc_fetch_flow_guard(const SharcState &cpu);
+void sharc_fetch_flow_guard(const SharcState &cpu, const SharcFetchState &transport);
 [[nodiscard]] bool sharc_fetch_branch_encoding(std::uint64_t opcode);
 [[nodiscard]] std::uint32_t sharc_fetch_condition_mask(unsigned int code);
 [[nodiscard]] bool sharc_fetch_interlock(const SharcState &cpu, const SharcFetchState &previous);
@@ -34,5 +34,18 @@ void sharc_fetch_flow(const SharcState &cpu,
 void sharc_fetch_quiet_effects(SharcState &cpu,
                                const SharcFetchState &transport,
                                const SharcControl *control);
+void sharc_fetch_loop_validate(const SharcFetchState &transport);
+void sharc_fetch_loop_guard(const SharcState &cpu, const SharcFetchState &transport);
+[[nodiscard]] bool sharc_fetch_loop_stall(const SharcFetchState &transport);
+void sharc_fetch_loop_flow(const SharcState &cpu,
+                           const SharcFetchState &previous,
+                           SharcFetchState &next);
+void sharc_fetch_loop_clock(SharcState &cpu,
+                            const SharcFetchState &previous,
+                            SharcFetchState &next,
+                            bool startup_stall);
+[[nodiscard]] SharcLoopClock sharc_fetch_loop_retirement(const SharcState &cpu,
+                                                         SharcFetchState &transport);
+void sharc_fetch_loop_finish(SharcFetchState &transport) noexcept;
 
 }

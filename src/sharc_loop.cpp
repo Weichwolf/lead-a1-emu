@@ -108,7 +108,20 @@ bool sharc_loop_body_supported(std::uint64_t opcode) {
          (opcode & register_indexed_mask) == register_indexed;
 }
 
-unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode) {
+void sharc_clocked_loop_pop(SharcState &state) {
+  if (!state.count_loop || !state.count_loop->frame_live || !state.depth) {
+    throw std::runtime_error("SHARC clocked loop pop requires a live ordinary loop frame");
+  }
+  auto &loop = *state.count_loop;
+  if (*state.depth != loop.saved_depth + 1 || state.pc_stack[loop.saved_depth] != loop.body ||
+      loop.body != loop.end || state.loops_empty != false) {
+    throw std::runtime_error("SHARC clocked loop frame changed before pop");
+  }
+  pop(state, loop);
+  sharc_stack_status(state);
+}
+
+unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode, bool clocked) {
   if (!sharc_loop_body_supported(opcode)) {
     throw std::runtime_error("SHARC count-loop body instruction/pipeline not implemented");
   }
@@ -120,11 +133,12 @@ unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode) {
   const bool last = loop->remaining == 1;
   // PGR4-61..63: stack pre-pop occurs before the final executions have drained.
   // Reviewed RAM/compute operations cannot access loop resources.
-  if ((loop->total > 4 && loop->remaining == 4) || (loop->total < 4 && loop->total > 1 && last)) {
+  if (!clocked &&
+      ((loop->total > 4 && loop->remaining == 4) || (loop->total < 4 && loop->total > 1 && last))) {
     pop(state, *loop);
   }
   --loop->remaining;
-  if ((loop->total == 4 && first) || last) { pop(state, *loop); }
+  if (!clocked && ((loop->total == 4 && first) || last)) { pop(state, *loop); }
   unsigned int minimum_cycles = first ? 2U : 1U; // Initial short-loop bubble.
   if (last && loop->total < 4) { minimum_cycles += 3; }
   if (last) {
@@ -133,7 +147,7 @@ unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode) {
   } else {
     state.count_loop = *loop;
   }
-  return minimum_cycles;
+  return clocked ? 1U : minimum_cycles;
 }
 
 }

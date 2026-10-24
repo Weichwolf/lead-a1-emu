@@ -89,6 +89,19 @@ SharcFetchEvent normal_clock(SharcMemory &memory,
   return event;
 }
 
+SharcFetchEvent loop_startup_clock(const SharcFetchState &previous,
+                                   SharcFetchState &next,
+                                   SharcFetchBus bus,
+                                   bool interlock,
+                                   bool cache_stall) {
+  if (interlock || cache_stall || bus != SharcFetchBus::available) {
+    throw std::runtime_error("SHARC simultaneous loop/bus/control stall not qualified");
+  }
+  next.execute = previous.address;
+  next.address.reset();
+  return {.stalled = true, .loop_stall = true};
+}
+
 }
 
 SharcFetchEvent
@@ -110,7 +123,7 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
     throw std::logic_error("SHARC cache fetch requires its idle bound memory");
   }
   validate_clock(state_, next_address, bus, sequenced);
-  if (sequenced) { detail::sharc_fetch_flow_guard(cpu.state_); }
+  if (sequenced) { detail::sharc_fetch_flow_guard(cpu.state_, state_); }
   const auto mode = cpu.state_.effective[4];
   detail::sharc_validate_cache(cpu.state_.cache);
   detail::sharc_fetch_mode(state_, mode);
@@ -119,7 +132,10 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
   SharcFetchEvent event;
   const bool interlock = sequenced && detail::sharc_fetch_interlock(cpu.state_, state_);
   const bool cache_stall = state_.lookup && state_.lookup->wait;
-  if (cache_stall || interlock) {
+  const bool loop_stall = sequenced && detail::sharc_fetch_loop_stall(state_);
+  if (loop_stall) {
+    event = loop_startup_clock(state_, next, bus, interlock, cache_stall);
+  } else if (cache_stall || interlock) {
     event = stalled_clock(state_, next, cache, bus, interlock);
   } else {
     event = normal_clock(memory_, cache, state_, next, mode, next_address, bus);
@@ -127,9 +143,11 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
   }
   auto core = cpu.state_;
   core.cache = cache;
+  if (sequenced) { detail::sharc_fetch_loop_clock(core, state_, next, loop_stall); }
   if (!next.execute) { detail::sharc_fetch_quiet_effects(core, next, cpu.control_); }
   detail::sharc_fetch_validate(next);
   detail::sharc_validate_cache(core.cache);
+  if (sequenced) { detail::sharc_fetch_loop_guard(core, next); }
   // The only external commit can reject ownership before any state change.
   // Fixed-value assignments below cannot throw after a successful device clock.
   static_assert(std::is_nothrow_copy_assignable_v<SharcState>);

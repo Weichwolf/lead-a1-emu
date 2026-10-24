@@ -240,12 +240,13 @@ std::optional<std::uint32_t> execute(SharcMemory &memory,
 unsigned int execute_loop(SharcMemory &memory,
                           SharcState &state,
                           std::uint64_t opcode,
-                          const SharcControl *control) {
+                          const SharcControl *control,
+                          bool clocked) {
   if (!detail::sharc_loop_body_supported(opcode)) {
     throw std::runtime_error("SHARC count-loop body instruction/pipeline not implemented");
   }
   static_cast<void>(execute(memory, state, opcode, control));
-  return detail::sharc_count_loop_step(state, opcode);
+  return detail::sharc_count_loop_step(state, opcode, clocked);
 }
 
 void finish_control(const SharcState &previous, SharcState &next) {
@@ -330,7 +331,8 @@ SharcStep Sharc::step() {
 
 SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
                              bool preserve_cache,
-                             std::optional<bool> branch_taken) {
+                             std::optional<bool> branch_taken,
+                             SharcLoopClock loop_clock) {
   auto opcode = captured;
   bool transaction{};
   bool control_transaction{};
@@ -353,10 +355,12 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     auto next = state_;
     next.pending.fill({});
     next.cache.pending_flush = false;
+    if (loop_clock == SharcLoopClock::clocked_pop) { detail::sharc_clocked_loop_pop(next); }
     detail::sharc_arithmetic_loop_prepare(next, *opcode);
     unsigned int minimum_cycles = 1;
     if (state_.count_loop && state_.count_loop->body == state_.count_loop->end) {
-      minimum_cycles = execute_loop(memory_, next, *opcode, control_);
+      minimum_cycles =
+          execute_loop(memory_, next, *opcode, control_, loop_clock != SharcLoopClock::functional);
     } else {
       if (detail::sharc_four_loop(next)) {
         minimum_cycles = detail::sharc_four_loop_prepare(next, *opcode);

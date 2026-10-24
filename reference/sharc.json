@@ -228,7 +228,7 @@
     "phases": "F1 selects an address, F2 reads real executable wide48 RAM, Decode/Address/Execute retain the actual fetched data; bubbles are absent words rather than retired guest NOPs",
     "retirement": "Bound memory and matching Execute PC required; actual native decoder consumes the latch only after successful transactional CPU/memory/device commit; no retirement-time instruction-RAM reread",
     "dma": "Owned actual LSB-first SPI reception and three normal32 DMA writes replace two native48 instructions; before-F2 writes are observed, later writes preserve captured data through actual CPU retirement and checkpoint continuation",
-    "limits": "Complete cache/pipeline integration, data arbitration/DAG operand capture, full control interlocks, indirect/RTI/loop/IDLE/IRQ sequencing and global/physical timing remain unqualified; bounded direct/RTS decisions are in fetch_flow_reference/branch_pipeline_reference; complete original prefixes use the separate functional instruction-order path"
+    "limits": "Complete cache/pipeline integration, data arbitration/DAG operand capture, full control interlocks, general indirect/RTI/loop/IDLE/IRQ sequencing and global/physical timing remain unqualified; bounded direct/RTS decisions are in fetch_flow_reference/branch_pipeline_reference; bounded immediate single loops are in single_loop_fetch_reference; full original record streams use the separate functional instruction-order path"
   },
   "interrupt_reference": {
     "primary": "PGRrev2.4 4-22/23,4-26/43,9-44/46,10-17,A-10,A-31/34,A-37/42",
@@ -280,7 +280,7 @@
     "cache_stall": "Partial conflict-miss stall holds F1 cursor and Decode suppression while Address progresses to Execute; unaccepted target is retried automatically",
     "snapshots": "Cursor, suppression, all retained words and cache phases restore with paired actual CPU/cache state; clock failures preserve all, failed retirement retains its already clocked Execute word",
     "owned_evidence": "Literal seven-column five-stage branch tables for absolute/relative JUMP/CALL with/without DB, actual CALL frames, backward relative refetch, branch-phase checkpoint continuation and real guest PM(PX) self-modifying delayed-branch targets with miss/hit outcomes",
-    "limits": "Indirect/RTI/loop/ISR/IDLE sequencing, pending-fill branch arbitration, complete MODE1/DAG/control interlocks and mode/width/flush quiet ordering remain guarded; no global/physical timing or complete original-stream finalizer/boot/audio acceptance"
+    "limits": "Indirect/RTI/general loop/ISR/IDLE sequencing, pending-fill branch arbitration, complete MODE1/DAG/control interlocks and mode/width/flush quiet ordering remain guarded; bounded immediate single loops have single_loop_fetch_reference; no global/physical timing or complete original-stream finalizer/boot/audio acceptance"
   },
   "branch_pipeline_reference": {
     "primary": "PGRrev2.4 4-5/8,4-19/23,4-106,4-115/118/Table4-55,9-32/34,9-44/46,A-17/20,A-31/35",
@@ -303,5 +303,17 @@
     "owned_evidence": "Actual last-DB-slot IRPTL/IMASK/FLAGS writes, no-retirement maturation and target compute/checkpoint continuation; drained guest MODE1 bank and SYSCTL width changes, paired device/RAM continuation, partial knowledge/branch preservation, routed latches/new eligibility, fetch/ownership failures and repair",
     "original_prefix": "Each serially loaded original kernel independently executes its first9 actual instructions through the bound sequencer in14 granted fetch clocks; clock13 matures pending IRPTL with no Execute word, clock14 reads actual PMCTL at8c091 into USTAT3=8, reaching8c092/frame108c008 without changing the bound clock device; full-stream CPU starts fresh and retains8c08e",
     "limits": "Pending cache flush effect/follower and lookup/fill ordering, live MODE1/width operands, complete DAG/control/IRQ/loop/IDLE sequencing, global/physical timing, full uploader/boot/audio/hardware remain unqualified"
+  },
+  "single_loop_fetch_reference": {
+    "primary": "PGRrev2.4 4-59..63, Tables4-17..20; count1 Table4-21 continuation row/note discrepancy remains open",
+    "profile": "Immediate single-instruction DO; count2/3/4/5 and larger, encoded0 means2^32; native NOP or supported compute-only/immediate shift body",
+    "startup": "Address retains actual Decode body; next clock executes native DO; one partial startup stall then a retained seed Decode make up to three initial body executions use original captured data; later words come from real F2",
+    "termination": "F1 tests four remaining for total>=4, one for total2/3; actual body issue budget aborts excess Decode copies, giving three tail bubbles only for2/3; fetch bookkeeping does not invent guest CURLCNTR/LCNTR reads",
+    "stack": "Native frame pops one clock after terminal F1 test; absent Execute count4 pop commits with whole clock, other cases pop inside real body transaction; preserves parent CALL frame",
+    "snapshots": "Retained Decode, phase, total/fetch/issued/retired counts and pending pop; shape and coupled CPU/count/stack guards; failed fetch or retirement preserves relevant committed boundary for retry",
+    "owned_evidence": "Literal five-stage Tables4-17..20, actual increments and stack clock oracles, held versus changed RAM data, independent RAM/CPU/transport checkpoint continuation at occupied/empty phases, zero/large count prefixes, failed arithmetic pop and late unknown-F2 quiet-pop repair, malformed shape and CPU mismatch rejection",
+    "original_prefix": "All four serially loaded original kernels, each in both existing direct-stream cases, separately execute8291 original instructions in8302 granted fetch clocks through six actual PLL NOP waits16/4096/16/4096/16/16; nextPC8c0b2, frame108c008, PMCTL40012 and ideal ratios18/9/36:5; owns fresh RAM/PMCTL and does not seed full functional streams",
+    "clock_inputs": "Stable/settled CLK_CFG0 candidate; count one core-clock lower bound per granted non-PMCTL-access clock including bubbles, one CLKIN only in bypass; no measured MHz, complete IOP bridge/mux/global/physical latency or board schedule",
+    "limits": "UREG/count1/multi-instruction/nested/delayed loops, RAM/DAG/PM body operands, simultaneous stalls, MODE1/control/IRQ/IDLE redirects and original delayed-IDLE finalizer remain guarded/open; complete application boot/audio/hardware unqualified"
   }
 }

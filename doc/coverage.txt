@@ -126,10 +126,16 @@ ID  State    Evidence / remaining work
              instructions runs through that sequencer in14 granted clocks,
              including a real PMCTL read after its pending IRPTL effect matures;
              its separate fresh functional full-stream run is not reclassified.
-             Loop/IRQ/IDLE/indirect redirects and complete interlocks remain
-             guarded or open, as do
-             block arbitration, mode/width/flush interlocks and global timing; original
-             prefixes still use the functional path.
+             Immediate single-instruction counter loops now retain Decode,
+             insert the actual startup/drain bubbles and pre-pop the native
+             frame at its specified clock. Literal stage tables, arithmetic,
+             external code writes and paired snapshots check the bounded model
+             (sharc-fetch-loops.txt). Other loop/IRQ/IDLE/indirect redirects,
+             block arbitration, mode/width/flush interlocks and global timing
+             remain guarded or open. A separate fresh RAM/PMCTL original
+             fixture executes8291 instructions/8302 granted fetch clocks to
+             8c0b2 through all six PLL waits, preserving the native CALL frame
+             and final clock ratios. Full record streams remain functional.
              Four-instruction loops execute real delayed CALLs, both delay
              slots, nested callees/polling and indexed stores; final steady
              bit25 frames, startup bubbles and rollback have owned tests

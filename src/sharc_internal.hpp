@@ -104,7 +104,9 @@ void sharc_validate_four_loop(const SharcState &state);
 [[nodiscard]] unsigned int sharc_four_loop_prepare(SharcState &state, std::uint64_t opcode);
 void sharc_four_loop_finish(const SharcState &previous, SharcState &next);
 [[nodiscard]] bool sharc_loop_body_supported(std::uint64_t opcode);
-[[nodiscard]] unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode);
+[[nodiscard]] unsigned int
+sharc_count_loop_step(SharcState &state, std::uint64_t opcode, bool clocked = false);
+void sharc_clocked_loop_pop(SharcState &state);
 void sharc_long_loop_prepare(SharcState &state, std::uint64_t opcode);
 void sharc_long_loop_finish(const SharcState &previous, SharcState &next);
 void sharc_validate_arithmetic_loop(const SharcState &state);

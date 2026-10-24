@@ -58,6 +58,9 @@ SharcStep.minimum_core_cycles is a lower bound, not complete CPU timing. It
 includes the initial short-loop bubble and the three drain cycles for counts
 below 4. Fetch/cache/IOP/other pipeline timing and interrupt delivery remain open.
 Failed instructions preserve count, frames, pending controls and memory.
+The optional bound clock has the further sharc-fetch-loops.txt contract for
+immediate single-instruction loops. Its explicit startup/drain bubbles and
+pre-pop phase replace those aggregate lower bounds only on the bound path.
 
 Original composition
 The optional original SPI regression retains its unconfigured-clock failure

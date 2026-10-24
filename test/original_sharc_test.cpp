@@ -171,6 +171,71 @@ void sequenced_kernel_prefix(lead_a1::SharcMemory &memory, ObservedClock &clock)
   require(!memory.active());
 }
 
+void sequenced_clock_setup(std::span<const std::byte> stream) {
+  // This fixture owns fresh RAM and PMCTL: its writes cannot seed the full stream.
+  lead_a1::SharcMemory memory;
+  memory.map_2148x_5mbit_ram();
+  auto boot = lead_a1::SharcSpiBoot::slave_reference_214xx();
+  bootstrap(memory, boot, stream);
+  ObservedClock clock;
+  memory.map_io({.first_word = 0x2000, .words = 1}, clock);
+  lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(reset));
+  lead_a1::SharcFetchState transport;
+  transport.flow = lead_a1::SharcFetchFlow{.next = reset};
+  lead_a1::SharcFetch fetch(memory, transport);
+  constexpr std::uint32_t flags_entry = 0x8c0b2;
+  constexpr unsigned int instruction_limit = 8291;
+  constexpr unsigned int clock_limit = 8302;
+  constexpr std::array<unsigned int, 6> counts{16, 4096, 16, 4096, 16, 16};
+  unsigned int clocks{};
+  unsigned int instructions{};
+  unsigned int stalls{};
+  unsigned int loops{};
+  while (cpu.state().pc != flags_entry && clocks < clock_limit) {
+    clock.accessed = false;
+    const auto event = fetch.advance_sequenced(cpu);
+    ++clocks;
+    if (event.loop_stall) { ++stalls; }
+    require(event.stalled == event.loop_stall);
+    if (fetch.state().execute) {
+      const auto step = cpu.step(fetch);
+      ++instructions;
+      require(instructions <= instruction_limit && step.minimum_core_cycles == 1);
+      constexpr unsigned int class_shift = 40;
+      if ((step.opcode >> class_shift) == 12) {
+        const auto active = cpu.state().count_loop;
+        require(active && active->total == counts.at(loops));
+        ++loops;
+      }
+      const auto active = cpu.state().count_loop;
+      if (active) { require(step.pc == active->body - 1 || step.opcode == 0); }
+    }
+    if (!clock.accessed) {
+      constexpr std::uint32_t bypass = 0x8000;
+      clock.device.advance(
+          {.core_cycles = 1,
+           .clkin_cycles = (clock.device.state().control & bypass) != 0 ? 1U : 0U});
+    }
+  }
+  require(cpu.state().pc == flags_entry && instructions == instruction_limit &&
+          clocks == clock_limit);
+  require(stalls == counts.size() && loops == counts.size());
+  constexpr std::uint32_t return_frame = 0x108c008;
+  require(cpu.state().depth == 1 && cpu.state().pc_stack[0] == return_frame);
+  const auto flow = fetch.state().flow;
+  require(!cpu.state().count_loop && cpu.state().loops_empty == true && flow && !flow->loop);
+  constexpr std::uint32_t expected_pmctl = 0x40012;
+  require(clock.device.state().control == expected_pmctl && !clock.device.state().pending_dividers);
+  const auto rates = clock.device.rates();
+  constexpr unsigned int core_ratio = 18;
+  constexpr unsigned int external_numerator = 36;
+  require(rates.core == (lead_a1::SharcClockRatio{.numerator = core_ratio}));
+  require(rates.peripheral == (lead_a1::SharcClockRatio{.numerator = 9}));
+  require(rates.external ==
+          (lead_a1::SharcClockRatio{.numerator = external_numerator, .denominator = 5}));
+  require(!memory.active());
+}
+
 struct SerialInput {
   std::span<const std::byte> stream;
   unsigned int interval;
@@ -303,6 +368,7 @@ void check_frontier(const lead_a1::Sharc &cpu,
 
 void run_stream(std::span<const std::byte> stream, Placement placement, unsigned int interval) {
   const auto expected = inventory(stream, placement); // Read-only oracle, never writes guest RAM.
+  sequenced_clock_setup(stream);
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
   auto boot = lead_a1::SharcSpiBoot::slave_reference_214xx();
@@ -367,6 +433,8 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
             << " instructions/serial edge; vector DMA armed, deferred branch frontier\n"
             << "  Sequenced kernel prefix:9 instructions/14 granted fetch clocks; "
                "actual PMCTL read, next PC0x8c092\n"
+            << "  Separate sequenced clock setup:8291 instructions/8302 granted fetch clocks; "
+               "six actual wait loops, next PC0x8c0b2\n"
             << std::flush;
 }
 

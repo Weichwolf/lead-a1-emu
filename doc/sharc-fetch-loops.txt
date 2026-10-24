@@ -1,0 +1,67 @@
+Single-instruction counter loops in the bound native fetch sequencer
+
+PGRrev2.4 4-59..63, Tables4-17..20, describe the qualified immediate-DO cases:
+counts2/3/4/5 and larger, with encoded zero meaning2^32 iterations. The body is
+one native NOP, supported compute-only instruction or immediate shifter
+instruction. The actual decoder executes every retained body word; there is no
+host wait, repeated functional-step timing summary or opcode patch. The default
+instruction-only loop helper retains its separate lower bounds.
+
+Address selects the loop F1 cursor and retains the original Decode body word.
+After native DO executes, one partial startup stall holds F1/F2/Decode while the
+first real body advances to Execute. A subsequent seed clock retains Decode once
+more, so up to three initial body executions use the captured word. Later copies
+come from actual F2 RAM/cache reads. DMA/self-modification can therefore change
+later iterations without changing the held initial copies. The held Decode arrow
+in the tables is represented by a captured word plus an issue stall; an aborted
+copy is absent, never an executable inserted NOP.
+
+A fetch counter selects the continuation at the documented termination test:
+four remaining for counts>=4, one for counts2/3. This is transport bookkeeping,
+not guest-visible LCNTR/CURLCNTR knowledge. Counts2/3 discard the three excess
+body copies and retain the resulting three absent Execute words. Count>=4 has
+the single startup bubble and no final bubble. Suppressed copies do not execute
+or decrement the architectural instruction-retirement count.
+
+The native loop PC frame pops one clock after the fetch termination test. For
+count4 that clock has absent Execute: the CPU copy changes only when the whole
+clock commits. Otherwise the real body instruction performs the pop inside its
+ordinary instruction transaction. Foreign controller ownership rejects a quiet
+pop before committing the staged CPU/transport. Failed arithmetic/operands keep
+the occupied Execute word, live frame and pending pop for retry. A late F2
+failure keeps the entire CPU/cache/transport clock unchanged. Parent CALL frames
+survive. No independent shadow architectural PC stack is introduced.
+
+Typed CPU/transport snapshots retain startup phase, original Decode word,
+fetch/issued/retired counts and pending pop. Coupled guards require matching
+native loop/count/stack state. Metadata drains only after the final real body
+has retired and all remaining body copies have left the transport. Address
+bounds precede continuation addition, including corrupt32-bit snapshot inputs.
+
+This is a bounded pipeline reference. UREG-count DO, count1, longer bodies,
+RAM/DAG/PM loop bodies, nested/delayed DO, loop-resource operations, combined
+cache/control stalls, MODE1 hazards and interrupt/IDLE redirects stay guarded.
+Count1 Table4-21's F1 row and note4 disagree about the continuation clock; that
+discrepancy is not resolved by the instruction-only helper's aggregate cycle
+lower bound. Physical Nord clocks and complete Decode operand capture remain
+open. No original application boot or audio follows from this model.
+
+Owned tests compare literal five-stage tables, actual arithmetic, stack timing,
+retained/refetched words, checkpoint continuation and transactional failures.
+The optional original test adds a fresh independent RAM/PMCTL fixture for each
+existing direct-stream invocation. The later record-stream serial cadence does
+not drive this separate initialization fixture. It boots the unchanged serial
+kernel and executes all six PLL wait loops (16/4096/16/4096/16/16 NOPs) through
+the bound sequencer:8291 actual instructions/8302 granted fetch clocks
+reach8c0b2, with frame108c008 and final PMCTL40012. The stable/settled CLK_CFG0
+candidate counts one core-clock lower bound per granted non-PMCTL-access clock,
+including bubbles; only bypass intervals count CLKIN. Ideal ratios are18/9/36:5.
+This does not qualify the physical IOP bridge, mux phase, absolute frequencies
+or board scheduling. Full record-stream checks still use a separate fresh
+functional CPU/device fixture and retain the8c08e frontier. Primary provenance
+remains reference/sharc.json. Manufacturer words and private
+assembler/decoder/implementation are not build or publication inputs.
+
+Reproduce (original images are optional hash-pinned local references):
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^(sharc_fetch_single_loops|original_sharc_images)$' --output-on-failure

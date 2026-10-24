@@ -148,6 +148,9 @@ struct SharcStep {
   unsigned int minimum_core_cycles{1};
 };
 
+// Private retirement selection shared with the bound fetch transport.
+enum class SharcLoopClock : std::uint8_t { functional, clocked, clocked_pop };
+
 // Functional native-48 instruction reference; unsupported execution fails.
 // No autonomous peripheral clocks or complete physical pipeline timing.
 class Sharc {
@@ -182,7 +185,8 @@ private:
   friend class SharcFetch;
   [[nodiscard]] SharcStep step_opcode(std::optional<std::uint64_t> captured,
                                       bool preserve_cache = false,
-                                      std::optional<bool> branch_taken = std::nullopt);
+                                      std::optional<bool> branch_taken = std::nullopt,
+                                      SharcLoopClock loop_clock = SharcLoopClock::functional);
   SharcMemory &memory_;
   SharcState state_;
   SharcControl *control_;

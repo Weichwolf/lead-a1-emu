@@ -46,6 +46,8 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
   }
   constexpr unsigned int first_other_control = 8;
   constexpr unsigned int last_other_control = 14;
+  constexpr unsigned int immediate_loop = 12;
+  if (type == immediate_loop) { return {}; }
   if ((type >= first_other_control && type <= last_other_control) ||
       (type == 0 && word.opcode != 0)) {
     throw std::runtime_error("SHARC sequenced RTI/loop/indirect/IDLE control not qualified");
@@ -55,11 +57,11 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
 
 }
 
-void sharc_fetch_flow_guard(const SharcState &cpu) {
-  if (cpu.count_loop || cpu.arithmetic_loop || cpu.loops_empty != true || cpu.interrupt ||
-      cpu.idle_pc) {
+void sharc_fetch_flow_guard(const SharcState &cpu, const SharcFetchState &transport) {
+  if (cpu.arithmetic_loop || cpu.interrupt || cpu.idle_pc) {
     throw std::runtime_error("SHARC sequenced loop/ISR/IDLE context not qualified");
   }
+  sharc_fetch_loop_guard(cpu, transport);
   sharc_interrupt_guard(cpu);
 }
 
@@ -92,6 +94,7 @@ void sharc_fetch_flow(const SharcState &cpu,
   if ((updated.discard_decode & 1U) != 0) { next.decode.reset(); }
   updated.discard_decode >>= 1;
   next.flow = updated;
+  sharc_fetch_loop_flow(cpu, previous, next);
 } catch (const std::exception &error) {
 
   std::ostringstream message;

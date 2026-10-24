@@ -22,6 +22,8 @@ struct SharcFetchWord {
   std::optional<bool> pm_data{std::nullopt};
   // Branch condition/target selected in Address, before native Execute effects.
   std::optional<SharcFetchBranch> branch{std::nullopt};
+  bool loop_body{};
+  bool loop_pop{};
   bool operator==(const SharcFetchWord &) const = default;
 };
 
@@ -39,10 +41,29 @@ struct SharcFetchFill {
   bool operator==(const SharcFetchFill &) const = default;
 };
 
+enum class SharcFetchLoopPhase : std::uint8_t { setup, hold, seed, stream };
+enum class SharcFetchLoopPop : std::uint8_t { live, due, execute, done };
+
+struct SharcFetchLoop {
+  std::uint32_t setup{};
+  std::uint32_t body{};
+  std::uint64_t total{};
+  std::uint64_t fetch_remaining{};
+  std::uint64_t issued{};
+  std::uint64_t retired{};
+  SharcFetchLoopPhase phase{SharcFetchLoopPhase::setup};
+  SharcFetchLoopPop pop{SharcFetchLoopPop::live};
+  std::optional<SharcFetchWord> held{std::nullopt};
+  std::optional<unsigned int> saved_depth{std::nullopt};
+  bool terminal{};
+  bool operator==(const SharcFetchLoop &) const = default;
+};
+
 struct SharcFetchFlow {
   std::uint32_t next{};
   // Low bit suppresses this clock's Decode input; shifts on an advancing clock.
   unsigned int discard_decode{};
+  std::optional<SharcFetchLoop> loop{std::nullopt};
   bool operator==(const SharcFetchFlow &) const = default;
 };
 
@@ -66,6 +87,7 @@ struct SharcFetchEvent {
   bool cache_hit{};
   bool forwarded{};
   bool control_stall{};
+  bool loop_stall{};
   bool operator==(const SharcFetchEvent &) const = default;
 };
 
