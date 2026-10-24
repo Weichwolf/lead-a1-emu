@@ -76,6 +76,7 @@ void sharc_fetch_validate(const SharcFetchState &state) {
   cache_metadata(state);
   sharc_fetch_branch_validate(state);
   sharc_fetch_loop_validate(state);
+  sharc_fetch_dag_validate(state);
   if (state.flow) {
     sharc_fetch_address(state.flow->next);
     if (state.flow->discard_decode > 3) {
@@ -174,7 +175,8 @@ SharcStep Sharc::step(SharcFetch &fetch) try {
       word ? detail::sharc_fetch_branch_retirement(state_, *word) : std::nullopt;
   auto transport = fetch.state_;
   const auto loop_clock = detail::sharc_fetch_loop_retirement(state_, transport);
-  const auto result = step_opcode(opcode, preserve_cache, branch_taken, loop_clock);
+  const auto *dag = word && word->dag ? &*word->dag : nullptr;
+  const auto result = step_opcode(opcode, preserve_cache, branch_taken, loop_clock, dag);
   transport.execute.reset();
   detail::sharc_fetch_loop_finish(transport);
   fetch.state_ = transport;

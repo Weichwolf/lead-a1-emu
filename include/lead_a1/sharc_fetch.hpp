@@ -2,6 +2,7 @@
 #pragma once
 
 #include "lead_a1/sharc.hpp"
+#include "lead_a1/sharc_dag.hpp"
 #include "lead_a1/sharc_memory.hpp"
 
 #include <cstdint>
@@ -24,6 +25,7 @@ struct SharcFetchWord {
   std::optional<SharcFetchBranch> branch{std::nullopt};
   bool loop_body{};
   bool loop_pop{};
+  std::optional<SharcDagAddress> dag{std::nullopt};
   bool operator==(const SharcFetchWord &) const = default;
 };
 

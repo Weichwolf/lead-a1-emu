@@ -4,6 +4,7 @@
 #include "lead_a1/memory.hpp"
 #include "lead_a1/sharc_control.hpp"
 #include "lead_a1/sharc_memory.hpp"
+#include "sharc_dag_internal.hpp"
 #include "sharc_internal.hpp"
 
 #include <cstdint>
@@ -165,7 +166,12 @@ std::optional<std::uint32_t> execute(SharcMemory &memory,
                                      SharcState &state,
                                      std::uint64_t opcode,
                                      const SharcControl *control,
-                                     std::optional<bool> branch_taken = std::nullopt) {
+                                     std::optional<bool> branch_taken = std::nullopt,
+                                     const SharcDagAddress *dag = nullptr) {
+  if (dag != nullptr) {
+    detail::sharc_execute_dag(memory, state, opcode, control, *dag);
+    return {};
+  }
   constexpr std::uint64_t dual_mask = 0xe00000000000;
   constexpr std::uint64_t dual_class = 0x200000000000;
   if ((opcode & dual_mask) == dual_class) {
@@ -241,11 +247,12 @@ unsigned int execute_loop(SharcMemory &memory,
                           SharcState &state,
                           std::uint64_t opcode,
                           const SharcControl *control,
-                          bool clocked) {
+                          bool clocked,
+                          const SharcDagAddress *dag) {
   if (!detail::sharc_loop_body_supported(opcode)) {
     throw std::runtime_error("SHARC count-loop body instruction/pipeline not implemented");
   }
-  static_cast<void>(execute(memory, state, opcode, control));
+  static_cast<void>(execute(memory, state, opcode, control, std::nullopt, dag));
   return detail::sharc_count_loop_step(state, opcode, clocked);
 }
 
@@ -332,7 +339,8 @@ SharcStep Sharc::step() {
 SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
                              bool preserve_cache,
                              std::optional<bool> branch_taken,
-                             SharcLoopClock loop_clock) {
+                             SharcLoopClock loop_clock,
+                             const SharcDagAddress *dag) {
   auto opcode = captured;
   bool transaction{};
   bool control_transaction{};
@@ -359,15 +367,15 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     detail::sharc_arithmetic_loop_prepare(next, *opcode);
     unsigned int minimum_cycles = 1;
     if (state_.count_loop && state_.count_loop->body == state_.count_loop->end) {
-      minimum_cycles =
-          execute_loop(memory_, next, *opcode, control_, loop_clock != SharcLoopClock::functional);
+      minimum_cycles = execute_loop(
+          memory_, next, *opcode, control_, loop_clock != SharcLoopClock::functional, dag);
     } else {
       if (detail::sharc_four_loop(next)) {
         minimum_cycles = detail::sharc_four_loop_prepare(next, *opcode);
       } else {
         detail::sharc_long_loop_prepare(next, *opcode);
       }
-      const auto target = execute(memory_, next, *opcode, control_, branch_taken);
+      const auto target = execute(memory_, next, *opcode, control_, branch_taken, dag);
       next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
     }
     // A bound fetch clock already accounted for the actual PM cache request.

@@ -11,6 +11,7 @@ namespace lead_a1 {
 
 class SharcControl;
 class SharcFetch;
+struct SharcDagAddress;
 
 struct SharcKnown32 {
   std::uint32_t value{};
@@ -186,7 +187,8 @@ private:
   [[nodiscard]] SharcStep step_opcode(std::optional<std::uint64_t> captured,
                                       bool preserve_cache = false,
                                       std::optional<bool> branch_taken = std::nullopt,
-                                      SharcLoopClock loop_clock = SharcLoopClock::functional);
+                                      SharcLoopClock loop_clock = SharcLoopClock::functional,
+                                      const SharcDagAddress *dag = nullptr);
   SharcMemory &memory_;
   SharcState state_;
   SharcControl *control_;

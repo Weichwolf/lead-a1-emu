@@ -36,12 +36,16 @@ add_library(lead_a1_sharc STATIC src/sharc_memory.cpp src/sharc_boot.cpp src/sha
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch.cpp src/sharc_fetch_cache.cpp src/sharc_fetch_clock.cpp src/sharc_fetch_flow.cpp src/sharc_fetch_branch.cpp src/sharc_fetch_hazard.cpp src/sharc_fetch_effect.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_loop.cpp src/sharc_fetch_loop_state.cpp src/sharc_fetch_loop_retirement.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_dag.cpp)
+target_sources(lead_a1_sharc PRIVATE src/sharc_dag.cpp src/sharc_fetch_operand.cpp)
 target_include_directories(lead_a1_sharc PUBLIC include)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-operand-test test/sharc_operand_test.cpp)
+  target_link_libraries(lead-a1-sharc-operand-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_captured_dag_addresses COMMAND lead-a1-sharc-operand-test)
   add_executable(lead-a1-sharc-dag-stall-test test/sharc_dag_stall_test.cpp)
   target_link_libraries(lead-a1-sharc-dag-stall-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_dag_load_stalls COMMAND lead-a1-sharc-dag-stall-test)
@@ -375,6 +379,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-quiet-clock-test
       lead-a1-sharc-fetch-loop-test
       lead-a1-sharc-dag-stall-test
+      lead-a1-sharc-operand-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
       lead-a1-memory-test lead-a1-original-arm-test lead-a1-mmu-walk-test
       lead-a1-mmu-cpu-test lead-a1-arm-data-test lead-a1-original-cache-test

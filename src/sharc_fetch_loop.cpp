@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_fetch.hpp"
+#include "sharc_dag_internal.hpp"
 #include "sharc_fetch_internal.hpp"
 #include "sharc_internal.hpp"
 
@@ -18,7 +19,8 @@ constexpr std::uint64_t counter_mask = 0xffff;
 constexpr std::uint64_t full_counter = std::uint64_t{1} << 32;
 
 bool body_supported(std::uint64_t opcode) {
-  return opcode == 0 || (opcode >> class_shift) == 1 || (opcode >> class_shift) == 2;
+  return opcode == 0 || (opcode >> class_shift) == 1 || (opcode >> class_shift) == 2 ||
+         sharc_dag_loop_body(opcode);
 }
 
 void begin(const SharcState &cpu, const SharcFetchFlow &previous, SharcFetchState &next) {

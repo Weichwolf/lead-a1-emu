@@ -141,7 +141,17 @@ ID  State    Evidence / remaining work
              I/B/L/M and primary/secondary-bank cases, actual transfers,
              snapshots, IOP repair and clock ownership have independent oracles
              (sharc-dag-stalls.txt). Full operand capture and mixed short-loop/
-             DAG arbitration remain open.
+             DAG arbitration remain open. Qualified Type3/Type4 Decode now
+             retains resolved DAG bank/index/modifier/address/width and forwards
+             older unconditional post-modifies. Actual RAM execution consumes
+             captured addresses; snapshots retain them across later-unknown DAG
+             state. Width mismatch/repair, real DM RAM loop bodies, pending-pop
+             failures and malformed operands have independent expectations
+             (sharc-dag-operands.txt). Its separate available-bus original
+             composition now checks the first48768 zero stores, preserved
+             kernel and native frame at57065 instructions/57077 grants, PC8c0b9.
+             Same-block arbitration and the next DAG/DO overlap remain open;
+             these grants do not qualify physical CCLK timing.
              Four-instruction loops execute real delayed CALLs, both delay
              slots, nested callees/polling and indexed stores; final steady
              bit25 frames, startup bubbles and rollback have owned tests

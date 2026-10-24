@@ -171,6 +171,69 @@ void sequenced_kernel_prefix(lead_a1::SharcMemory &memory, ObservedClock &clock)
   require(!memory.active());
 }
 
+void sequenced_first_clear(lead_a1::SharcMemory &memory,
+                           lead_a1::Sharc &cpu,
+                           lead_a1::SharcFetch &fetch,
+                           ObservedClock &clock,
+                           std::span<const std::byte> stream) {
+  constexpr std::uint32_t first = 0x92180;
+  constexpr std::uint32_t body = 0x8c0b8;
+  constexpr std::uint32_t next = 0x8c0b9;
+  constexpr unsigned int stores = 0xbe80;
+  constexpr unsigned int instruction_limit = stores + 6;
+  constexpr unsigned int clock_limit = instruction_limit + 1;
+  unsigned int retired{};
+  unsigned int writes{};
+  unsigned int clocks{};
+  unsigned int stalls{};
+  while (cpu.state().pc != next && clocks < clock_limit) {
+    clock.accessed = false;
+    const auto event = fetch.advance_sequenced(cpu);
+    ++clocks;
+    if (event.loop_stall) { ++stalls; }
+    require(event.stalled == event.loop_stall);
+    const auto executing = fetch.state().execute;
+    if (executing) {
+      if (executing->address == body) {
+        const auto address = executing->dag;
+        require(address && address->address == first + writes && address->index == 0 &&
+                address->post && address->width == lead_a1::SharcWidth::normal32);
+        ++writes;
+      }
+      const auto step = cpu.step(fetch);
+      require(step.minimum_core_cycles == 1);
+      ++retired;
+    }
+    require(!clock.accessed);
+    clock.device.advance({.core_cycles = 1});
+  }
+  require(cpu.state().pc == next && retired == instruction_limit && clocks == clock_limit);
+  require(writes == stores && stalls == 1 && !cpu.state().count_loop);
+  constexpr std::uint32_t after = 0x9e000;
+  require(cpu.state().dag[0][0][0].value == after && cpu.state().depth == 1);
+  constexpr std::uint32_t parent = 0x108c008;
+  require(cpu.state().pc_stack[0] == parent && cpu.state().loops_empty == true);
+  for (unsigned int index = 0; index < stores; ++index) {
+    require(memory.read({.address = first + index}) == 0);
+  }
+  constexpr std::uint32_t kernel = 0x92000;
+  constexpr unsigned int words = kernel_bytes / 4;
+  for (unsigned int index = 0; index < words; ++index) {
+    require(memory.read({.address = kernel + index}) == word(stream, std::size_t{index} * 4));
+  }
+  const auto before = cpu.state();
+  const auto transport = fetch.state();
+  bool guarded{};
+  try {
+    static_cast<void>(fetch.advance_sequenced(cpu));
+  } catch (const std::exception &error) {
+    require(std::string(error.what()).find("DAG stall with control/PM instruction") !=
+            std::string::npos);
+    guarded = true;
+  }
+  require(guarded && cpu.state() == before && fetch.state() == transport && !memory.active());
+}
+
 void sequenced_clock_setup(std::span<const std::byte> stream) {
   // This fixture owns fresh RAM and PMCTL: its writes cannot seed the full stream.
   lead_a1::SharcMemory memory;
@@ -179,7 +242,8 @@ void sequenced_clock_setup(std::span<const std::byte> stream) {
   bootstrap(memory, boot, stream);
   ObservedClock clock;
   memory.map_io({.first_word = 0x2000, .words = 1}, clock);
-  lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(reset));
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(reset), &control);
   lead_a1::SharcFetchState transport;
   transport.flow = lead_a1::SharcFetchFlow{.next = reset};
   lead_a1::SharcFetch fetch(memory, transport);
@@ -234,6 +298,7 @@ void sequenced_clock_setup(std::span<const std::byte> stream) {
   require(rates.external ==
           (lead_a1::SharcClockRatio{.numerator = external_numerator, .denominator = 5}));
   require(!memory.active());
+  sequenced_first_clear(memory, cpu, fetch, clock, stream);
 }
 
 struct SerialInput {
@@ -435,6 +500,8 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
                "actual PMCTL read, next PC0x8c092\n"
             << "  Separate sequenced clock setup:8291 instructions/8302 granted fetch clocks; "
                "six actual wait loops, next PC0x8c0b2\n"
+            << "  Same sequenced fixture:57065 instructions/57077 fetch clocks; "
+               "48768 actual zero stores, mixed DAG/DO frontier PC0x8c0b9\n"
             << std::flush;
 }
 

@@ -2,8 +2,8 @@ Single-instruction counter loops in the bound native fetch sequencer
 
 PGRrev2.4 4-59..63, Tables4-17..20, describe the qualified immediate-DO cases:
 counts2/3/4/5 and larger, with encoded zero meaning2^32 iterations. The body is
-one native NOP, supported compute-only instruction or immediate shifter
-instruction. The actual decoder executes every retained body word; there is no
+one native NOP, supported compute-only instruction, immediate shifter
+instruction, or the bounded DM RAM forms in sharc-dag-operands.txt. The actual decoder executes every retained body word; there is no
 host wait, repeated functional-step timing summary or opcode patch. The default
 instruction-only loop helper retains its separate lower bounds.
 
@@ -39,7 +39,7 @@ has retired and all remaining body copies have left the transport. Address
 bounds precede continuation addition, including corrupt32-bit snapshot inputs.
 
 This is a bounded pipeline reference. UREG-count DO, count1, longer bodies,
-RAM/DAG/PM loop bodies, nested/delayed DO, loop-resource operations, combined
+Other RAM/DAG/PM loop bodies, nested/delayed DO, loop-resource operations, combined
 cache/control stalls, MODE1 hazards and interrupt/IDLE redirects stay guarded.
 Count1 Table4-21's F1 row and note4 disagree about the continuation clock; that
 discrepancy is not resolved by the instruction-only helper's aggregate cycle

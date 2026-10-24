@@ -1,0 +1,78 @@
+Captured native DAG addresses and RAM loop operations
+
+PGRrev2.4 Table4-1 (4-5/6),4-111..114,6-10/11,9-13/18 and10-7/8 separate Decode
+address generation, Address bus presentation and Execute effects. PGR7-20/22
+retains the distinct memory-block arbitration requirement. The optional bound
+sequencer now retains a typed SharcDagAddress for qualified unconditional,
+compute-free Type3/Type4 R/S data-register transfers. It records the resolved
+logical index, physical bank, old index, modifier, bus word address, post-update
+value and selected SW16/NW32/extended40 width. Opcode bits are not changed. Raw
+standalone/explicit-address paths keep their existing contract.
+
+A normal advancing clock captures its new Decode input after actual control
+suppression. F2 words have no operand capture. Stalls retain existing operands;
+they do not sample the registers again. Two older in-flight unconditional
+post-modifies forward their resolved index updates in program order, so a later
+Decode sees the newest pointer. The consecutive accesses in PGR6-11 must use
+successive addresses despite overlap in the five-stage pipeline. These are
+transport values; architectural SharcState retains in-order retirement
+bookkeeping, not a claimed physical DAG register-port read view.
+
+The native decoder routes the original instruction plus its captured address to
+actual RAM transfer execution. It does not reread I/M or choose a new DAG bank
+at Execute. A successful post-modify writes its captured physical bank; a
+pre-modify leaves the architectural index alone. Captured addresses remain
+usable when restored current I/M or DAG-bank knowledge is unknown. Data-register
+values and RAM contents still use the ordinary native transfer transaction; this
+is not full data-operand or memory-bus response-latch capture. A RAM edit after
+Decode but before Address remains visible to a load.
+
+Width must still match at retirement; a changed controller profile fails before
+memory/index mutation. Pending/in-flight MODE1 or SYSCTL width changes and
+foreign controller ownership cannot supply guessed Decode inputs. Shape
+validation checks opcode eligibility, index/bank bounds, modular arithmetic,
+immediate modifiers, pre/post relations, memory domains and widths. Pre-modify
+cannot cross address spaces (PGR6-10). Early, absent or unexpected operand
+captures reject. Control, CPU and transport failures retain the relevant
+committed boundary for repair.
+
+The single-instruction counter-loop sequencer also admits these DM transfers.
+Its retained loop word holds only the original opcode, not an operand capture.
+Each newly issued Decode copy generates its own address. The startup-held Decode
+retains its already generated address; the seed copy generates the next one.
+Thus the first opcode copies can be equal while their addresses differ. Every
+store/load and loop instruction executes normally. Real RAM failure during a
+pending native frame pop rolls back the pop, index, memory and Execute use.
+PM/conditional/parallel/other loop bodies remain guarded.
+
+Owned tests independently check literal captured addresses, late-unknown I/M and
+DAG-bank state, retained opcodes, negative/pre addressing, two in-flight
+updates, normal/extended/short widths, changed width rejection/repair and actual
+loop stores for counts2/3/4/5/16. External replacement of a five-pass loop body
+keeps three original opcodes then uses two refetched opcodes, with independently
+expected distinct bus addresses. Paired RAM/controller/CPU/transport snapshots,
+failed memory with pending pre-pop and malformed metadata supplement these
+numerical/phase oracles. No manufacturer/private implementation is a build
+input.
+
+The optional original test extends its fresh sequenced PLL fixture through the
+FIRST unchanged RAM-clear loop. It performs48768 actual NW32 zero stores from
+92180 to9dfff, reaches PC8c0b9 after57065 instructions/57077 granted fetch
+clocks, checks each cleared word, all384 original kernel words, index9e000 and
+parent frame108c008. The owner supplies available-bus grants in this fixture.
+Code and clear data share candidate block0; block/DMA arbitration is not modeled
+by these grants, which are not physical CCLK timing. The next actual clock
+encounters I0 at8c0b9, DO at8c0ba and the RAM body8c0bb: combined
+DAG-load/short-loop startup remains explicitly guarded, with whole CPU/transport
+unchanged. This is not the other three clear loops, complete loader, board
+schedule, application boot or audio. The complete record streams still use
+separate fresh functional CPU/device fixtures and retain8c08e.
+
+Other conditional/parallel/dual forwarding, complete MODE1/width transitions,
+DREG operand/data-bus latency, full DAG readback timing, PM loop arbitration,
+interrupt/reentry/IDLE and physical/global timing remain unfinished. No fixed
+loop summary, host RAM initialization or patched firmware replaces execution.
+Primary provenance remains reference/sharc.json.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^(sharc_captured_dag_addresses|original_sharc_images)$' --output-on-failure

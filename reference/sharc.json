@@ -306,7 +306,7 @@
   },
   "single_loop_fetch_reference": {
     "primary": "PGRrev2.4 4-59..63, Tables4-17..20; count1 Table4-21 continuation row/note discrepancy remains open",
-    "profile": "Immediate single-instruction DO; count2/3/4/5 and larger, encoded0 means2^32; native NOP or supported compute-only/immediate shift body",
+    "profile": "Immediate single-instruction DO; count2/3/4/5 and larger, encoded0 means2^32; native NOP, supported compute-only/immediate shift or bounded DM RAM body with dag_operand_reference",
     "startup": "Address retains actual Decode body; next clock executes native DO; one partial startup stall then a retained seed Decode make up to three initial body executions use original captured data; later words come from real F2",
     "termination": "F1 tests four remaining for total>=4, one for total2/3; actual body issue budget aborts excess Decode copies, giving three tail bubbles only for2/3; fetch bookkeeping does not invent guest CURLCNTR/LCNTR reads",
     "stack": "Native frame pops one clock after terminal F1 test; absent Execute count4 pop commits with whole clock, other cases pop inside real body transaction; preserves parent CALL frame",
@@ -314,7 +314,7 @@
     "owned_evidence": "Literal five-stage Tables4-17..20, actual increments and stack clock oracles, held versus changed RAM data, independent RAM/CPU/transport checkpoint continuation at occupied/empty phases, zero/large count prefixes, failed arithmetic pop and late unknown-F2 quiet-pop repair, malformed shape and CPU mismatch rejection",
     "original_prefix": "All four serially loaded original kernels, each in both existing direct-stream cases, separately execute8291 original instructions in8302 granted fetch clocks through six actual PLL NOP waits16/4096/16/4096/16/16; nextPC8c0b2, frame108c008, PMCTL40012 and ideal ratios18/9/36:5; owns fresh RAM/PMCTL and does not seed full functional streams",
     "clock_inputs": "Stable/settled CLK_CFG0 candidate; count one core-clock lower bound per granted non-PMCTL-access clock including bubbles, one CLKIN only in bypass; no measured MHz, complete IOP bridge/mux/global/physical latency or board schedule",
-    "limits": "UREG/count1/multi-instruction/nested/delayed loops, RAM/DAG/PM body operands, simultaneous stalls, MODE1/control/IRQ/IDLE redirects and original delayed-IDLE finalizer remain guarded/open; complete application boot/audio/hardware unqualified"
+    "limits": "UREG/count1/multi-instruction/nested/delayed loops, other RAM/DAG/PM body operands, simultaneous stalls, MODE1/control/IRQ/IDLE redirects and original delayed-IDLE finalizer remain guarded/open; complete application boot/audio/hardware unqualified"
   },
   "dag_stall_reference": {
     "primary": "PGRrev2.4 4-5/6,4-111..114/Tables4-51..53; conditional post-modify and mixed dependency caution4-117/118 remain separate",
@@ -324,6 +324,19 @@
     "clock": "Hold F1/F2/cursor/suppression; older Decode advances to Address, older Address to Execute, new Decode absent; independent from later Address-condition branch interlock; no timer or guest NOP",
     "atomicity": "Faulting real producer retains X/held consumer; repaired IOP mapping executes unchanged captured instruction; foreign SYSCTL ownership preserves failed quiet clock and external transaction; existing staged CPU/cache/transport commits remain",
     "owned_evidence": "Literal Tables4-51/52; 144 I/B/L/M producer/distance/bank cases, Type4 immediate operands and M exception, actual DAG2 PM transfers with later genuine cache misses, retained changed-RAM words, independent phase continuation, failed IOP and ownership repair, conditional/parallel/LW/dual/control and actual pending-cache guard cases",
-    "limits": "Full Decode operand capture, post-modify/operand forwarding, other explicit or implicit producers, conditional post-modify hazards, simultaneous loop/branch/PM/cache stalls, MODE1 changes and complete global/physical timing remain unqualified; original RAM clear loops through this pipeline, application boot/audio/hardware remain incomplete"
+    "limits": "Full Decode operand capture, complete post-modify/operand forwarding, other explicit or implicit producers, conditional post-modify hazards, simultaneous loop/branch/PM/cache stalls, MODE1 changes and complete global/physical timing remain unqualified; remaining original RAM clear loops through this pipeline, application boot/audio/hardware remain incomplete"
+  },
+  "dag_operand_reference": {
+    "primary": "PGRrev2.4 Table4-1 4-5/6,4-111..114,6-10/11,9-13/18,10-7/8; independent block/DMA arbitration7-20/22 remains open",
+    "capture": "Qualified unconditional compute-free Type3/Type4 R/S RAM transfers retain Decode index/bank/before/modifier/bus-address/post-value/width; original opcode remains unchanged, F2 has no capture, stalls retain old operands",
+    "forwarding": "Two older unconditional in-flight post-modifies forward resolved index updates in program order; logical architectural index writes still retire normally; no claimed physical DAG register-port readback timing",
+    "execution": "Native decoder performs actual RAM transfer using captured address and physical post-update bank without rereading I/M; late-unknown I/M/bank selection does not replace known captured operands; DATA-register/RAM transaction timing remains the bounded native reference",
+    "width": "SW16/NW32/extended40 recorded; retirement requires matching width, changed profile fails before RAM/index mutation; pending/in-flight MODE1/SYSCTL and unqualified conditional/parallel/dual forwarding reject",
+    "loop": "DM single-body RAM loop keeps raw original opcode separately from regenerated Decode addresses; startup-held operand stays stable and seed gets next address; each actual instruction/store/pop executes transactionally",
+    "snapshots": "Required Decode/Address/Execute capture, forbidden early F2/loop-held capture; opcode/index/bank/arithmetic/immediate/pre-post/domain/width validation; pre-modify space crossing rejects; no full board/disk snapshot claim",
+    "owned_evidence": "Literal retained addresses after unknown I/M/bank restoration, pre/negative access, real 3-word forwarding, normal/extended/short stores and stale-width repair, counts2/3/4/5/16 RAM loops, held/refetched loop opcodes with distinct addresses, pending-pop RAM failure/repair, paired RAM/controller/CPU/transport continuation, malformed/early/missing operands and unsafe mode/width/dual/conditional contexts",
+    "original_prefix": "Each of8 existing direct-stream invocations owns a separate fresh sequenced fixture: six PLL waits plus first48768 actual NW32 zero stores92180..9dfff, all384 kernel words preserved, index9e000/frame108c008, PC8c0b9 after57065 instructions/57077 available-bus grants; next original I0/DO/store DAG hazard rejects atomically",
+    "bus_inputs": "Owner explicitly supplies available-bus grants. Original code and first-clear data share candidate block0; these grant counts do not qualify required block/DMA arbitration or physical CCLK timing. No new all4 coupled or global board schedule evidence.",
+    "limits": "Other RAM/PM/conditional/parallel/dual loop paths, DREG/memory response-latch timing, full mode/width transitions, physical DAG readback, loop/DAG/block/cache arbitration and original delayed-IDLE finalizer remain open; complete uploader/boot/audio/hardware not achieved"
   }
 }

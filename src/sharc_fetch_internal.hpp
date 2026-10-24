@@ -28,6 +28,10 @@ void sharc_fetch_flow_guard(const SharcState &cpu, const SharcFetchState &transp
 [[nodiscard]] std::optional<unsigned int> sharc_fetch_destination(std::uint64_t opcode);
 [[nodiscard]] bool
 sharc_fetch_dag_stall(const SharcState &cpu, const SharcFetchState &state, SharcFetchBus bus);
+void sharc_fetch_dag_prepare(const SharcState &cpu,
+                             SharcFetchState &next,
+                             const SharcControl *control);
+void sharc_fetch_dag_validate(const SharcFetchState &state);
 void sharc_fetch_branch_validate(const SharcFetchState &state);
 [[nodiscard]] std::optional<bool> sharc_fetch_branch_retirement(const SharcState &cpu,
                                                                 const SharcFetchWord &word);

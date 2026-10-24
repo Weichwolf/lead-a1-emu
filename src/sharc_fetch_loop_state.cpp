@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_fetch.hpp"
+#include "sharc_dag_internal.hpp"
 #include "sharc_fetch_internal.hpp"
 
 #include <cstdint>
@@ -18,7 +19,8 @@ void loop_word(const SharcFetchWord &word, const SharcFetchState &transport, boo
   const auto loop = transport.flow ? transport.flow->loop : std::nullopt;
   constexpr unsigned int class_shift = 40;
   const auto type = word.opcode >> class_shift;
-  if (word.loop_body && word.opcode != 0 && type != 1 && type != 2) {
+  if (word.loop_body && word.opcode != 0 && type != 1 && type != 2 &&
+      !sharc_dag_loop_body(word.opcode)) {
     throw std::invalid_argument("Invalid SHARC inherited loop body encoding");
   }
   if (word.loop_body &&
@@ -53,7 +55,8 @@ void metadata(const SharcFetchLoop &loop) {
     constexpr unsigned int class_shift = 40;
     const auto type = word.opcode >> class_shift;
     if (word.address != loop.body || word.pm_data || word.branch || word.loop_body ||
-        word.loop_pop || (word.opcode != 0 && type != 1 && type != 2)) {
+        word.loop_pop || word.dag ||
+        (word.opcode != 0 && type != 1 && type != 2 && !sharc_dag_loop_body(word.opcode))) {
       throw std::invalid_argument("Invalid SHARC retained loop Decode word");
     }
   }
