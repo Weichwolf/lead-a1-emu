@@ -1,0 +1,50 @@
+VISA instruction input and remaining processor boundary
+
+PGRrev2.4 4-5/9 selects VISA through short-word program addresses, without
+a mode bit. Instructions have one, two or three short words, aligned at
+bit47 for decoding. Figure4-3 gives a five-short-word IAB and a separate
+48-bit delay register. Instruction words leave the IAB at Decode; unused
+short words remain and later input is concatenated. These are different
+addresses and packing from a normal-word native48 instruction read.
+
+sharc_visa_words determines length from the available prefix using
+PGR10-5..29. Shared compute/move forms need the second short word to
+distinguish the seven-bit no-compute tag. VISA-only compact formats use
+their own fields. Type10 is ISA only: native D/E/F groups are not accepted
+as VISA, whereas C is short compute. Length recognition does not validate
+all operand/reserved fields and never authorizes CPU execution.
+
+SharcVisaBuffer captures three actual executable SW16 cells into delay.
+The owner supplies this F2 event; occupied delay rejects new input. Failed
+reads preserve both buffers. The Decode boundary may consume one complete
+instruction, then concatenate delay only if it fits the five-word IAB.
+Missing/incomplete data is explicit; it cannot become a NOP. Captured data
+is immutable despite later RAM writes. Peek/Decode/restore never reread it.
+Snapshots retain addresses, five cells, count and delay; malformed continuity
+and unused cells reject. Foreign memory transactions survive. Failures carry
+the bound memory PC context, short-word address and operation.
+
+This input component does not yet route the native sequencer into VISA,
+execute compact operations, determine automatic F1/IAB stalls, integrate
+cache/DMA ports or resolve mixed-width branch/loop/IRQ timing. Cross-block
+bursts remain guarded pending separate arbitration qualification. The owner
+supplies grants and context; no physical Nord clock is selected.
+
+Owned checks use44 independent literal format examples, delay/IAB occupancy,
+eight retained16-bit words through backpressure, a48-bit instruction split
+between bursts, a32-bit follower, changed RAM, separate restored owners,
+unknown/permission faults and repair, foreign transactions and malformed/
+cross-block state. These qualify input data and lengths, not CPU semantics.
+
+Under the candidate response in sharc-fetch-memory.txt, the original
+continuation reaches8c005. Its next JUMP targets1c47d1 for part0 streams
+and1c058c for part1 streams. The IAB separately reads the first three48-bit
+VISA entries: two CALLs followed by a self JUMP. Both first calls target1c0528;
+second targets differ per placement (reference/sharc.json). All8 fixtures
+compare those factual fields without changing native CPU/fetch/control state.
+The native transport still fails atomically at the VISA redirect in Address.
+No VISA instruction executes, no loader exit/application startup is qualified,
+and the physical response phase remains open. Original program bytes stay local.
+
+  cmake --build --preset strict --target lead-a1-sharc-visa-test lead-a1-original-sharc-test
+  ctest --preset strict -R '^(sharc_visa_alignment_buffer|original_sharc_deferred_f2)$' --output-on-failure

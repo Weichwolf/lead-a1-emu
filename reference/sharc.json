@@ -505,5 +505,43 @@
     "owned_evidence": "Immediate and early completion execute the old decrement after actual self-write; late completion executes the replacement increment. Separate occupied/retired RAM/core/control/transport restores, failure/repair and ready-word refresh rejection. Relocated backward DO/PCSTK/DB uses different registers/width/data and actual dual self-patch followed by native48 PX PM end/cache miss/native pop",
     "original_profile": "Optional original_sharc_deferred_f2 freshly verifies full bundle/six sections/four kernels, runs all four streams and both supplied cadences, then explicitly completes the pending end read after the first original dual store commits. Default original_sharc_images remains independent and retains its quiet SYSCTL guard. All8 candidate runs execute actual NOP/dual/NOP/PX, restore the saved SPI vector from unchanged PX, pop the native frame and reach8c005 with settled SYSCTL4 and no pending response; ordinary109318-cell oracle per cadence retained. These are results under the selected input, not independent physical response-phase proof",
     "limits": "Candidate owner response order, not independent Nord physical memory timing or automatic bus scheduler. Cached sources, IRQ, branch/counter/flush composition and general arbitration remain guarded. No complete uploader/application boot, normal host MIDI/audio/USB/observed UI/storage/update/recovery/performance or hardware qualification; complete objective unchanged"
+  },
+  "visa_input_reference": {
+    "primary": "PGRrev2.4 4-5/9,Figure4-3 five-word IAB/48-bit delay,10-1/29 size prefixes and no-compute tags;9-40 Type10 is ISA only",
+    "length": "Actual available short-word prefix selects16/32/48 bits. Shared compute/move families require second-word seven-bit tag. Operand/reserved-field and CPU semantics are not qualified by length recognition",
+    "capture": "Explicit owner F2 event reads three actual executable SW16 cells into delay. Decode consumes only a complete instruction, then concatenates delay if it fits the five-word IAB. Captured data is not reread after RAM changes or restore. Failed reads/foreign transactions preserve state",
+    "owned_evidence": "44 literal format examples; independent full IAB/delay occupancy and eight-word drain; split48/next32/short16 encodings; different-RAM restores; failed/unknown/permission input repair, foreign ownership, malformed continuity/count/unused cells and cross-block guards",
+    "original_evidence": "All8 candidate-response fixtures separately read the three actual VISA entries from their original loaded RAM and compare CALL/CALL/self-JUMP length/field/address metadata without native CPU/fetch/controller changes. The subsequent native transport redirect remains atomically guarded in Address at8c005. No VISA instruction executes",
+    "entry_facts": [
+      {
+        "part": 0,
+        "transport": 0,
+        "entry": "0x1c47d1",
+        "first_call": "0x1c0528",
+        "second_call": "0x1c5b8d"
+      },
+      {
+        "part": 0,
+        "transport": 1,
+        "entry": "0x1c47d1",
+        "first_call": "0x1c0528",
+        "second_call": "0x1c5b15"
+      },
+      {
+        "part": 1,
+        "transport": 0,
+        "entry": "0x1c058c",
+        "first_call": "0x1c0528",
+        "second_call": "0x1c0754"
+      },
+      {
+        "part": 1,
+        "transport": 1,
+        "entry": "0x1c058c",
+        "first_call": "0x1c0528",
+        "second_call": "0x1c0620"
+      }
+    ],
+    "limits": "Input component only: no compact CPU execution, native/VISA sequencer connection, automatic F1/IAB backpressure, cache/DMA-port composition, cross-block bursts or mixed-width branch/loop/IRQ timing. Candidate memory-response phase remains unqualified. Complete original boot/application/instrument/host/hardware objective unchanged"
   }
 }

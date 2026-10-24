@@ -110,6 +110,11 @@ ID  State    Evidence / remaining work
              CADIS=1 and owner clock/address grants (sharc-fetch.txt).
              Actual owned SPI/DMA replacements before/after F2, checkpoint
              continuation and actual latched-word CPU retirement have tests.
+             A separate VISA input retains a five-short-word IAB plus a
+             three-word delay. Actual SW16 captures, variable16/32/48 lengths,
+             incomplete-prefix backpressure and independent restores have
+             literal tests (sharc-visa.txt). It does not execute VISA or qualify
+             native/VISA redirects, automatic fetch stalls or IRQs.
              The bound internal cache clock adds conflict lookup, early tag
              reservation, F2 cache/RAM data, Decode fill and early-hit input-bus
              forwarding. Actual owned PM stores, all16 sets/both ways, SPI/DMA
@@ -599,6 +604,13 @@ ID  State    Evidence / remaining work
              (sharc-loop-idle.txt,sharc-arithmetic-cache.txt,
              sharc-fetch-memory.txt).
              TSan preset prepared; no concurrent native code or TSan claim yet.
+             VISA tests add44 literal length formats, split/mixed-width data,
+             full IAB/delay retention, changed RAM, separate-owner restores,
+             unknown/permission faults and repair, malformed continuity and
+             cross-block rejection. All8 candidate original runs separately
+             read their first three VISA entries, preserve native resources,
+             then require the actual native-to-VISA Address guard at8c005.
+             No VISA execution or boot is qualified (sharc-visa.txt).
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.
              The separate original_images ARM integration aggregate is retained.

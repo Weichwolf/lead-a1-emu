@@ -7,6 +7,7 @@
 #include "lead_a1/sharc_fetch.hpp"
 #include "lead_a1/sharc_memory.hpp"
 #include "lead_a1/sharc_spi.hpp"
+#include "lead_a1/sharc_visa.hpp"
 
 #include <array>
 #include <cstddef>
@@ -66,6 +67,8 @@ struct Placement {
   unsigned int bytes;
   unsigned int records;
   unsigned int cells;
+  std::uint32_t visa_entry{};
+  std::uint32_t second_call{};
 };
 
 using CellExpectations = std::map<std::uint32_t, std::uint16_t>;
@@ -76,11 +79,30 @@ void check_cells(lead_a1::SharcMemory &memory, const CellExpectations &expected)
   }
 }
 
-constexpr std::array<std::array<Placement, 2>, 2> placements{
-    {{{{.offset = 0x2c6d78, .bytes = 114112, .records = 608, .cells = 51869},
-       {.offset = 0x2ab0f8, .bytes = 113788, .records = 600, .cells = 51755}}},
-     {{{.offset = 0x71bc8, .bytes = 11476, .records = 26, .cells = 4042},
-       {.offset = 0x701d8, .bytes = 6636, .records = 21, .cells = 1652}}}}};
+constexpr std::array<std::array<Placement, 2>, 2> placements{{{{{.offset = 0x2c6d78,
+                                                                 .bytes = 114112,
+                                                                 .records = 608,
+                                                                 .cells = 51869,
+                                                                 .visa_entry = 0x1c47d1,
+                                                                 .second_call = 0x1c5b8d},
+                                                                {.offset = 0x2ab0f8,
+                                                                 .bytes = 113788,
+                                                                 .records = 600,
+                                                                 .cells = 51755,
+                                                                 .visa_entry = 0x1c47d1,
+                                                                 .second_call = 0x1c5b15}}},
+                                                              {{{.offset = 0x71bc8,
+                                                                 .bytes = 11476,
+                                                                 .records = 26,
+                                                                 .cells = 4042,
+                                                                 .visa_entry = 0x1c058c,
+                                                                 .second_call = 0x1c0754},
+                                                                {.offset = 0x701d8,
+                                                                 .bytes = 6636,
+                                                                 .records = 21,
+                                                                 .cells = 1652,
+                                                                 .visa_entry = 0x1c058c,
+                                                                 .second_call = 0x1c0620}}}}};
 
 class ObservedClock final : public lead_a1::MemoryDevice {
 public:
@@ -346,6 +368,7 @@ struct HeaderDevices {
   lead_a1::SharcControl &control;
   unsigned int interval;
   bool deferred_memory{};
+  Placement placement{};
 };
 
 void check_frontier(const lead_a1::Sharc &cpu,
@@ -490,6 +513,70 @@ void complete_foreground_response(lead_a1::SharcMemory &memory,
           control.snapshot() == controller);
 }
 
+void check_original_visa_frontend(lead_a1::SharcMemory &memory,
+                                  lead_a1::Sharc &cpu,
+                                  const lead_a1::SharcFetch &fetch,
+                                  HeaderDevices devices) {
+  const auto native = cpu.state();
+  const auto transport = fetch.state();
+  const auto controller = devices.control.snapshot();
+  const auto entry = devices.placement.visa_entry;
+  constexpr std::uint32_t jump_pc = self_modify + 1;
+  constexpr std::uint64_t pc_mask = 0xffffff;
+  constexpr unsigned int class_shift = 40;
+  constexpr unsigned int condition_shift = 33;
+  constexpr unsigned int call_shift = 39;
+  constexpr unsigned int unconditional = 31;
+  const auto jump = memory.read({.address = jump_pc, .width = lead_a1::SharcWidth::wide48});
+  require((jump >> class_shift) == 6 && (jump & pc_mask) == entry);
+  lead_a1::SharcVisaBuffer buffer(memory, {.decode = entry, .fetch = entry});
+  constexpr std::uint32_t first_call = 0x1c0528;
+  const std::array<std::uint32_t, 3> targets{first_call, devices.placement.second_call, entry + 6};
+  for (unsigned int index = 0; index < targets.size(); ++index) {
+    buffer.capture();
+    require(!buffer.advance(false));
+    const auto word = buffer.instruction();
+    require(word && word->address == entry + index * 3 && word->words == 3);
+    if (!word) { throw std::logic_error("Missing original VISA prefix"); }
+    require((word->opcode >> class_shift) == 6 &&
+            ((word->opcode >> condition_shift) & unconditional) == unconditional &&
+            ((word->opcode >> call_shift) & 1) == (index < 2 ? 1U : 0U) &&
+            (word->opcode & pc_mask) == targets[index]);
+    require(buffer.advance(true) == word);
+  }
+  require(buffer.state().decode == entry + 9 && !buffer.instruction());
+  require(cpu.state() == native && fetch.state() == transport &&
+          devices.control.snapshot() == controller);
+  std::cout << "  Separate VISA IAB read:3 original 48-bit entries at0x" << std::hex << entry
+            << std::dec << "; no VISA instruction executed\n";
+}
+
+void check_original_visa_boundary(lead_a1::SharcMemory &memory,
+                                  lead_a1::Sharc &cpu,
+                                  lead_a1::SharcFetch &fetch,
+                                  SerialInput &serial,
+                                  HeaderDevices devices) {
+  check_original_visa_frontend(memory, cpu, fetch, devices);
+  for (unsigned int clock = 0; clock < 2; ++clock) {
+    require(fetch.advance_sequenced(cpu).address_accepted && !fetch.state().execute);
+    advance_devices(memory, cpu, serial, devices);
+  }
+  const auto native = cpu.state();
+  const auto transport = fetch.state();
+  const auto controller = devices.control.snapshot();
+  try {
+    static_cast<void>(fetch.advance_sequenced(cpu));
+  } catch (const std::exception &error) {
+    require(std::string(error.what()).find("SHARC fetch requires an internal native address") !=
+            std::string::npos);
+    require(cpu.state() == native && fetch.state() == transport &&
+            devices.control.snapshot() == controller && cpu.state().pc == self_modify + 1);
+    std::cout << "  Original VISA redirect remains guarded in Address at PC0x8c005\n";
+    return;
+  }
+  throw std::runtime_error("Missing original native-to-VISA transport guard");
+}
+
 void sequenced_deferred_foreground(lead_a1::SharcMemory &memory,
                                    lead_a1::Sharc &cpu,
                                    lead_a1::SharcFetch &fetch,
@@ -532,6 +619,7 @@ void sequenced_deferred_foreground(lead_a1::SharcMemory &memory,
   require(controller.control == 4 && controller.effective == 4 && !controller.delayed);
   std::cout << "  Deferred F2 input:4 original foreground instructions, saved SPI vector restored, "
                "PC0x8c005; response phase is not hardware-qualified\n";
+  check_original_visa_boundary(memory, cpu, fetch, serial, devices);
 }
 
 void sequenced_arithmetic_entry(lead_a1::SharcMemory &memory,
@@ -814,6 +902,7 @@ void sequenced_first_header(lead_a1::SharcMemory &memory,
 void sequenced_clock_setup(std::span<const std::byte> stream,
                            unsigned int interval,
                            const CellExpectations &expected,
+                           Placement placement,
                            bool deferred_memory) {
   // This fixture owns fresh RAM and PMCTL: its writes cannot seed the full stream.
   lead_a1::SharcMemory memory;
@@ -890,7 +979,8 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                           .spi = spi,
                           .control = control,
                           .interval = interval,
-                          .deferred_memory = deferred_memory});
+                          .deferred_memory = deferred_memory,
+                          .placement = placement});
   check_cells(memory, expected);
   std::cout << "  Sequenced final payload cells: " << expected.size() << " matched\n";
 }
@@ -1001,7 +1091,7 @@ void run_stream(std::span<const std::byte> stream,
                 unsigned int interval,
                 bool deferred_memory) {
   const auto expected = inventory(stream, placement); // Read-only oracle, never writes guest RAM.
-  sequenced_clock_setup(stream, interval, expected.cells, deferred_memory);
+  sequenced_clock_setup(stream, interval, expected.cells, placement, deferred_memory);
   if (deferred_memory) {
     return;
   } // The existing instruction-only aggregate remains a separate fixture.
