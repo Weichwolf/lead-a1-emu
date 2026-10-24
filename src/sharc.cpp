@@ -188,6 +188,7 @@ execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const Shar
     case 10: return return_branch(state, opcode);
     case 12:
     case 13: detail::sharc_begin_count_loop(state, opcode); return {};
+    case 14: detail::sharc_begin_arithmetic_loop(state, opcode); return {};
     case 15: {
       constexpr std::uint64_t visa_form = 0x8000000000;
       if ((opcode & visa_form) != 0) {
@@ -251,7 +252,7 @@ void execution_guard(const SharcState &state) {
   if (state.depth && *state.depth >= almost_full) {
     throw std::runtime_error("SHARC stack-full interrupt state not implemented");
   }
-  if ((!state.loops_empty || !*state.loops_empty) && !state.count_loop) {
+  if ((!state.loops_empty || !*state.loops_empty) && !state.count_loop && !state.arithmetic_loop) {
     throw std::runtime_error("SHARC active/unknown loop sequencing not implemented");
   }
   detail::sharc_interrupt_guard(state);
@@ -268,6 +269,7 @@ Sharc::Sharc(SharcMemory &memory, SharcState initial, SharcControl *control)
     : memory_(memory), state_(initial), control_(control) {
   validate(state_);
   detail::sharc_validate_count_loop(state_);
+  detail::sharc_validate_arithmetic_loop(state_);
   detail::sharc_stack_status(state_);
 }
 
@@ -311,6 +313,7 @@ SharcStep Sharc::step() {
     opcode = memory_.read({.address = state_.pc, .width = SharcWidth::wide48}, AccessKind::fetch);
     auto next = state_;
     next.pending.fill({});
+    detail::sharc_arithmetic_loop_prepare(next, *opcode);
     unsigned int minimum_cycles = 1;
     if (state_.count_loop && state_.count_loop->body == state_.count_loop->end) {
       minimum_cycles = execute_loop(memory_, next, *opcode, control_);
@@ -324,6 +327,7 @@ SharcStep Sharc::step() {
       next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
     }
     finish_control(state_, next);
+    minimum_cycles += detail::sharc_arithmetic_loop_finish(state_, next);
     memory_.commit_instruction();
     transaction = false;
     if (control_transaction) {

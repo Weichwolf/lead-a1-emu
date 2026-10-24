@@ -103,5 +103,12 @@ void sharc_four_loop_finish(const SharcState &previous, SharcState &next);
 [[nodiscard]] unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode);
 void sharc_long_loop_prepare(SharcState &state, std::uint64_t opcode);
 void sharc_long_loop_finish(const SharcState &previous, SharcState &next);
+void sharc_validate_arithmetic_loop(const SharcState &state);
+void sharc_begin_arithmetic_loop(SharcState &state, std::uint64_t opcode);
+void sharc_arithmetic_loop_prepare(SharcState &state, std::uint64_t opcode);
+[[nodiscard]] unsigned int sharc_arithmetic_loop_finish(const SharcState &previous,
+                                                        SharcState &next);
+void sharc_arithmetic_stack_write(SharcState &state, SharcKnown32 value);
+[[nodiscard]] SharcKnown32 sharc_loop_address(const SharcState &state);
 
 }

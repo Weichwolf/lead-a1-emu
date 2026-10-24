@@ -1,0 +1,55 @@
+Native arithmetic-loop reference and deferred setup
+
+Type13a native DO decodes a24-bit PC-relative end and a5-bit termination
+code, pushes the following address on the PC stack and records the LADDR
+termination/type fields. Only one active loop is supported; nested/delayed
+setup, unknown stack resources and stack-full boundaries fail explicitly.
+The zero type is multiple-instruction arithmetic, not a counter loop.
+
+Straight nonwrapped bodies of at least five native48 instructions execute
+through the ordinary decoder. NOP, qualified compute/shifter, immediate UREG
+and SISD register transfers are supported. Body memory transfers and control
+flow remain guarded because their fetch stalls/reentry are not yet qualified.
+Every actual instruction retires; no host loop summary or fabricated data
+producer replaces the body. FOREVER never terminates from the general TRUE
+condition. Other qualified conditions use the existing PEx AND PEy rule.
+
+PGR4-53/54 Table4-15 places Fetch1 at b+1 while Execute is e-2. The reference
+samples the old condition before e-2 computes or captures UREG operands. If
+true it pops PC/loop resources before those operands, latches termination
+and drains e-2,e-1,e. Later flag changes cannot reverse that decision. The
+last body instruction reports two additional minimum clocks for the flushed
+instructions; these are not retired guest NOPs. This is the qualified
+unstalled straight-path reference, not a complete physical pipeline/cache.
+
+An end behind DO records a deferred setup context.
+The reference executes the setup's existing instructions while outside the
+unqualified end-fetch window. An explicit known PCSTK address write
+updates that loop's start without recalculating LADDR's type. The currently
+qualified address writes require zero CALL/interrupt metadata bits. A jump,
+return or approach within four words of the end fails before pretending to
+execute its short/wrapped/reentered pipeline. This permits the original
+FINAL_INIT resource setup without claiming its self-modifying loop works.
+Forward arithmetic bodies of length1..4 remain unsupported.
+
+LADDR reads expose end | (termination<<24), with known type0 for a live
+qualified arithmetic frame; the popped/empty view is ffffffff. Unknown loop
+state and live counter-loop LADDR remain guarded. PCSTK/PCSTKP preserve
+existing frame and physical popped-entry behavior. CURLCNTR/LCNTR, explicit
+loop-stack manipulation and nested loops have not acquired guessed values.
+Inherited state validates the phase, address span, stack frame/depth, loop
+empty view and exclusive ownership against the counter-loop model.
+
+Owned sharc_arithmetic_loop_test checks the PGR numerical example's R6=4,
+R7=8,R5=0 after six full passes, exactly37 retired instructions/39 minimum
+clocks including DO; e-2 old flags, a parallel read of the popped parent
+frame and flags changed by that same instruction; LADDR/PCSTKP readback;
+FOREVER and SIMD AND; unknown-condition/operand rollback including pending
+MODE1/SYSCTL; active/draining checkpoint continuation; backward setup with
+a new one/two-word apparent body but retained type0; rejected short loops,
+reserved encodings, body memory, deferred branches and malformed restoration.
+
+Primary evidence: PGRrev2.4,4-45/54,4-56/58,9-49/50,10-19/33,A-10/11.
+reference/sharc.json records provenance. Instruction fetch visibility,
+self-modification, interrupt/RTI, cache and IDLE remain separate open work;
+see sharc-finalizer.txt. No physical boot, audio or chip-timing claim.

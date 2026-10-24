@@ -1,0 +1,42 @@
+DSP reconstruction artifact identity
+
+reference/sharc-source-equivalence.json pins the four complete DSP stream and
+uploader-count identities against the unchanged OS1.36 decoded CODE inputs.
+Existing baseline and separate isolated-reproduction outputs in the private
+project were read without running its tools or modifying that worktree. Every
+stream.bin and count.bin matched its original CODE slice byte for byte.
+
+Part Transport Stream bytes Count words Source snapshot files reported
+0    0         114112       28528       66
+0    1         113788       28447       66
+1    0          11476        2869       26
+1    1           6636        1659       22
+
+The four arrays plus16 count bytes cover246028 distinct decoded CODE bytes.
+Their bytes are identical inputs to the deterministic emulator. This does not
+add a separate execution result: the original-stream runtime results retain
+their boundaries in sharc-stream-reference.txt and sharc-four-loops.txt.
+Part/transport numbers and the private diagnostic directory label do not
+identify physical chips, firmware-part roles or user-visible slots.
+
+Each inspected reproduction report's stream digest and stored file-access trace
+digest matched the corresponding artifacts. The report declares no original
+workspace accesses. This is a consistency check of existing artifacts/reports,
+not an independent source-only rebuild or a new audit of its input reads.
+The observed private revision records the workspace at inspection; it is not
+an independently established producer-commit identity. No private source,
+assembler/decoder implementation, stream bytes or manufacturer assets are
+published here. The reconstruction is not a public emulator build dependency.
+
+For optional local reinspection, compare the SHA256 values and lengths in the
+metadata with these existing outputs and the original offsets/counts:
+  sha256sum ../lead-a1-src/build/main-streams/transport-{0,1}/{stream,count}.bin
+  sha256sum ../lead-a1-src/build/diagnostic-streams/transport-{0,1}/{stream,count}.bin
+The corresponding isolated outputs are under build/reproducibility in that
+project. Original enclosing CODE lengths/digests are in reference/sections.json;
+test/original_images.py verifies freshly decoded inputs before execution.
+
+Complete MCU/application source reconstruction, exact stored LZO/container
+identity and the complete firmware source-built/original comparison remain
+open. Artifact identity does not establish final vector restoration, cold boot,
+MIDI/audio, update/recovery, timing or hardware equivalence.

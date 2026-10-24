@@ -27,7 +27,7 @@ namespace {
 constexpr unsigned int kernel_bytes = 1536;
 constexpr unsigned int header_bytes = 12;
 constexpr std::uint32_t reset = 0x8c000;
-constexpr std::uint32_t frontier = 0x8c083;
+constexpr std::uint32_t frontier = 0x8c088;
 constexpr std::uint32_t full32 = 0xffffffff;
 constexpr std::uint32_t saved_vector = 0x8c030;
 constexpr std::uint32_t self_modify = 0x8c004;
@@ -210,8 +210,18 @@ void check_frontier(const lead_a1::Sharc &cpu,
                     SerialInput serial,
                     const Inventory &expected) {
   const auto &state = cpu.state();
-  require(state.pc == frontier && state.depth == 0 && state.loops_empty == true &&
+  require(state.pc == frontier && state.depth == 1 && state.loops_empty == false &&
           !state.count_loop && !state.branch);
+  if (!state.arithmetic_loop) { throw std::runtime_error("Missing original arithmetic DO state"); }
+  const auto &active = *state.arithmetic_loop;
+  constexpr std::uint32_t loop_start = 0x8c003;
+  require(active.body == loop_start && active.end == self_modify && active.termination == 0 &&
+          active.saved_depth == 0 && active.kind == lead_a1::SharcArithmeticKind::multiple &&
+          active.phase == lead_a1::SharcArithmeticPhase::deferred);
+  require(state.pc_stack[0] == loop_start);
+  constexpr std::uint32_t primary_mask = 0x1003;
+  require(state.system[11].value == primary_mask && state.effective[11] == state.system[11]);
+  require(state.system[10].value == 0 && state.effective[10] == state.system[10]);
   const auto saved = (std::uint64_t{word(serial.stream, expected.terminal + 8)} << 32) |
                      (word(serial.stream, expected.terminal + 4) & 0xffff0000);
   constexpr std::uint64_t full64 = 0xffffffffffffffff;
@@ -256,7 +266,7 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
       step = cpu.step();
     } catch (const std::exception &error) {
       const std::string message(error.what());
-      if (message.find("native48 pc=0x8c083") == std::string::npos ||
+      if (message.find("native48 pc=0x8c088") == std::string::npos ||
           message.find("instruction class not implemented") == std::string::npos) {
         throw std::runtime_error("Unexpected original SHARC execution failure: " + message);
       }
@@ -289,7 +299,7 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
   }
   std::cout << expected.records << " records, " << expected.cells.size() << " final payload cells, "
             << instructions << " DSP instructions, " << interval
-            << " instructions/serial edge; arithmetic DO frontier\n"
+            << " instructions/serial edge; cache flush frontier\n"
             << std::flush;
 }
 

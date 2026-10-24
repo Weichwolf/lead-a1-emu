@@ -27,23 +27,26 @@ A separate read-only tag/padding walker builds last-write-wins expectations for
 final physical16-bit cells. The core must write every compared value through
 its instructions and DMA. Tag1 remains the original skip, not a host zero-fill.
 The terminal header supplies an independent PX alias oracle. The following
-1536 vector bytes are excluded from payload acceptance. Failed arithmetic DO
-at native PC8c083 must preserve CPU, SPI, SYSCTL and transaction state.
+1536 vector bytes are excluded from payload acceptance. Unsupported cache flush
+at native PC8c088 must preserve CPU, SPI, SYSCTL and transaction state.
 
 Both cadences pass all four placements with the same payload/PX/control state.
 Counts are actual retired instructions, not measured physical clock cycles:
 
 Part Transport Records Payload cells 2instr/edge 3instr/edge
-0    0         608     51869         3725074     5501716
-0    1         600     51755         3714707     5486162
-1    0          26      4042          440722      575188
-1    1          21      1652          285844      342868
+0    0         608     51869         3725079     5501721
+0    1         600     51755         3714712     5486167
+1    0          26      4042          440727      575193
+1    1          21      1652          285849      342873
 
 Each cadence covers1251 nonterminal records/109318 final-cell comparisons.
 This independently exercises original BSET, SYSCTL width selection, I12 setup
 and the old-value parallel PASS/register move after the previously qualified
-PX read. Arithmetic DO, final vector restoration, IRQ/cache/IDLE/VISA and
-application execution remain open (sharc-finalizer.txt).
+PX read. It also executes arithmetic DO, the explicit PCSTK change and actual
+IRPTL/IMASK/MODE1 setup. The retained loop has start8c003/end8c004/type0,
+depth1 and deferred phase; effective IMASK1003/IRPTL0 match the independent
+expectations. The actual loop body/reentry, final vector restoration,
+IRQ/cache/IDLE/VISA and application remain open (sharc-finalizer.txt).
 
 Reproduce after preparing the pinned local bundle:
   cmake --build --preset strict --target lead-a1-original-sharc-test lead-a1-emu
@@ -55,5 +58,7 @@ uploader, GPIO or TI master. These two cadences and the original composition's
 one-DSP-step-per-ARM-step profile are owned functional schedules, not physical
 wiring, readiness/FLAG timing or CPU-frequency ratios. Passing them does not
 establish a completed outer upload, cold boot, slot allocation or audio.
-The original composition also passes all four placements through the same
-arithmetic-DO boundary; its distinct counts are in sharc-four-loops.txt.
+The original composition also qualifies all four placements through this
+cache-flush boundary, with its distinct instruction counts in
+sharc-four-loops.txt. It retains the same arithmetic-resource, payload and PX
+oracles; the two references do not qualify a completed ARM writer or boot.

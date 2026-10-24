@@ -40,6 +40,9 @@ return frames fail before effects. The stack has 30 physical entries; the
 reference guards before pushing entry 29, where the unimplemented SOVFI event
 would occur. PCSTK reads empty as 0x3ffffff, ignores empty writes and retains
 physical storage after a pop. STKYx PCFL/PCEM are derived from known stack depth.
+Arithmetic DO, qualified straight bodies and deferred PCSTK setup are documented
+in sharc-arithmetic-loops.txt. LADDR exposes the known arithmetic frame or the
+empty ffffffff value; live counter/unknown loop readback remains guarded.
 
 System register read views and effective controls are separate. MODE1, IRPTL
 and IMASK writes have one following internal instruction of effect latency

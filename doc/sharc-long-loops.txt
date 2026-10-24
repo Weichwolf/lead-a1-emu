@@ -37,9 +37,10 @@ Two/three-instruction loops, wrapped bodies, nested DO, body JUMPs/RTS,
 delayed control flow inside long loops and late long-loop CALL/RTS(LR) remain
 guarded. Four-instruction loops have the separate contract above.
 Unsupported body operations use their usual PC/opcode/address diagnostics.
-CURLCNTR, LCNTR, LADDR, FADDR/DADDR, explicit resource manipulation, conditional
-LCE latency, speculative fetch, caches, interrupt entry and complete cycle/bus
-scheduling are not implemented by this functional extension. One minimum cycle
+Live counter-loop LADDR, CURLCNTR, LCNTR, FADDR/DADDR, explicit resource
+manipulation, conditional LCE latency, speculative fetch, caches, interrupt
+entry and complete cycle/bus scheduling are not implemented by this functional
+extension. One minimum cycle
 per ordinary committed instruction is not a complete branch-timing claim.
 PGR4-68/71's fetch-stage counter decrements/freezes must be modeled before
 exposing those pipeline resources or supporting the additional branch cases.

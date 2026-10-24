@@ -56,6 +56,20 @@ struct SharcCountLoop {
   bool operator==(const SharcCountLoop &) const = default;
 };
 
+enum class SharcArithmeticPhase : std::uint8_t { deferred, active, draining };
+enum class SharcArithmeticKind : std::uint8_t { multiple, single };
+
+struct SharcArithmeticLoop {
+  std::uint32_t body{};
+  std::uint32_t end{};
+  unsigned int termination{};
+  unsigned int saved_depth{};
+  // LADDR's type is selected at DO; a PCSTK write does not reclassify it.
+  SharcArithmeticKind kind{SharcArithmeticKind::multiple};
+  SharcArithmeticPhase phase{SharcArithmeticPhase::active};
+  bool operator==(const SharcArithmeticLoop &) const = default;
+};
+
 struct SharcFlagDrive {
   std::uint16_t high{};
   std::uint16_t low{};
@@ -85,6 +99,7 @@ struct SharcState {
   std::optional<bool> loops_empty;
   std::optional<SharcBranch> branch;
   std::optional<SharcCountLoop> count_loop;
+  std::optional<SharcArithmeticLoop> arithmetic_loop;
   bool operator==(const SharcState &) const = default;
 };
 

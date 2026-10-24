@@ -887,14 +887,27 @@ void continuous_stream(Fixture &fixture,
   } catch (const std::exception &error) {
     fixture.cooperative_dsp = nullptr;
     const std::string message(error.what());
-    require(message.find("native48 pc=0x8c083") != std::string::npos);
+    require(message.find("native48 pc=0x8c088") != std::string::npos);
     require(message.find("instruction class not implemented") != std::string::npos);
     stopped = true;
   }
   fixture.cooperative_dsp = nullptr;
-  constexpr std::uint32_t frontier = 0x8c083;
+  constexpr std::uint32_t frontier = 0x8c088;
   require(stopped && cpu.state().pc == frontier && !fixture.dsp_memory.active());
-  require(cpu.state().depth == 0 && !cpu.state().count_loop && cpu.state().loops_empty == true);
+  require(cpu.state().depth == 1 && !cpu.state().count_loop && cpu.state().loops_empty == false);
+  const auto &state = cpu.state();
+  if (!state.arithmetic_loop) { throw std::logic_error("Missing original arithmetic DO"); }
+  const auto &active = *state.arithmetic_loop;
+  constexpr std::uint32_t loop_start = 0x8c003;
+  constexpr std::uint32_t loop_end = 0x8c004;
+  require(active.body == loop_start && active.end == loop_end && active.termination == 0 &&
+          active.saved_depth == 0 && active.kind == lead_a1::SharcArithmeticKind::multiple &&
+          active.phase == lead_a1::SharcArithmeticPhase::deferred);
+  require(cpu.state().pc_stack[0] == loop_start);
+  constexpr std::uint32_t primary_mask = 0x1003;
+  require(cpu.state().system[11].value == primary_mask &&
+          cpu.state().effective[11] == cpu.state().system[11]);
+  require(cpu.state().system[10].value == 0 && cpu.state().effective[10] == cpu.state().system[10]);
   constexpr std::uint32_t saved_instruction = 0x8c030;
   constexpr std::uint64_t template_value = 0xb16b000000;
   require(cpu.state().dag[0][0][8].value == saved_instruction);
@@ -929,7 +942,7 @@ void continuous_stream(Fixture &fixture,
   const auto cells = verify_stream_payload(fixture, input);
   std::cout << "Cooperative original ARM/DSP transfer: " << input.records << " records, " << cells
             << " final payload cells, " << fixture.dsp_steps
-            << " committed DSP instructions; finalizer reaches arithmetic DO\n"
+            << " committed DSP instructions; finalizer reaches cache flush\n"
             << std::flush;
 }
 
@@ -1193,7 +1206,7 @@ void kernel_transfer(std::span<const std::byte> image,
                  .records = records[part][channel]});
     std::cout << "Part " << part << " transport " << channel
               << ": original ARM/SPI first code record stored through native SW reads and indexed "
-                 "writes; cooperative finalizer reaches arithmetic DO\n";
+                 "writes; cooperative finalizer reaches cache flush\n";
   }
 }
 

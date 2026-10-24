@@ -1,0 +1,68 @@
+{
+  "scope": "Four complete embedded DSP arrays and their four little-endian uploader counts, not the complete firmware container or physical execution.",
+  "original_bundle_sha256": "16909837b32768833ceca047a2207f9bf8d9e303037cebc9c95a2cdaed99c9ec",
+  "observed_reconstruction_revision": "488da6af7bcae84a08f949a77ac29f52d51a22f3",
+  "evidence": "Read-only byte comparisons of existing baseline and isolated reproduction artifacts with independently pinned original CODE slices. Report/trace digests also agree. No private tools were executed; source-only provenance and file-access audit remain externally reported, not independently reproduced here. No source or manufacturer program bytes are included.",
+  "artifact_roots": {
+    "baseline": "../lead-a1-src/build",
+    "isolated": "../lead-a1-src/build/reproducibility"
+  },
+  "placements": [
+    {
+      "part": 0,
+      "transport": 0,
+      "code_offset": "0x2c6d78",
+      "stream_bytes": 114112,
+      "uint32_words": 28528,
+      "count_offset": "0x2e2b38",
+      "original_stream_sha256": "06588e4d71b73fda97ad53bd82e28cb8659b690be397d70b0218b173c289aafd",
+      "original_count_sha256": "12399ef6b3657c4900e000f9f180e9cd2496cae406cfb8eae628f77ea60a70c7",
+      "artifact_directory": "main-streams/transport-0",
+      "observed_isolated_report_source_files": 66,
+      "observed_isolated_report_sha256": "020cc534e4fb8e036783e3f599635a0486dff375512f53e33cdca080e1c983ff",
+      "observed_trace_sha256": "adc52c73b39a3c172f983d88f7672413d5f64a6b813ece5533448e9a645b7581"
+    },
+    {
+      "part": 0,
+      "transport": 1,
+      "code_offset": "0x2ab0f8",
+      "stream_bytes": 113788,
+      "uint32_words": 28447,
+      "count_offset": "0x2c6d74",
+      "original_stream_sha256": "5efc0b8ada5be222fa2d80287eae9e51ec4ee4f49afeb939bb314b92fd8591e4",
+      "original_count_sha256": "99e68d2da4dc773bb25efc682dd64f110fcbd129bf063387d647a731c3389bea",
+      "artifact_directory": "main-streams/transport-1",
+      "observed_isolated_report_source_files": 66,
+      "observed_isolated_report_sha256": "49dfc2de46ba6d4ce9adefa0ff59b5e2e6f70649d78ef2f2fb9a9acf45c49b94",
+      "observed_trace_sha256": "873adb91d4431b61633b7e891f46976135b5a98f3c7bf86d0e88671b0b4ff906"
+    },
+    {
+      "part": 1,
+      "transport": 0,
+      "code_offset": "0x71bc8",
+      "stream_bytes": 11476,
+      "uint32_words": 2869,
+      "count_offset": "0x7489c",
+      "original_stream_sha256": "37d6f542a7d06d2823e5c2f7d7b1eed47fd1b6f17a43debc7fea8c5481983d3b",
+      "original_count_sha256": "07aa0d92d0128705924fca29ad1499df0c287cea44c9f1e18fa173a0006c0479",
+      "artifact_directory": "diagnostic-streams/transport-0",
+      "observed_isolated_report_source_files": 26,
+      "observed_isolated_report_sha256": "eb584f6d12a6a4daeecd08c95a87e1ae5e54bb1cd6a2d507e2df8d9abf75982c",
+      "observed_trace_sha256": "9190dee6dd8204b7302e60f43a80cdccc8c3ec341b2d41da76896a6f600a75fc"
+    },
+    {
+      "part": 1,
+      "transport": 1,
+      "code_offset": "0x701d8",
+      "stream_bytes": 6636,
+      "uint32_words": 1659,
+      "count_offset": "0x71bc4",
+      "original_stream_sha256": "ef92eb6a9b0a0ca58e609ae2070f6d014ef806529e022e77f05643cfbcfbfd50",
+      "original_count_sha256": "a2eb07e894a59a31e1505ff6c628a231d3a0e57df6de09e68416fcb5971f65d3",
+      "artifact_directory": "diagnostic-streams/transport-1",
+      "observed_isolated_report_source_files": 22,
+      "observed_isolated_report_sha256": "c3d9aa5f874d8e59b3e3bf6d2ecec173d64df0fdfcff4ab153882e39089403c9",
+      "observed_trace_sha256": "4371f103a8504dde0184418d7af8cf6bd53ffc5116858ac8b09f8880cab27291"
+    }
+  ]
+}

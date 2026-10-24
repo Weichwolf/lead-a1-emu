@@ -38,6 +38,6 @@ Primary evidence: SHARC Programming Reference rev2.4,3-23/30,11-64..67,
 Table12-11,10-11 andA-19/20. Provenance in reference/sharc.json. The original
 kernel's BSET at0x8c07f uses position9. The direct original stream reference
 executes it at all four placements/two serial cadences, then checks the
-SYSCTL and parallel-transfer prefix up to arithmetic DO8c083
+SYSCTL/parallel-transfer and arithmetic-resource prefix up to cache flush8c088
 (sharc-stream-reference.txt). The remaining finalizer, VISA application boot,
 audio and physical timing remain open.

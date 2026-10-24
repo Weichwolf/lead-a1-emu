@@ -1,9 +1,9 @@
 SHARC finalizer evidence and remaining execution boundary
 
-The qualified PX prefix is in sharc-px.txt. The following generic bit-operation
-and parallel-transfer extensions are documented separately; arithmetic DO,
-modified PC-stack loop starts, IRQ/RTI, cache/prefetch and IDLE sequencing still
-need execution qualification. No vector load or application boot is implied.
+The qualified PX/bit/parallel prefix is documented separately. Arithmetic DO
+and deferred PC-stack setup have a bounded reference in sharc-arithmetic-loops.txt.
+Reentered/short/self-modifying loops, IRQ/RTI, cache/prefetch and IDLE sequencing
+still need execution qualification. No vector load or application boot is implied.
 
 Primary-reference provenance is recorded in reference/sharc.json:
 - PGRrev2.4,4-53/54: arithmetic-loop termination tests when the second body

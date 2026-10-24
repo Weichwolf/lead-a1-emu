@@ -41,6 +41,7 @@ constexpr unsigned int sreg_base = 0x70;
 constexpr unsigned int pc_ureg = 0x63;
 constexpr unsigned int stack_ureg = 0x64;
 constexpr unsigned int depth_ureg = 0x65;
+constexpr unsigned int loop_address_ureg = 0x66;
 
 SharcKnown32 merge(SharcKnown32 previous, SharcKnown32 value, std::uint32_t mask) {
   return {.value = (previous.value & ~mask) | (value.value & mask),
@@ -144,6 +145,7 @@ SharcKnown32 sharc_ureg(const SharcState &state, unsigned int ureg) {
     return state.system[index];
   }
   if (ureg == pc_ureg) { return {.value = state.pc, .known = all_bits}; }
+  if (ureg == loop_address_ureg) { return sharc_loop_address(state); }
   if (ureg == depth_ureg) {
     if (!state.depth) { throw std::runtime_error("Unknown SHARC PC stack depth"); }
     return {.value = *state.depth, .known = all_bits};
@@ -172,6 +174,10 @@ void sharc_ureg(SharcState &state, unsigned int ureg, SharcKnown32 value) {
     return;
   }
   if (ureg == stack_ureg) {
+    if (state.arithmetic_loop) {
+      sharc_arithmetic_stack_write(state, value);
+      return;
+    }
     if (state.count_loop) {
       throw std::runtime_error("SHARC PCSTK modification inside a count loop not qualified");
     }

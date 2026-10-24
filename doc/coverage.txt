@@ -67,6 +67,13 @@ ID  State    Evidence / remaining work
              final e-3 pre-pop, PCSTK/PCSTKP reads and failed pre-pop/pending-effect
              rollback have independent tests (sharc-long-loops.txt). Other loop
              forms, counter readback and full pipeline timing remain open.
+             Arithmetic DO and straight>=5-instruction compute/register bodies
+             sample old flags/pre-pop at e-2, preserve latched termination and
+             report two flush lower-bound clocks. FOREVER/SIMD AND, LADDR/stack
+             readback, rollback/checkpoints and the manual numerical example
+             have owned tests (sharc-arithmetic-loops.txt). Deferred backward
+             setup/PCSTK writes preserve type0; short/reentered/body-memory
+             pipelines, branches and full cache/interrupt timing stay guarded.
              Four-instruction loops execute real delayed CALLs, both delay
              slots, nested callees/polling and indexed stores; final steady
              bit25 frames, startup bubbles and rollback have owned tests
@@ -217,12 +224,14 @@ ID  State    Evidence / remaining work
              header dispatch selects part0 tag4/count27 at four-instruction loop
              PC0x8c05a; part1 tag1/count420/580 is skipped by
              real DEC/branch to PC0x8c015 (sharc-ram-moves.txt).
-             A separate one-DSP-step-per-ARM-instruction cooperative reference
+             The one-DSP-step-per-ARM-instruction cooperative reference
              now qualifies all four placements' remaining ordinary records:
              1251 nonterminal records and109318 final payload-cell comparisons.
              Each executes finalizer PX, BSET, SYSCTL width selection and the
-             old-value parallel PASS/move to unsupported arithmetic DO at
-             PC0x8c083; per-placement counts and
+             old-value parallel PASS/move, arithmetic DO, explicit PCSTK change
+             and IRPTL/IMASK/MODE1 setup to unsupported cache flush at
+             PC0x8c088. Deferred type0/start/end/depth and effective interrupt
+             registers match independent oracles; per-placement counts and
              committed-instruction totals are in sharc-four-loops.txt.
              All64 PX bits match the independent original terminal-header
              alias oracle, including low16 zero (sharc-px.txt).
@@ -231,7 +240,9 @@ ID  State    Evidence / remaining work
              unqualified (sharc-four-loops.txt).
              A separate direct SHARC serial reference qualifies all four streams
              at two fixed edge cadences through BSET/SYSCTL and the old-value
-             parallel PASS/move, stopping at arithmetic DO/native PC0x8c083.
+             parallel PASS/move, arithmetic DO/PCSTK/interrupt-register setup,
+             stopping at unsupported cache flush/native PC0x8c088. Type0 and
+             the new start/end/depth, IMASK1003/IRPTL0 have independent oracles.
              Each cadence retains1251 ordinary records/109318 final-cell checks
              and the independent PX oracle (sharc-stream-reference.txt). This
              exercises the original DSP code/DMA without an ARM/physical wiring
@@ -261,6 +272,11 @@ ID  State    Evidence / remaining work
 9   partial  Private reconstruction repo verified; coordination contract and
              bootstrap handoff issue. Source-built ARM0 identity evidence received;
              no reconstructed source copied. Full source-only bundle pending.
+             Four existing reconstructed DSP streams/counts and their isolated
+             reproduction outputs independently match pinned original CODE bytes
+             (reconstruction-equivalence.txt,reference/sharc-source-equivalence.json).
+             Report/trace digests agree; source-only provenance/input auditing
+             remains external, not a newly executed source-only rebuild here.
 10  pending  No hardware comparison, timing measurement or flashing performed.
 
 Quality and UI checks validate only the named bootstrap behavior. Unknown values

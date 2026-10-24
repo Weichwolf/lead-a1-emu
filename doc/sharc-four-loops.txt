@@ -53,8 +53,8 @@ pending controls and memory. A restored checkpoint in a delayed CALL resumes
 both delay slots and the real callee. Body jumps/plain CALL/RTS, calls in the
 last three positions, delayed callee control, branches in delay slots, nested
 DO, two/three-instruction loops and loop-resource writes remain guarded.
-CURLCNTR/LCNTR/LADDR/FADDR/DADDR, speculative fetch, interrupt entry and
-complete physical scheduling are still unimplemented.
+Live counter-loop LADDR, CURLCNTR/LCNTR/FADDR/DADDR, speculative fetch,
+interrupt entry and complete physical scheduling are still unimplemented.
 
 Owned sharc_four_instruction_loops covers straight counts1/2/3/4/27, final
 PCSTK/PCSTKP/STKY operand reads, preserved parent frames and minimum cycles;
@@ -71,6 +71,9 @@ not public build inputs.
 
 Original cooperative stream reference
 
+The arithmetic-resource prefix is qualified in both this coupled reference
+and the separately paced direct DSP reference in sharc-stream-reference.txt.
+
 The optional original SPI reference retains the separately paced bootstrap,
 RAM-clear, first header and complete first tag3-record assertions. It then
 executes one unchanged ARM block-writer call over the remaining original
@@ -86,9 +89,12 @@ compares every such final cell against actual DSP RAM. It does not copy any
 payload into DSP memory. Tag1 remains the original skip, not a host zero fill.
 The terminal header's following1536 vector bytes are excluded. Execution
 retires PX=PM, BSET, SYSCTL width selection, I12 setup and the old-value
-parallel PASS/register transfer, then stops on unsupported arithmetic DO
-at native PC0x8c083 (sharc-px.txt,sharc-bit-operations.txt,
-sharc-register-moves.txt).
+parallel PASS/register transfer, arithmetic DO, the explicit PCSTK change
+and IRPTL/IMASK/MODE1 setup, then stops on unsupported cache flush at native
+PC0x8c088 (sharc-px.txt,sharc-bit-operations.txt,sharc-register-moves.txt,
+sharc-arithmetic-loops.txt). The retained deferred loop has start8c003,
+end8c004,type0 and depth1; effective IMASK1003/IRPTL0 match independent
+expectations. Its reentered/self-modifying body has not executed.
 The ARM writer has not returned at this frontier; in-flight serial state is
 not reported as a completed whole-array transfer.
 
@@ -96,10 +102,10 @@ All four original placements reach that frontier. Record counts include the
 terminal header; payload-cell counts are final last-write-wins comparisons:
 
 Part  Transport  Records  Payload cells  Committed DSP instructions
-0     0          608      51869          6415780
-0     1          600      51755          6397475
-1     0           26       4042           617464
-1     1           21       1652           344005
+0     0          608      51869          6415785
+0     1          600      51755          6397480
+1     0           26       4042           617469
+1     1           21       1652           344010
 
 This covers1251 nonterminal records and109318 final-cell comparisons across
 the placements. Architectural count1 startup stack arbitration above,
