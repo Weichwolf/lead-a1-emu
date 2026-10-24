@@ -29,8 +29,9 @@ Failed clocks preserve CPU/cache/transport and the pending wait.
 
 An intervening guest instruction removes this immediate-producer dependency.
 A branch on retained ALU flags after MUL has no multiplier stall. Ordinary
-ALU/shifter/BTF producers retain one-clock interlocks. Conditional post-modify,
-floating-to-fixed compute stalls, dual-operand MUL forwarding and general
+ALU/shifter/BTF producers retain one-clock interlocks. The separate bounded
+floating-to-fixed transition is in sharc-float-fixed-pipeline.txt.
+Conditional post-modify, dual-operand MUL forwarding and general
 combinations of dependencies remain separate unfinished work.
 
 Typed snapshots preserve the additional hold before and after producer

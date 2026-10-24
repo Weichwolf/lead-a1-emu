@@ -93,6 +93,7 @@ struct SharcFetchEvent {
   bool control_stall{};
   bool loop_stall{};
   bool dag_stall{};
+  bool compute_stall{};
   bool operator==(const SharcFetchEvent &) const = default;
 };
 

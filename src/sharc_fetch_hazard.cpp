@@ -83,6 +83,7 @@ std::uint32_t produced(std::uint64_t opcode) {
 
 SharcFetchInterlock sharc_fetch_interlock(const SharcState &cpu,
                                           const SharcFetchState &previous) try {
+  if (sharc_fetch_fixed_interlock(cpu, previous)) { return SharcFetchInterlock::fixed_compute; }
   const auto branch = previous.decode;
   if (!branch || !sharc_fetch_branch_encoding(branch->opcode)) { return SharcFetchInterlock::none; }
   const auto condition = static_cast<unsigned int>((branch->opcode >> 33) & 31);

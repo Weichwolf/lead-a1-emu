@@ -255,6 +255,14 @@ ID  State    Evidence / remaining work
              JUMP/CALL/RTS, DB slots and gap cases have literal phase/frame/
              result oracles (sharc-multiplier-branches.txt). Full mixed
              dependency/global timing and original audio remain unqualified.
+             Floating MUL followed by a supported fixed ALU/shifter compute
+             now has the required single Decode hold regardless of register
+             identity. Native results, independent PE predicates/banks, actual
+             parallel copies, zero/gap cases and retained/repaired pipeline
+             continuation have literal oracles (sharc-float-fixed-pipeline.txt).
+             Compute and later dependent branch holds remain distinct. Mode,
+             live loop/DB, PM/cache and unknown-format combinations retain
+             their guards; complete global timing/application stays unfinished.
              Runtime SPI RX DMA has a completed-bootstrap handoff, finite
              four-word FIFO plus receive buffer, explicit grouped memory grants,
              signed cursor steps, zero-count65536 semantics and transactional
@@ -420,6 +428,14 @@ ID  State    Evidence / remaining work
              positive-zero/unrelated-condition cases. Captured RAM
              replacement, failed producer/clock repair, unknown flags/stack and
              malformed wait states have independent checks.
+             Float-to-fixed tests add a literal four-column phase oracle and
+             516 finite operation/sign/gap/PE/parallel cases across 23 forms,
+             all 16 source registers, 23 positive-zero products, inactive unknown
+             inputs, distinct banked PE results and false-dependency cases.
+             Actual producer/consumer retry, SYSCTL ownership, cache/mode and
+             RAM-changed live-loop guards preserve their committed boundary.
+             A real Type1 fixed ADD retains old inputs across DM/PM loads and
+             both DAG updates, followed by a distinct later PM cache miss/fill.
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

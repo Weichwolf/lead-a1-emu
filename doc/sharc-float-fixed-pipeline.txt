@@ -1,0 +1,68 @@
+Floating multiply to fixed-input compute interlock
+
+PGRrev2.4,4-118 requires one Decode hold when a floating multiply is immediately
+followed by a compute using any fixed-point register operand. Register identity
+does not matter. This is separate from the two-hold multiplier-flag branch
+rule in sharc-multiplier-branches.txt and the still-guarded dual-input MUL
+forwarding case in sharc-floating-multiply.txt. Primary input classifications
+are in11-1..19,11-59..69 and12-1..3/9..10; manuals stay local. No private
+implementation or original program words are build inputs.
+
+The optional bound sequencer now identifies the implemented fixed ADD/SUB,
+INC/DEC, PASS/logical, COMP/COMPU, LSHIFT/ASHIFT and BSET/BCLR/BTGL/BTST forms.
+It recognizes their compute-only, supported parallel-register/dual-compute
+fields and immediate-shifter encodings. Non-compute instruction payloads do
+not become operations. Floating add/sub and another floating MUL do not use
+fixed input operands; compute-free copies, immediate moves and NOP do not
+create this transition. Unsupported compute input formats reject visibly
+rather than guess their type. FLOAT/conversion and remaining arithmetic are
+not newly implemented by this classification.
+
+On the hold, F1/F2/Decode/cursor/suppression retain their current values; actual
+Address MUL enters Execute and Address becomes absent. Its normal native
+retirement supplies the result/flags. The next advancing clock moves the held
+consumer into Address. Its later Execute performs the actual arithmetic/copy.
+The hold is reported by compute_stall, independently from control_stall. No
+extra guest NOP, second instruction execution or hidden timer is introduced.
+The retained stages themselves preserve this one-clock dependency in snapshots.
+
+Conditional compute uses existing independent PE predicates and effective
+data banks. Classification needs no operand values or ASTAT flags. A predicate
+that disables an element still leaves its inputs unread. Pending/in-flight
+MODE1, live loops/DB control, PM/cache conflicts and other mixed dependencies
+remain guarded. Both failed producer and failed consumer retain the actual
+occupied Execute word for repair. Successful prior instructions remain committed.
+Failed release clocks preserve CPU/cache/transport and controller ownership.
+
+sharc_floating_to_fixed_stalls has a literal four-column five-stage oracle,
+before/after Execute continuations against independently initialized RAM/CPU/
+fetch, and invalid RAM replacement of already captured producer/consumer words.
+Independent literal numerical results cover 23 fixed forms. A 516-case finite
+matrix checks zero/one/two real NOPs, both signs, SISD/SIMD and supported
+parallel old-value register copies. Eight activation/bank cases check all four
+PE predicate combinations with unknown disabled inputs and distinct PE results.
+All 16 source registers include the newly produced MUL value and unrelated
+registers. 23 positive-zero product cases retain the required hold. Floating
+add/sub/MUL, compute-free copies, NOP, immediate payloads and other producer
+classes check absence of false holds.
+
+Actual MUL/DEC/NE-JUMP execution checks one compute hold followed separately by
+the ordinary ALU condition hold. A real Type1 ADD with DM/PM loads retains old
+compute operands and actual loaded values/DAG updates, then an independently
+qualified later PM cache-miss stall and fill. These are successive hazards;
+no simultaneous-stall merging or physical block timing is inferred.
+Unknown producer/consumer input repair,
+foreign SYSCTL release-clock ownership, actual PM cache conflict, wrong bus,
+pending MODE1 and unknown compute-format cases preserve their failure boundary.
+Changing an owned five-pass MUL loop body in RAM to fixed DEC reaches and
+preserves the guarded mixed loop transition after retained/refetched copies.
+The initial phase oracle failed against 5d6bdfa before implementation. No tests
+were weakened; all inputs are fixed finite owned cases, not random/fuzz data.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^(sharc_floating_to_fixed_stalls|sharc_multiplier_branch_stalls|sharc_floating_multiply)$' --output-on-failure
+
+Available-bus grants remain separate from global/physical Nord timing. Full
+mode/data forwarding and combined loop/DAG/cache/control arbitration, remaining
+arithmetic/exception/VISA, original boot/application/audio, hardware comparison
+and real-time host performance remain unfinished.
