@@ -668,74 +668,208 @@ void integer_dispatch(Fixture &fixture, lead_a1::Sharc &cpu) {
   require((cpu.state().system[6].value & (alu_status | shifter_status)) == 8);
 }
 
+void dsp_instructions(Fixture &fixture, lead_a1::Sharc &cpu, unsigned int count) {
+  for (unsigned int index = 0; index < count; ++index) {
+    static_cast<void>(cpu.step());
+    ++fixture.dsp_steps;
+  }
+}
+
+void runtime_words(Fixture &fixture,
+                   lead_a1::Sharc &cpu,
+                   const std::filesystem::path &spec,
+                   HeaderInput input,
+                   std::uint32_t source,
+                   unsigned int words) {
+  if (!fixture.runtime || words == 0 || words > 3) {
+    throw std::logic_error("Missing runtime SPI or invalid short reference transfer");
+  }
+  auto &runtime = fixture.runtime->device;
+  constexpr std::uint32_t receive_buffer = 0x92003;
+  require(runtime.state().serial.remaining == words && runtime.state().occupied == 0 &&
+          runtime.state().serial.next_word == receive_buffer);
+  const auto transmitted = fixture.transmitted.size();
+  const auto grants = fixture.dma_grants.size();
+  constexpr unsigned int call_limit = 20000;
+  static_cast<void>(call(fixture,
+                         spec,
+                         input.routine,
+                         {input.endpoint, fixture.dsp_channel, source, words},
+                         call_limit));
+  require(fixture.transmitted.size() == transmitted + (std::size_t{words} * 2));
+  require(fixture.dma_grants.size() == grants + 1 && fixture.dma_grants.back() == words);
+  for (unsigned int index = 0; index < words; ++index) {
+    const auto expected = fixture.memory.read({.address = source + (index * 4), .size = 4});
+    require(fixture.dsp_memory.read({.address = receive_buffer + index}) == expected);
+    constexpr std::uint64_t halfword = 0xffff;
+    const auto serial_position = transmitted + (std::size_t{index} * 2);
+    require(fixture.transmitted[serial_position] == (expected & halfword));
+    require(fixture.transmitted[serial_position + 1] == (expected >> 16));
+  }
+  require(runtime.state().serial.remaining == 0 && runtime.state().occupied == 0 &&
+          !runtime.state().receive && !runtime.state().overflow);
+  require(runtime.state().interrupt_pending);
+  constexpr std::uint32_t primary_spi = 0x1000;
+  cpu.latch_interrupt(primary_spi); // Explicit owner route; IMASK3 still masks it.
+  runtime.acknowledge_interrupt();
+}
+
 void runtime_code_word(Fixture &fixture,
                        lead_a1::Sharc &cpu,
                        const std::filesystem::path &spec,
                        HeaderInput input) {
-  // Execute the original DO, CALL, receive configuration and busy-poll cycle.
-  constexpr unsigned int prepare = 10;
-  for (unsigned int index = 0; index < prepare; ++index) {
-    static_cast<void>(cpu.step());
-    ++fixture.dsp_steps;
-  }
+  // Original DO, CALL, receive configuration and busy-poll cycle.
+  dsp_instructions(fixture, cpu, 10);
   constexpr std::uint32_t poll = 0x8c038;
   constexpr std::uint32_t body = 0x8c04e;
   constexpr std::uint32_t resume = 0x8c04f;
   constexpr unsigned int polling_steps = 171812;
   require(cpu.state().pc == poll && fixture.dsp_steps == polling_steps);
   const auto loop = cpu.state().count_loop;
-  if (!loop || !fixture.runtime) { throw std::logic_error("Missing loop/runtime SPI fixture"); }
+  if (!loop) { throw std::logic_error("Missing code-record loop"); }
   require(loop->body == body && loop->end == body + 4 && loop->frame_live);
   const auto iterations = cpu.state().data[0][2].value >> 8;
   require(loop->total == iterations && loop->remaining == iterations);
   constexpr std::uint32_t call_frame = 0x108c04f;
   require(cpu.state().depth == 2 && cpu.state().pc_stack[0] == body &&
-          cpu.state().pc_stack[1] == call_frame);
-  auto &runtime = fixture.runtime->device;
-  require(runtime.state().serial.remaining == 1 && runtime.state().occupied == 0);
-  constexpr std::uint32_t receive_buffer = 0x92003;
-  require(runtime.state().serial.next_word == receive_buffer && cpu.state().system[15].value == 1);
-  const auto transmitted = fixture.transmitted.size();
-  constexpr unsigned int call_limit = 20000;
+          cpu.state().pc_stack[1] == call_frame && cpu.state().system[15].value == 1);
   constexpr std::uint32_t header_bytes = 12;
-  static_cast<void>(call(fixture,
-                         spec,
-                         input.routine,
-                         {input.endpoint, fixture.dsp_channel, input.source + header_bytes, 1},
-                         call_limit));
-  require(fixture.transmitted.size() == transmitted + 2);
-  require(fixture.dma_grants.size() == 2 && fixture.dma_grants.back() == 1);
-  const auto expected = static_cast<std::uint32_t>(
-      fixture.memory.read({.address = input.source + header_bytes, .size = 4}));
-  require(fixture.dsp_memory.read({.address = receive_buffer}) == expected);
-  require(runtime.state().serial.remaining == 0 && runtime.state().occupied == 0 &&
-          !runtime.state().receive && !runtime.state().overflow);
-  require(runtime.state().interrupt_pending);
-  constexpr std::uint32_t primary_spi = 0x1000;
-  cpu.latch_interrupt(primary_spi);
-  runtime.acknowledge_interrupt();
-  // Genuine poll/read/RTS. No iteration is consumed by these subroutine steps.
-  for (unsigned int index = 0; index < 5; ++index) {
-    static_cast<void>(cpu.step());
-    ++fixture.dsp_steps;
-  }
+  const auto source = input.source + header_bytes;
+  runtime_words(fixture, cpu, spec, input, source, 1);
+  dsp_instructions(fixture, cpu, 5); // Genuine poll/read/RTS.
   require(cpu.state().pc == resume && fixture.dsp_steps == polling_steps + 5);
   require(cpu.state().depth == 1 && cpu.state().pc_stack[0] == body);
   const auto returned_loop = cpu.state().count_loop;
   require(returned_loop && returned_loop->remaining == iterations &&
           cpu.state().loops_empty == false);
-  require(cpu.state().data[0][8].value == (std::uint64_t{expected} << 8));
+  const auto expected = fixture.memory.read({.address = source, .size = 4});
+  require(cpu.state().data[0][8].value == (expected << 8));
+}
+
+void store_code_word(Fixture &fixture,
+                     lead_a1::Sharc &cpu,
+                     std::uint32_t address,
+                     std::uint64_t expected,
+                     bool last) {
+  constexpr std::uint32_t resume = 0x8c04f;
+  constexpr std::uint64_t halfword = 0xffff;
+  require(cpu.state().pc == resume && cpu.state().dag[0][0][0].value == address);
+  dsp_instructions(fixture, cpu, 1); // Genuine low short-word read; final pre-pop.
+  require(cpu.state().data[0][6].value == ((expected & halfword) << 8));
+  require(cpu.state().depth == (last ? 0U : 1U) && cpu.state().loops_empty == last);
+  dsp_instructions(fixture, cpu, 1); // Genuine high short-word read.
+  require(cpu.state().data[0][7].value == ((expected >> 16) << 8));
+  dsp_instructions(fixture, cpu, 1); // Real post-modified store of R6.
+  require(fixture.dsp_memory.read({.address = address, .width = lead_a1::SharcWidth::short16}) ==
+          (expected & halfword));
+  require(cpu.state().dag[0][0][0].value == address + 1);
+  dsp_instructions(fixture, cpu, 1); // Store R7 and complete this body iteration.
+  require(fixture.dsp_memory.read(
+              {.address = address + 1, .width = lead_a1::SharcWidth::short16}) == (expected >> 16));
+  require(cpu.state().dag[0][0][0].value == address + 2);
+  constexpr std::uint32_t body = 0x8c04e;
+  require(cpu.state().pc == (last ? body + 5 : body));
+}
+
+void later_code_word(Fixture &fixture,
+                     lead_a1::Sharc &cpu,
+                     const std::filesystem::path &spec,
+                     HeaderInput input,
+                     std::uint32_t source) {
+  const auto before_loop = cpu.state().count_loop;
+  if (!before_loop) { throw std::logic_error("Missing loop before receive CALL"); }
+  dsp_instructions(fixture, cpu, 9); // CALL, receive setup and busy poll.
+  constexpr std::uint32_t poll = 0x8c038;
+  const auto loop = cpu.state().count_loop;
+  require(cpu.state().pc == poll && loop && loop->remaining == before_loop->remaining &&
+          loop->frame_live);
+  require(cpu.state().depth == 2 && cpu.state().loops_empty == false);
+  runtime_words(fixture, cpu, spec, input, source, 1);
+  dsp_instructions(fixture, cpu, 5);
+  constexpr std::uint32_t resume = 0x8c04f;
+  require(cpu.state().pc == resume && cpu.state().depth == 1);
+}
+
+void next_record(Fixture &fixture,
+                 lead_a1::Sharc &cpu,
+                 const std::filesystem::path &spec,
+                 HeaderInput input,
+                 std::uint32_t source,
+                 bool main_bundle) {
+  dsp_instructions(fixture, cpu, 2); // Even-count test and return to header loop.
+  constexpr std::uint32_t header_loop = 0x8c015;
+  require(cpu.state().pc == header_loop && cpu.state().depth == 0);
+  dsp_instructions(fixture, cpu, 10); // Original three-word receive setup/poll.
+  constexpr std::uint32_t poll = 0x8c038;
+  require(cpu.state().pc == poll);
+  runtime_words(fixture, cpu, spec, input, source, 3);
+  dsp_instructions(fixture, cpu, 10); // Poll/read/RTS and native header reads.
+  constexpr std::uint32_t dispatch = 0x8c01b;
+  require(cpu.state().pc == dispatch && cpu.state().depth == 0);
+  const auto tag = cpu.state().data[0][0].value >> 8;
+  const auto count = cpu.state().data[0][2].value >> 8;
+  constexpr std::uint64_t table_address = 0x92180;
+  require(cpu.state().data[0][3].value == (table_address << 8));
+  if (!main_bundle) {
+    constexpr unsigned int count0 = 420;
+    constexpr unsigned int count1 = 580;
+    require(tag == 1 && count == (fixture.dsp_channel == 0 ? count0 : count1));
+    dsp_instructions(fixture, cpu, 2); // Original tag1 skips this declaration.
+    require(cpu.state().pc == header_loop && !cpu.state().count_loop);
+    return;
+  }
+  constexpr unsigned int table_words = 27;
+  require(tag == 4 && count == table_words);
+  dsp_instructions(fixture, cpu, 9); // Select tag4 and copy R3 into I0.
+  constexpr std::uint32_t setup = 0x8c05a;
+  require(cpu.state().pc == setup && cpu.state().dag[0][0][0].value == table_address);
   const auto before = cpu.state();
   bool stopped{};
   try {
     static_cast<void>(cpu.step());
   } catch (const std::exception &error) {
     const std::string message(error.what());
-    require(message.find("native48 pc=0x8c04f") != std::string::npos);
-    require(message.find("word-address=0x124006") != std::string::npos);
+    require(message.find("native48 pc=0x8c05a") != std::string::npos);
+    require(message.find("two-to-four-instruction count loops") != std::string::npos);
     stopped = true;
   }
   require(stopped && cpu.state() == before && !fixture.dsp_memory.active());
+}
+
+void runtime_code_record(Fixture &fixture,
+                         lead_a1::Sharc &cpu,
+                         const std::filesystem::path &spec,
+                         HeaderInput input) {
+  const auto count = cpu.state().system[1].value;
+  const auto iterations = count / 2;
+  const auto destination = cpu.state().dag[0][0][0].value;
+  constexpr unsigned int main_count = 274;
+  constexpr unsigned int alternate_count = 268;
+  require(count == main_count || count == alternate_count);
+  constexpr std::uint32_t header_bytes = 12;
+  const auto payload = input.source + header_bytes;
+  runtime_code_word(fixture, cpu, spec, input); // Retain the171817 first-word oracle.
+  for (unsigned int word = 0; word < iterations; ++word) {
+    const auto source = payload + (word * 4);
+    if (word != 0) { later_code_word(fixture, cpu, spec, input, source); }
+    const auto expected = fixture.memory.read({.address = source, .size = 4});
+    store_code_word(fixture, cpu, destination + (word * 2), expected, word + 1 == iterations);
+  }
+  constexpr unsigned int prefix = 171803;
+  constexpr unsigned int instructions_per_word = 18;
+  require(fixture.dsp_steps == prefix + (instructions_per_word * iterations));
+  require(!cpu.state().count_loop && cpu.state().loops_empty == true && cpu.state().depth == 0);
+  require(cpu.state().system[1].value == count);
+  for (unsigned int index = 0; index < count; ++index) {
+    const auto expected = fixture.memory.read({.address = payload + (index * 2), .size = 2});
+    require(fixture.dsp_memory.read({.address = destination + index,
+                                     .width = lead_a1::SharcWidth::short16}) == expected);
+  }
+  for (const auto address : {destination - 1, destination + count}) {
+    require(fixture.dsp_memory.read({.address = address, .width = lead_a1::SharcWidth::short16}) ==
+            0);
+  }
+  next_record(fixture, cpu, spec, input, payload + (count * 2), count == main_count);
 }
 
 void runtime_header(Fixture &fixture,
@@ -809,7 +943,7 @@ void runtime_header(Fixture &fixture,
   require(cpu.state().effective[11].value == 3 && events.size() == 5);
   require(!events[4].write && events[4].value == 7 && events[4].offset == 16);
   integer_dispatch(fixture, cpu);
-  runtime_code_word(fixture, cpu, spec, input);
+  runtime_code_record(fixture, cpu, spec, input);
 }
 
 void clock_setup(Fixture &fixture, const std::filesystem::path &spec, HeaderInput input) {
@@ -918,9 +1052,8 @@ void kernel_transfer(std::span<const std::byte> image,
                  .endpoint = endpoint,
                  .source = code + offsets[part][channel] + kernel_bytes});
     std::cout << "Part " << part << " transport " << channel
-              << ": original ARM/SPI kernel+header+code-word loading and 171817 SHARC instructions "
-                 "through count-loop setup, receive CALL and RTS; short-word read remains "
-                 "unsupported\n";
+              << ": original ARM/SPI first code record stored through native SW reads and indexed "
+                 "writes; next header dispatch reached\n";
   }
 }
 

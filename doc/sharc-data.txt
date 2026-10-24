@@ -23,7 +23,7 @@ transfers, PX and additional register/compute instruction forms remain guarded
 
 SYSCTL
 SharcControl maps device offset0/read-write32 to word0x30024. The owning core
-binds the same device explicitly; missing binding prevents RAM data-width
+binds the same device explicitly; missing binding prevents NW RAM data-width
 selection. The decoder queries effective control directly without an extra
 guest IOP read. The device must outlive its Memory and core bindings.
 
@@ -48,7 +48,8 @@ I0..7/I8..15 respectively. Post-modify accesses old Ix then updates it modulo
 2^32; pre-modify addresses the sum and leaves Ix unchanged. False conditions
 require no index/data/memory value. SIMD is rejected before evaluating a PEx
 condition because data moves have per-element conditions, not branch AND rules.
-Circular, reversed, broadcast, SW/LW/external/IOP indexed accesses and parallel
+SW16 direct/indexed transfers and Type3a register modifiers are documented in
+sharc-ram-moves.txt. Circular, reversed, broadcast, LW/external/IOP indexed accesses and parallel
 computations remain explicit unsupported forms.
 
 IMDW selects NW32 or extended40 independently for each bank. NW32 stores need

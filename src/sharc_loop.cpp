@@ -95,9 +95,12 @@ void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode) {
 bool sharc_loop_body_supported(std::uint64_t opcode) {
   constexpr std::uint64_t indexed_mask = 0xf00000000000;
   constexpr std::uint64_t indexed_move = 0x600000000000;
+  constexpr std::uint64_t register_indexed_mask = 0xe00000000000;
+  constexpr std::uint64_t register_indexed = 0x400000000000;
   constexpr unsigned int class_shift = 40;
   return opcode == 0 || (opcode >> class_shift) == 1 || (opcode >> class_shift) == 2 ||
-         (opcode & indexed_mask) == indexed_move;
+         (opcode & indexed_mask) == indexed_move ||
+         (opcode & register_indexed_mask) == register_indexed;
 }
 
 unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode) {

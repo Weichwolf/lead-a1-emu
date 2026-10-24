@@ -108,8 +108,10 @@ Native integer arithmetic and UREG transfers extend this to PC0x8c04c after
 171801 instructions (sharc-arithmetic.txt). Immediate LSHIFT extends this to
 PC0x8c04d after171802 (sharc-shifts.txt). Native long count loops with ordinary
 CALLs then reach171817/PC0x8c04f after genuine serial receipt of the first
-code-record word and RTS. The next SW16 read remains guarded
-(sharc-long-loops.txt).
+code-record word and RTS (sharc-long-loops.txt). Short-word and Type3a indexed
+moves then store the complete first code record in137/134 actual iterations,
+reaching174269/174215 instructions at PC0x8c053. The next header dispatch is
+qualified separately in sharc-ram-moves.txt; four-instruction loops remain guarded.
 The unconfigured-clock prefix above remains separate.
 Other loop forms, counter-register
 readback, other bodies and full pipeline/board timing remain pending.

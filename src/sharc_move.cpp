@@ -18,7 +18,19 @@ constexpr std::uint64_t update_bit = std::uint64_t{1} << 38;
 constexpr std::uint64_t program_bit = std::uint64_t{1} << 40;
 constexpr std::uint64_t low_byte = 0xff;
 
-void addressing_guard(const SharcState &state, unsigned int index) {
+std::uint32_t modified(SharcAccess access, std::uint64_t opcode) {
+  constexpr unsigned int modifier_shift = 27;
+  constexpr std::uint32_t sign = 32;
+  constexpr std::uint32_t mask = 63;
+  const auto immediate = static_cast<std::uint32_t>((opcode >> modifier_shift) & mask);
+  const auto displacement =
+      immediate < sign ? std::uint64_t{immediate} : (std::uint64_t{1} << 32) - (64 - immediate);
+  return static_cast<std::uint32_t>(std::uint64_t{access.address} + displacement);
+}
+
+}
+
+void sharc_addressing_guard(const SharcState &state, unsigned int index) {
   const auto mode = state.effective[sharc_mode1];
   unsigned int reversed{};
   if (index == 0) { reversed = 2; }
@@ -32,26 +44,23 @@ void addressing_guard(const SharcState &state, unsigned int index) {
   }
 }
 
-std::uint32_t modified(SharcAccess access, std::uint64_t opcode) {
-  constexpr unsigned int modifier_shift = 27;
-  constexpr std::uint32_t sign = 32;
-  constexpr std::uint32_t mask = 63;
-  const auto immediate = static_cast<std::uint32_t>((opcode >> modifier_shift) & mask);
-  const auto displacement =
-      immediate < sign ? std::uint64_t{immediate} : (std::uint64_t{1} << 32) - (64 - immediate);
-  return static_cast<std::uint32_t>(std::uint64_t{access.address} + displacement);
-}
-
+bool sharc_data_move_condition(const SharcState &state, std::uint64_t opcode) {
+  const auto mode = state.effective[sharc_mode1];
+  if ((mode.known & sharc_simd) == 0 || (mode.value & sharc_simd) != 0) {
+    throw std::runtime_error("SHARC SIMD data addressing not implemented");
+  }
+  constexpr std::uint64_t compute_mask = 0x7fffff;
+  if ((opcode & compute_mask) != 0) {
+    throw std::runtime_error("SHARC parallel compute/data move not implemented");
+  }
+  const auto condition = static_cast<unsigned int>((opcode >> 33) & 31);
+  return sharc_condition(state, condition);
 }
 
 void sharc_ram_transfer(SharcMemory &memory,
                         SharcState &state,
                         SharcDataTransfer transfer,
                         const SharcControl *control) try {
-  if (control == nullptr) {
-    throw std::runtime_error("SHARC RAM data-width access requires a bound SYSCTL reference");
-  }
-  const auto width = control->data_width(transfer.access.address);
   constexpr unsigned int complement_begin = 0x50;
   constexpr unsigned int complement_end = 0x60;
   const auto reg = transfer.ureg;
@@ -59,6 +68,17 @@ void sharc_ram_transfer(SharcMemory &memory,
     throw std::runtime_error("SHARC RAM non-data UREG transfer not implemented");
   }
   auto &data = sharc_data_register(state, reg);
+  constexpr std::uint32_t short_begin = 0x100000;
+  constexpr std::uint32_t short_end = 0x200000;
+  if (transfer.access.address >= short_begin && transfer.access.address < short_end) {
+    sharc_short_transfer(
+        memory, data, state.effective[sharc_mode1], transfer.access, transfer.write);
+    return;
+  }
+  if (control == nullptr) {
+    throw std::runtime_error("SHARC RAM data-width access requires a bound SYSCTL reference");
+  }
+  const auto width = control->data_width(transfer.access.address);
   if (transfer.write) {
     const auto required =
         width == SharcWidth::normal32 ? sharc_data_mask & ~low_byte : sharc_data_mask;
@@ -86,19 +106,10 @@ void sharc_data_move(SharcMemory &memory,
                      const SharcControl *control) try {
   // SIMD data moves evaluate conditions per element, unlike branch AND rules.
   // Reject that mode before a false PEx condition could hide a PEy access.
-  const auto mode = state.effective[sharc_mode1];
-  if ((mode.known & sharc_simd) == 0 || (mode.value & sharc_simd) != 0) {
-    throw std::runtime_error("SHARC SIMD data addressing not implemented");
-  }
-  constexpr std::uint64_t compute_mask = 0x7fffff;
-  if ((opcode & compute_mask) != 0) {
-    throw std::runtime_error("SHARC parallel compute/data move not implemented");
-  }
-  const auto condition = static_cast<unsigned int>((opcode >> 33) & 31);
-  if (!sharc_condition(state, condition)) { return; }
+  if (!sharc_data_move_condition(state, opcode)) { return; }
   const auto index =
       static_cast<unsigned int>((opcode >> 41) & 7) + ((opcode & program_bit) != 0 ? 8U : 0U);
-  addressing_guard(state, index);
+  sharc_addressing_guard(state, index);
   const auto current = sharc_value(sharc_register_read(state, 16 + index));
   const auto next = modified({.address = current}, opcode);
   const auto address = (opcode & update_bit) != 0 ? current : next;

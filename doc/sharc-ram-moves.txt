@@ -1,0 +1,80 @@
+SHARC short-word and register-indexed RAM moves
+
+Native Type14a direct and Type4a immediate-index RAM transfers now support
+SW16 in addition to the existing NW32/extended40 data-register views. Native
+Type3a compute-free, SISD register-indexed transfers use the same packing.
+These are independently implemented processor operations, not loader hooks.
+Unsupported instructions/operands retain PC/opcode/operation/address diagnostics.
+
+Short words
+SW addresses0x100000..0x1fffff select the existing shared16-bit physical cells.
+Loads place the selected16 bits into DREG23:8, establish low8 zero and fill
+39:24 with zero or the sign bit according to effective MODE1.SSE (bit14).
+A positive value has the same upper bits for either SSE state. For a negative
+value and unknown SSE, only the affected upper16 bits stay unknown. No guessed
+extension/default or host signed shift is used. Explicit Rx/Sx and their
+primary/secondary low/high banks use the existing register-selection rules.
+SISD does not implicitly access the other processing element.
+
+Stores require only DREG23:8 to be known; upper16 and low8 are unused. One
+physical short cell changes, preserving adjacent NW32/48 aliases. Loads/stores
+preserve arithmetic flags. SW does not consult IMDW and needs no SYSCTL binding.
+MODE1 writes retain the existing one-following-instruction effect delay.
+
+Register indexing
+Type3a prefix47:45=010; U44; I43:41; M40:38; COND37:33; G32; D31; L30;
+UREG29:23; COMPUTE22:0. G selects DAG1/2 for both I/M selectors. Index and
+modifier values are captured independently from their effective register banks.
+U=1 accesses old I then updates I to I+M modulo2^32. U=0 accesses I+M and leaves
+I unchanged. Full32-bit modifiers, including negative/extreme values, are used
+without host overflow. A false SISD condition reads no addressing/data operands.
+An instruction using a UREG from its own addressing DAG is prohibited by9-13.
+
+The current RAM operand implementation accepts Rx/Sx data registers only.
+Other UREGs, PX, forcedLW, indexed IOP/external accesses, parallel compute,
+circular/reversed/broadcast/SIMD addressing remain explicit unsupported cases.
+These restrictions must be removed with qualified semantics as runtime needs
+them; they are not successful peripheral or arithmetic substitutes.
+
+All transfers and post-updates join the core memory/control transaction.
+Unknown required bits, failed accesses and read-only columns preserve CPU,
+index, loop, pending controls and memory. Single-instruction loops admit Type3a
+and execute every real transfer, with existing short-loop drain/pre-pop rules.
+Long loops execute these moves through the common decoder as usual.
+
+Primary evidence: ADI Programming Reference rev2.4,3-37,6-3..8,7-28..30
+(Figure7-10),9-12..18,10-4/7/8,A-2/4. Actual10-7 and7-30 diagrams were
+inspected independently; provenance is in reference/sharc.json. Manuals,
+original bytes and private reconstruction implementations are not public inputs.
+
+Owned sharc_short_and_indexed_moves checks eight literal extension/knowledge
+cases, all65536 input values under both SSE states, minimal known-bit stores,
+NW aliases, delayed SSE/bank effects, direct PM/Sx and Type3 PM/Sx, all16 I
+selectors/eight same-DAG M selectors/pre/post/load/store over three widths
+(1536 cases), mixed index/modifier banks, full32 modifiers and address wrap,
+false predicates, unknown operands, a read-only second physical column,
+guarded forms and an actual three-iteration single-instruction store loop.
+The finite enumerations are deterministic tests, not random fuzzing.
+
+Original paced composition
+All four kernel placements retain the171817/PC0x8c04f first-word oracle,
+then execute actual short-word reads and post-modified stores. Genuine ARM
+block-writer calls transmit every subsequent original word over TI serial
+edges. Each one-word RX grant and native receive CALL/RTS executes normally.
+137/134 iterations store all274/268 short words of the first tag3 record at
+SW0x1c0300, with exact payload/guard comparisons, final pre-pop and I0 advance.
+The complete record ends at174269/174215 committed instructions, PC0x8c053.
+
+The next original header is also serially received and dispatched. Bundle-part0
+selects tag4,count27,destinationNW0x92180 and stops unchanged at PC0x8c05a:
+the four-instruction count loop is still unsupported. Bundle-part1 receives
+tag1,count420/580,destination0x92180 and executes the actual two-instruction
+skip back to PC0x8c015. Those bundle/transport facts identify no physical
+DSP, slot, product variant or audio responsibility.
+
+This fixture deliberately calls the original ARM block writer once per code
+word, including select/release, and pauses DSP execution during those calls.
+It grants DMA between edges/instructions. This is not the complete original
+uploader with continuous transfers, physical FLAG/pad/clock timing, complete
+stream/application boot or original audio. No host payload copy or ready/status
+substitute is used. Remaining acceptance requirements stay in coverage.txt.

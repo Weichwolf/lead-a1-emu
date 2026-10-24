@@ -171,6 +171,12 @@ void direct_move(SharcMemory &memory,
 
 std::optional<std::uint32_t>
 execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const SharcControl *control) {
+  constexpr std::uint64_t register_indexed_mask = 0xe00000000000;
+  constexpr std::uint64_t register_indexed = 0x400000000000;
+  if ((opcode & register_indexed_mask) == register_indexed) {
+    detail::sharc_indexed_move(memory, state, opcode, control);
+    return {};
+  }
   constexpr std::uint64_t register_class_mask = 0xf00000000000;
   constexpr std::uint64_t register_class = 0x700000000000;
   if ((opcode & register_class_mask) == register_class) {
@@ -227,18 +233,10 @@ unsigned int execute_loop(SharcMemory &memory,
                           SharcState &state,
                           std::uint64_t opcode,
                           const SharcControl *control) {
-  if (opcode != 0) {
-    if (!detail::sharc_loop_body_supported(opcode)) {
-      throw std::runtime_error("SHARC count-loop body instruction/pipeline not implemented");
-    }
-    if ((opcode >> class_shift) == 1) {
-      detail::sharc_compute(state, opcode);
-    } else if ((opcode >> class_shift) == 2) {
-      detail::sharc_shift(state, opcode, true);
-    } else {
-      detail::sharc_data_move(memory, state, opcode, control);
-    }
+  if (!detail::sharc_loop_body_supported(opcode)) {
+    throw std::runtime_error("SHARC count-loop body instruction/pipeline not implemented");
   }
+  static_cast<void>(execute(memory, state, opcode, control));
   return detail::sharc_count_loop_step(state, opcode);
 }
 

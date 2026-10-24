@@ -74,6 +74,12 @@ ID  State    Evidence / remaining work
              owned literal tests. Short counter loops execute every load/store;
              failed accesses preserve index/count/columns/control effects
              (sharc-data.txt). Direct Rx/Sx NW32/40 RAM moves share that packing.
+             SW16 loads/stores use DREG23:8 and delayed SSE extension, preserving
+             unknown upper bits when required. Type3a register-indexed SISD moves
+             support full32 modifiers/pre/post, mixed effective banks and single
+             loops. All65536 short values in both SSE states,1536 addressing/
+             width cases, aliases, wrap and rollback have independent tests
+             (sharc-ram-moves.txt). Other RAM UREGs/PX remain guarded.
              Compute-only fixed PASS/AND/OR/XOR/NOT have known-bit SISD/SIMD
              reference tests, per-element conditions/banks, immediate ALU flags
              and one-instruction loop support. AC/AV tests use A-6's actual bits,
@@ -180,8 +186,14 @@ ID  State    Evidence / remaining work
              PC0x8c04d after171802 instructions (sharc-shifts.txt). The original
              DO/CALL receive path and next genuine ARM one-word SPI/DMA transfer
              reach171817/PC0x8c04f after polling/read/RTS, preserving137/134 loop
-             iterations and the separate loop/CALL frames. The next SW16 read
-             fails unchanged (sharc-long-loops.txt). This paced composition supplies no
+             iterations and the separate loop/CALL frames (sharc-long-loops.txt).
+             Real short-word reads/Type3a stores then write all274/268 short words
+             at0x1c0300, with exact original payload/guard checks and final pre-pop.
+             PC0x8c053 is reached after174269/174215 instructions. Next actual
+             header dispatch selects part0 tag4/count27, stopping unchanged on
+             four-instruction loop PC0x8c05a; part1 tag1/count420/580 is skipped by
+             real DEC/branch to PC0x8c015 (sharc-ram-moves.txt).
+             This paced composition supplies no
              physical ready wiring or full-uploader schedule (sharc-spi.txt).
              This does not qualify physical MHz, bridge/mux timing or board reset; general
              loader/application boot and audio remain open (sharc-clock.txt).

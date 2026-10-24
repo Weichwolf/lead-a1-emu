@@ -88,8 +88,9 @@ transfers then continue the composition through171801 instructions
 to PC0x8c04c (sharc-arithmetic.txt). Native immediate LSHIFT then reaches
 171802/PC0x8c04d (sharc-shifts.txt). The long count loop and actual next one-word
 ARM transfer then reach171817/PC0x8c04f after genuine polling/read/RTS, with
-the loop count unchanged by its callee. Short-word read remains guarded
-(sharc-long-loops.txt). Earlier preservation
+the loop count unchanged by its callee (sharc-long-loops.txt). Actual short-word
+and Type3a stores then complete the first code record and receive/dispatch
+the next header (sharc-ram-moves.txt). Earlier preservation
 oracle precedes the genuine runtime writes at0x92003..5, which legitimately
 alias old NOP instruction storage.
 
