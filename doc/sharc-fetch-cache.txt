@@ -68,8 +68,13 @@ checks actual captured data and a qualified native prefix, not an invented
 architectural loop or duplicate instruction retirement. Unknown-state and
 wrong-request/ownership/bubble boundaries have explicit rejection tests.
 
+The separate arithmetic composition is in sharc-arithmetic-cache.txt. It
+qualifies real PM operations and partial holds without repeated F1 sampling;
+general terminating/stalled drains and operand-width changes remain guarded.
+Original entry IDLE/vector/P1I/RTI and the first self-modifying PM/SYSCTL store
+execute in their bounded fixtures; the next quiet width clock remains open.
+Complete uploader/application boot and audio do not follow from these paths.
+Separate instruction-only streams retain their8c08e frontier.
+
 Primary evidence: PGRrev2.4,4-5/8,4-79..90,Table4-31/33,A-8; provenance is in
-reference/sharc.json. Full-stream original tests retain the separate functional
-path and8c08e frontier; the separate nine-instruction sequenced prefix through
-the first PMCTL read is in sharc-quiet-clocks.txt. Original finalizer, delayed-branch/loop IDLE, complete
-uploader/boot, application and audio remain open (sharc-finalizer.txt).
+reference/sharc.json. See sharc-finalizer.txt for the original execution boundary.

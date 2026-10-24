@@ -226,11 +226,20 @@ ID  State    Evidence / remaining work
              Native LADDR/IRQ-PCSTK/depth reads and48 independently rebound
              occupied/retired-Execute continuations have literal expectations.
              Original vector receive compares all384 actual DMA words, then
-             real P1I/temporary RTI return to8c003. The next PM/cache clock
-             still fails before a foreground instruction retires, preserving
-             native/transport/controller state. General loop IRQ/cache/stall
-             timing, self-modifying stores, saved-vector restore and complete
-             application remain open (sharc-loop-idle.txt).
+             real P1I/temporary RTI return to8c003 (sharc-loop-idle.txt).
+             Internal arithmetic PM/cache conflicts now retain F1 on the real
+             partial stall without resampling termination; hits/fills may
+             complete through an advancing drain. Literal20-entry Table4-31,
+             old-AZ/two-pass results, disabled/frozen modes and48 independent
+             cache/transport continuations qualify bounded combinations.
+             Original NOP/dual PM-SYSCTL retire and the first RAM patch matches
+             the prepared register. The next quiet SYSCTL width clock still
+             fails with read4/effective204/pending4, old end in F2/NOP in Decode,
+             preserving native/cache/transport/controller and prior RAM store.
+             Rewritten-instruction execution, new-miss terminating drains,
+             general loop IRQ/stall/operand-width composition, saved-vector
+             restore and complete application remain open
+             (sharc-arithmetic-cache.txt).
              A separate internal RAM-port reference grants IO0>IO1>DM>PM per block,
              retains losing IO1 into the following clock and alternates new
              I/O launch eligibility from an explicit owner phase. Actual reads,
@@ -539,7 +548,13 @@ ID  State    Evidence / remaining work
              first-/second-producer short drains and120 independently rebound
              occupied/retired-Execute continuations with literal native outputs.
              Unknown sampling, missing/orphan end markers, corrupted drain
-             columns and real PM/multiplier guards preserve failure state.
+             columns and real multiplier guards preserve failure state.
+             PM/cache tests check20 literal wrapped Table4-31 stage entries,
+             real payload/hit behavior, old-AZ sampling across a partial hold,
+             independent two-pass/two-store/R5=-1 results, disabled/frozen
+             knowledge, distinct cached-NOP/RAM-decrement results and48
+             independent occupied/retired cache continuations.
+             New-miss termination preserves state and prior committed stores.
              Loop-entry IDLE tests add actual192-word DMA replacement, invalid
              new slot RAM, native handler LADDR/IRQ-PCSTK/depth readback and RTI,
              one independent held-state restoration and48 occupied/retired
@@ -547,9 +562,11 @@ ID  State    Evidence / remaining work
              Raw/unsequenced APIs, masks/unknown wake, mismatched entry/frame/
              phase/depth and foreign-controller failure/repair have checks.
              Original vectors have a separate384-word oracle before real P1I/
-             RTI; the remaining8c003 PM/cache failure preserves state and
-             explicitly qualifies no foreground self-modification or startup
-             (sharc-loop-idle.txt).
+             RTI. The following original NOP/dual PM-SYSCTL and RAM patch are
+             checked before the remaining8c003 quiet SYSCTL width failure;
+             prior writes survive while the failed clock preserves state.
+             No rewritten-word/vector restore or startup is qualified
+             (sharc-loop-idle.txt,sharc-arithmetic-cache.txt).
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

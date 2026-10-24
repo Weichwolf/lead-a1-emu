@@ -50,6 +50,9 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-fetch-arithmetic-cache-test test/sharc_fetch_arithmetic_cache_test.cpp)
+  target_link_libraries(lead-a1-sharc-fetch-arithmetic-cache-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_fetched_arithmetic_cache COMMAND lead-a1-sharc-fetch-arithmetic-cache-test)
   add_executable(lead-a1-sharc-loop-idle-test test/sharc_loop_idle_test.cpp)
   target_link_libraries(lead-a1-sharc-loop-idle-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_loop_idle_dma_interrupt_return COMMAND lead-a1-sharc-loop-idle-test)
@@ -441,6 +444,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-fetch-deferred-test
       lead-a1-sharc-fetch-arithmetic-test
       lead-a1-sharc-fetch-arithmetic-short-test
+      lead-a1-sharc-fetch-arithmetic-cache-test
       lead-a1-sharc-loop-idle-test
       lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test lead-a1-sharc-float-test lead-a1-sharc-float-multiply-test lead-a1-sharc-compare-test lead-a1-sharc-multiplier-branch-test lead-a1-sharc-float-fixed-stall-test lead-a1-sharc-idle-branch-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test

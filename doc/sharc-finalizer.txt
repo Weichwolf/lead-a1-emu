@@ -4,9 +4,11 @@ The bound original setup now reaches CPU8c08e with its actual Address-stage
 DB target selected, PM request/cache handling and deferred type0 frame
 intact (sharc-fetch-finalizer.txt). The later arithmetic continuation executes
 entry DB/IDLE, receives all384 vector words, accepts P1I and retires the actual
-temporary RTI through restored8c003 (sharc-loop-idle.txt). The next
-self-modifying PM/cache clock still fails before a foreground instruction
-retires. No saved-vector restoration or application boot is qualified.
+temporary RTI through restored8c003 (sharc-loop-idle.txt). The
+foreground continuation retires its real NOP and self-modifying PM/SYSCTL
+store, then preserves the next quiet SYSCTL width failure
+(sharc-arithmetic-cache.txt). No rewritten-instruction execution,
+saved-vector restoration or application boot is qualified.
 
 The qualified PX/bit/parallel prefix is documented separately. Arithmetic DO
 and deferred PC-stack setup have a bounded reference in sharc-arithmetic-loops.txt.

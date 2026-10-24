@@ -1,0 +1,50 @@
+Fetched arithmetic loops with internal PM conflicts
+
+The bound sequencer composes a live native arithmetic frame with the existing
+internal conflict-cache transport. A PM instruction issues its real Address
+request and executes its real data access. On the cache-miss partial stall,
+Address advances to Execute while F1/F2/Decode and the next cursor hold.
+The arithmetic comparator does not sample the held F1 again. No branch mask,
+loop pass count or instruction retirement supplies the missing clock.
+
+Advancing clocks retain the ordinary end/start+1 comparisons and old-flag
+sampling. Known cache hits and fills may finish through the existing checked
+arithmetic drain; speculative F1/F2 words are still discarded at Decode.
+Termination coincident with a new cache miss remains guarded: its stalled
+drain/flush ordering needs a separate reference. Deferred/suspended cache
+contexts, other simultaneous stalls and branch/cache compositions remain
+bounded by their existing guards. No generic stall-free loop summary is used.
+
+Owned tests check all20 E/A/D/F2/F1 entries of PGR Table4-31 columns2..5,
+including the actual six-instruction wrap, real PM(PX) payload and later hits.
+A conditional producer sets AZ in Execute just before F1=start+1 is held.
+The independent expectation is two complete passes and stores, with R5=-1;
+sampling the held address would terminate early. FOREVER retains unresolved
+arithmetic flags. Disabled/frozen misses preserve cache contents/knowledge
+and continue real stores without hits. A prefilled frozen hit has a cached NOP
+against a different RAM decrement: exactly the first unconflicted RAM word
+decrements R7, while later conflict hits execute the retained cached word.
+Forty-eight occupied/retired-Execute checkpoints restore separate
+RAM/core/cache/transport and verify payloads.
+A new-miss termination rejection preserves CPU/cache/transport and prior RAM
+stores; it is an explicit remaining gap, not successful termination.
+
+The optional original continuation now retires its actual foreground NOP
+and dual PM/SYSCTL instruction. RAM at8c004 equals the prepared R11 patch
+shifted to its documented48-bit store position. The saved vector and PX stay
+unchanged. The next quiet clock fails at the existing SYSCTL Decode/Address
+width guard, with read4/effective204/pending4 and the old end word still
+captured in F2 while Decode holds the NOP. The failed clock preserves native,
+cache, transport and control state and the earlier committed RAM patch.
+Executing that rewritten word, restoring the saved vector, leaving the loader
+and application boot remain
+unqualified. The ordinary109318-cell oracle per cadence remains independent;
+instruction-only streams still stop at8c08e.
+
+Primary constraints: PGRrev2.4 4-5/8,4-53/58,4-79/85 Tables4-31/33,A-32/45;
+native arithmetic/cache contracts and pinned provenance in reference/sharc.json.
+These are explicitly granted internal transport clocks. No vendor simulator,
+silicon timing, physical Nord CCLK or complete board schedule is qualified.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_fetched_arithmetic.*|sharc_loop_idle_dma_interrupt_return|original_sharc_images)$' --output-on-failure

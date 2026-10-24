@@ -286,10 +286,7 @@ int main() try {
   popped_operands_and_latched_flags();
   unknown_sampling_and_missing_marker();
   orphan_marker();
-  constexpr std::uint64_t pm_store = 0x136b00000000;
   constexpr std::uint64_t multiply = 0x013e00130312;
-  constexpr std::uint32_t target = base + 40;
-  guarded_mixed_timing(pm_store | target, "fetch stall/cache timing");
   guarded_mixed_timing(multiply, "multiplier arithmetic-loop condition latency");
   simd_conditions_and_forever();
   std::cout << "Fetched arithmetic Table4-15 columns and native effects pass\n";

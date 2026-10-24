@@ -19,10 +19,11 @@ real instruction execution or RAM fetches.
 Forward native setup still requires at least five instructions. A backward
 setup can enter a nonwrapped multiple-instruction type0 frame after actual
 PCSTK rewriting without reclassifying its apparent shorter body. Single,
-wrapped, nested, mixed cache/stall/interrupt and termination-before-retained-
-end paths remain guarded. The separate loop-entry IDLE/IRQ composition is in
-sharc-loop-idle.txt; self-modifying PM/cache needs further qualification. This contract does
-not establish final vector acceptance or instrument startup.
+wrapped, nested, unqualified mixed-stall/interrupt and termination-before-
+retained-end paths remain guarded. The separate loop-entry IDLE/IRQ and
+internal PM/cache compositions are in sharc-loop-idle.txt and
+sharc-arithmetic-cache.txt. Complete self-modifying execution and instrument
+startup require further qualification.
 
 Primary constraints: PGRrev2.4 4-53/54 Table4-15,4-58,A-10/11.
 The owned long-loop test uses all45 literal E/A/D/F2/F1 entries of the nine
@@ -34,11 +35,14 @@ RAM/controller/CPU/transport continuations cover occupied and retired Execute
 phases. Further cases check SIMD AND/FOREVER with unresolved unsampled flags,
 popped parallel PCSTK operands with flags changed
 by the same instruction, unknown-condition rollback, missing/orphan end markers,
-corrupted drain columns and actual PM/multiplier mixed-context rejection.
+corrupted drain columns and actual multiplier mixed-context rejection.
+The separate PM/cache tests replace the former blanket PM rejection with
+actual operations and preserve the unqualified new-miss termination guard.
 
 The original8c08e setup checkpoint additionally retires the entry DB and
 accepts the first two body F1 addresses. The later vector DMA/IRQ/RTI
-continuation and remaining8c003 PM/cache guard are in sharc-loop-idle.txt.
+continuation is in sharc-loop-idle.txt. The subsequent two actual foreground
+instructions and remaining8c003 SYSCTL width guard are in sharc-arithmetic-cache.txt.
 The independent109318-cell final-payload oracle per cadence is still checked.
 Separate instruction-only streams retain8c08e.
 

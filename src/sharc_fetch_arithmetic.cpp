@@ -131,6 +131,10 @@ void terminate(SharcState &cpu, SharcFetchState &transport) {
     throw std::logic_error("Missing arithmetic termination context");
   }
   auto &loop = *cpu.arithmetic_loop;
+  if (transport.lookup && transport.lookup->wait) {
+    throw std::runtime_error(
+        "SHARC arithmetic termination with pending cache transfer not qualified");
+  }
   if (transport.flow->discard_decode != 0 || cpu.branch) {
     throw std::runtime_error("SHARC arithmetic termination with entry branch not qualified");
   }
@@ -169,8 +173,10 @@ void sharc_fetch_arithmetic_guard(const SharcState &cpu, const SharcFetchState &
   }
   if (!transport.flow) { throw std::logic_error("Missing SHARC fetched arithmetic-loop context"); }
   const bool suspended = cpu.arithmetic_loop->phase == SharcArithmeticPhase::fetched_suspended;
+  const bool draining_cache = draining(cpu) && (!transport.lookup || !transport.lookup->wait);
+  const bool cached = cpu.arithmetic_loop->phase == SharcArithmeticPhase::fetched || draining_cache;
   if (cpu.count_loop || (cpu.interrupt && !suspended) || transport.flow->loop ||
-      transport.flow->long_loop || transport.lookup || transport.fill) {
+      transport.flow->long_loop || ((transport.lookup || transport.fill) && !cached)) {
     throw std::runtime_error("SHARC fetched mixed arithmetic-loop context not qualified");
   }
   sharc_validate_arithmetic_loop(cpu);
@@ -189,7 +195,13 @@ void sharc_fetch_arithmetic_clock(SharcState &cpu,
                                   const SharcFetchEvent &event) {
   if (!cpu.arithmetic_loop) { return; }
   if (!transport.flow) { throw std::logic_error("Missing arithmetic fetch cursor"); }
-  if (!event.address_accepted || event.stalled || transport.lookup || transport.fill) {
+  if (event.stalled && !event.address_accepted && !event.control_stall && !event.loop_stall &&
+      !event.dag_stall && !event.compute_stall && transport.lookup && !transport.lookup->wait &&
+      cpu.arithmetic_loop->phase == SharcArithmeticPhase::fetched && !cpu.branch &&
+      transport.flow->discard_decode == 0) {
+    return; // The cache-miss partial stall holds F1; do not sample the held address again.
+  }
+  if (!event.address_accepted || event.stalled) {
     throw std::runtime_error("SHARC arithmetic-loop fetch stall/cache timing not qualified");
   }
   auto &loop = *cpu.arithmetic_loop;

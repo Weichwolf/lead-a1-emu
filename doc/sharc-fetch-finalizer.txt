@@ -23,8 +23,9 @@ from the new apparent body length or evaluate termination flags early.
 The setup checkpoint here precedes the fetched arithmetic continuation in
 sharc-fetch-arithmetic.txt. The later original loop-entry IDLE, actual vector
 DMA, P1I and temporary RTI continuation is in sharc-loop-idle.txt. It returns
-to8c003 before the still guarded self-modifying PM/cache clock. This setup
-checkpoint itself remains before those operations, with all384 DMA words
+to8c003 before the foreground PM/cache continuation in sharc-arithmetic-cache.txt.
+Its first self-modifying store retires; the next SYSCTL width clock is guarded.
+This setup checkpoint itself remains before those operations, with all384 DMA words
 armed. General cache/loop/IDLE/interrupt timing and self-modifying PM
 execution still need work.
 Primary references: PGRrev2.4 4-5/8,4-45/54,4-79/89,9-49/50,A-10/11;

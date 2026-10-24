@@ -34,7 +34,9 @@ core-control effect latency and late-failure rollback. The Type1 PM-follower
 and SIMD guards also have rollback assertions.
 A static explicit-field audit of all four original terminal vector word4
 placements agrees with DM I4/M5/R9,PM I12/M13/R11,R0=R0-R0. It is not
-execution evidence. Active arithmetic-loop bodies still guard memory/control
+execution evidence. Instruction-only arithmetic bodies still guard memory/control
 instructions; this extension does not remove their reentry/pipeline boundary.
-No new original Type1 finalizer execution, IDLE/IRQ/RTI/VISA, complete boot,
-audio or physical timing is established.
+The separate fetched arithmetic/cache fixture now executes that first original
+Type1 self-modifying PM/SYSCTL store, then preserves the next quiet width failure
+(sharc-arithmetic-cache.txt). Full dual operand capture/self-modified visibility,
+VISA, complete boot, audio and physical timing remain unqualified.

@@ -473,6 +473,15 @@ void sequenced_arithmetic_entry(lead_a1::SharcMemory &memory,
   advance_devices(memory, cpu, serial, devices);
   sequenced_vector_receive(memory, cpu, fetch, serial, devices);
   sequenced_loop_interrupt(memory, cpu, fetch, serial, devices);
+  constexpr std::uint32_t loop_start = 0x8c003;
+  constexpr std::uint64_t full40 = 0xffffffffff;
+  const auto patch_register = cpu.state().data[0][11];
+  require(patch_register.known == full40);
+  const auto patch = patch_register.value << 8;
+  const auto original_end =
+      memory.read({.address = self_modify, .width = lead_a1::SharcWidth::wide48});
+  const auto vector = memory.read({.address = saved_vector, .width = lead_a1::SharcWidth::wide48});
+  const auto saved_px = cpu.state().px;
   constexpr unsigned int limit = 32;
   unsigned int foreground_retired{};
   for (unsigned int clock = 0; clock < limit; ++clock) {
@@ -482,24 +491,35 @@ void sequenced_arithmetic_entry(lead_a1::SharcMemory &memory,
     const bool requested = fetch.address_pm_request(cpu);
     const auto bus =
         requested ? lead_a1::SharcFetchBus::pm_data : lead_a1::SharcFetchBus::available;
+    lead_a1::SharcFetchEvent event;
     try {
-      static_cast<void>(fetch.advance_sequenced(cpu, bus));
+      event = fetch.advance_sequenced(cpu, bus);
     } catch (const std::exception &error) {
       require(std::string(error.what())
-                  .find("arithmetic-loop fetch stall/cache timing not qualified") !=
+                  .find("quiet SYSCTL Decode/Address width interlock not qualified") !=
               std::string::npos);
-      constexpr std::uint32_t loop_start = 0x8c003;
-      const auto word = transport.decode;
-      require(foreground_retired == 0 && requested && before.pc == loop_start &&
-              transport.fetch1 == self_modify && word && word->address == self_modify);
+      const auto word = transport.fetch2;
+      require(foreground_retired == 2 && !requested && before.pc == loop_start &&
+              transport.fetch1 == loop_start && word && word->address == self_modify &&
+              word->opcode == original_end && transport.decode &&
+              transport.decode->address == loop_start && transport.decode->opcode == 0 &&
+              !transport.address && !transport.execute);
+      constexpr std::uint32_t widened = 0x204;
+      require(control.control == 4 && control.effective == widened && control.delayed == 4);
+      require(memory.read({.address = self_modify, .width = lead_a1::SharcWidth::wide48}) == patch);
+      require(memory.read({.address = saved_vector, .width = lead_a1::SharcWidth::wide48}) ==
+                  vector &&
+              before.px == saved_px && before.loops_empty == false && before.depth == 1);
       require(cpu.state() == before && fetch.state() == transport &&
               devices.control.snapshot() == control && !memory.active());
-      std::cout << "  Sequenced foreground: self-modifying PM/cache timing remains unsupported "
-                   "at PC0x8c003; failed clock preserves native/transport state\n";
+      std::cout << "  Sequenced foreground: actual NOP and dual PM/SYSCTL store retired; RAM patch "
+                   "matched, next quiet SYSCTL width boundary at PC0x8c003 preserves state\n";
       return;
     }
     if (fetch.state().execute) {
-      static_cast<void>(cpu.step(fetch));
+      const auto step = cpu.step(fetch);
+      require(foreground_retired < 2 && step.pc == loop_start + foreground_retired &&
+              step.minimum_core_cycles == 1 && event.stalled == (foreground_retired == 1));
       ++foreground_retired;
     }
     advance_devices(memory, cpu, serial, devices);

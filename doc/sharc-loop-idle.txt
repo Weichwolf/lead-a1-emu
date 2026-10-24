@@ -41,10 +41,10 @@ suspension/frame/depth, raw APIs and foreign-controller failure/repair.
 The optional original continuation receives all384 final vector words through
 the existing continuous SPI source/DMA and compares each with the local input.
 Original IDLE, retained mask slot, real P1I frame and original temporary RTI
-execute through restored CPU8c003. The next PM/cache clock remains explicitly
-unsupported with native/transport/controller state preserved. No resumed
-foreground instruction, self-modifying store, saved-vector restoration or
-application boot is qualified. The ordinary109318-cell oracle per cadence
+execute through restored CPU8c003. The further PM/cache composition and first
+foreground self-modifying store are in sharc-arithmetic-cache.txt; its next
+quiet SYSCTL width clock remains guarded. Saved-vector restoration and
+application boot are not qualified. The ordinary109318-cell oracle per cadence
 remains separate and intact; instruction-only streams still stop at8c08e.
 
 Primary constraints: PGRrev2.4 4-22/38,4-53/58,4-73/74,9-44/46,A-10/11,A-32;
