@@ -82,8 +82,8 @@ bool dependency(const std::optional<SharcFetchWord> &producer, DagUse use) {
 }
 
 void guard(const SharcState &cpu, const SharcFetchState &state, SharcFetchBus bus) {
-  if (!state.flow || state.flow->loop || state.flow->discard_decode != 0 || cpu.branch ||
-      state.lookup || state.fill || bus != SharcFetchBus::available) {
+  if (!state.flow || state.flow->loop || state.flow->long_loop || state.flow->discard_decode != 0 ||
+      cpu.branch || state.lookup || state.fill || bus != SharcFetchBus::available) {
     throw std::runtime_error("SHARC DAG stall with loop/branch/PM/cache phases not qualified");
   }
   constexpr unsigned int mode1 = 0x72;

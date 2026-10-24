@@ -2,6 +2,7 @@
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_fetch.hpp"
 #include "sharc_fetch_internal.hpp"
+#include "sharc_fetch_long.hpp"
 
 #include <cstdint>
 #include <stdexcept>
@@ -9,6 +10,10 @@
 namespace lead_a1::detail {
 
 SharcLoopClock sharc_fetch_loop_retirement(const SharcState &cpu, SharcFetchState &transport) {
+  if (transport.flow && transport.flow->long_loop) {
+    sharc_fetch_long_retirement(cpu, transport);
+    return SharcLoopClock::functional;
+  }
   if (!transport.flow || !transport.flow->loop) { return SharcLoopClock::functional; }
   auto &loop = *transport.flow->loop;
   const auto word = transport.execute;
@@ -46,6 +51,7 @@ SharcLoopClock sharc_fetch_loop_retirement(const SharcState &cpu, SharcFetchStat
 }
 
 void sharc_fetch_loop_finish(SharcFetchState &transport) noexcept {
+  sharc_fetch_long_finish(transport);
   if (!transport.flow || !transport.flow->loop) { return; }
   const auto &loop = *transport.flow->loop;
   if (loop.retired != loop.total || loop.pop != SharcFetchLoopPop::done ||

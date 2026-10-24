@@ -3,6 +3,7 @@
 #include "lead_a1/sharc_fetch.hpp"
 #include "sharc_dag_internal.hpp"
 #include "sharc_fetch_internal.hpp"
+#include "sharc_fetch_long.hpp"
 #include "sharc_internal.hpp"
 
 #include <cstdint>
@@ -92,6 +93,7 @@ void sharc_fetch_loop_flow(const SharcState &cpu,
                            const SharcFetchState &previous,
                            SharcFetchState &next) {
   if (!previous.flow || !next.flow) { throw std::logic_error("Missing SHARC loop flow"); }
+  if (sharc_fetch_long_flow(cpu, previous, next)) { return; }
   if (!previous.flow->loop) {
     if (next.address && (next.address->opcode >> class_shift) == immediate_loop) {
       begin(cpu, previous, next);

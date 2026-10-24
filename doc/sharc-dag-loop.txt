@@ -50,7 +50,7 @@ unknown. All384 kernel words survive, and the actual RTS pops its original
 CALL frame and returns to8c008 with depth0 and I0=e7fff. No host initialization
 or loop summary substitutes for these operations.
 
-The full prefix retires171758 instructions using171776 AVAILABLE-BUS grants.
+The RAM-clear prefix retires171758 instructions using171776 AVAILABLE-BUS grants.
 Its earlier first-clear checkpoint remains57065/57077 at8c0b9. Code/data block
 arbitration is still not coupled to these granted fetch clocks; they are not
 physical CCLK, MHz or a board schedule. Direct serial record-stream fixtures

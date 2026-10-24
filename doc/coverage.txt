@@ -163,8 +163,20 @@ ID  State    Evidence / remaining work
              and native return to8c008 with popped frame. Full prefix retires
              171758 instructions in171776 available-bus grants; the first-clear
              checkpoint remains57065/57077 at8c0b9. Same-block arbitration remains open;
-             these grants do not qualify physical CCLK timing. A separate
-             internal RAM-port reference now grants IO0>IO1>DM>PM per block,
+             these grants do not qualify physical CCLK timing.
+             Five-or-more-instruction immediate/UREG counter loops now select
+             Fetch1 at the actual end and resolve count only in native DO Execute.
+             Ordinary internal CALL/RTS and callee polling preserve native frames;
+             the last e-3 instruction pre-pops before reading its operands.
+             Literal stage tables and independently rebound state check this
+             bounded path (sharc-fetch-long-loops.txt). The same fresh original
+             prefix now receives the actual first header and first tag3 payload
+             via serial edges/DMA: all274/268 short words match at1c0300, with
+             137/134 actual reader calls and return to8c015. All8 stream/cadence
+             cases pass; continuous2/3-grant serial edges are explicit inputs.
+             Neither this prefix nor the separate functional streams qualifies
+             a complete cold boot or physical bus/clock timing.
+             A separate internal RAM-port reference grants IO0>IO1>DM>PM per block,
              retains losing IO1 into the following clock and alternates new
              I/O launch eligibility from an explicit owner phase. Actual reads,
              fetches and writes preserve failed grants for repair; typed bus

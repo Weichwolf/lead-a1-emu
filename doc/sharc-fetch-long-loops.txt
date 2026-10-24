@@ -1,0 +1,54 @@
+Long counter loops in the bound native fetch sequencer
+
+Primary reference: PGRrev2.4 4-45..48, Tables4-13/14, 9-48/10-18.
+The bounded path accepts immediate or UREG counter setup with at least five
+native body instructions. Address selects the loop; Execute resolves the
+actual original DO count from current architectural operands. In particular,
+an older register producer may retire between those stages. Encoded zero
+represents2^32 iterations. No startup bubble is inserted for these lengths.
+
+Fetch1 at the real end selects the body or continuation, independently of
+native instruction retirement. Actual native DO and end instructions own the
+loop frame/count; the final e-3 instruction pre-pops the frame before reading
+its operands. No host loop executes data transfers or replaces instructions.
+An ordinary internal CALL at or before e-4 may leave the body and execute
+actual subroutine branches/RTS. The native CALL frames remain above the loop
+frame, and the final pop occurs after return. Body JUMPs, late/delayed CALLs,
+nested DO, callee/end address overlap and unsupported mixed stalls fail.
+
+Transport snapshots retain the actual setup word, unresolved/resolved count,
+fetch remaining, retired ends and terminal phase. Native counter/frame and
+transport consistency are checked before advancing. The existing staged CPU,
+memory, controller and fetch transactions remain the commit boundary.
+
+Literal independent Tables4-13/14 columns check iteration/termination and
+native pre-pop timing with synthetic owned program words. Thirty immediate/UREG
+count/length cases,128 independent snapshot continuations, a still-unknown
+older count producer, full32/zero count prefixes, changed RAM/retained F2 data,
+actual failed pre-pop DM store/repair, ownership and malformed/unsupported
+control rollback extend the checks. Original firmware
+and all manufacturer material remain optional hash-pinned local inputs.
+
+Original reference evidence: the fresh sequenced RAM-clear fixture continues
+from8c008 through actual SPI setup, poll, DMA, header loads and return to8c019.
+All four streams at each explicit2/3-grant edge cadence receive the actual
+three-word first header:193/426 or277/622 instructions/grants. The real
+register-count DO at8c04d and CALL at8c04e then load the complete first tag3
+record. Both part0 streams write274 short words with137 reader calls in17543
+or26307 further grants; both part1 streams write268 words with134 calls in
+17155 or25730 grants. Every stored word matches the local original stream;
+native return to8c015 has no active loop/frame. The continuous serial source
+is not reset at record boundaries. DMA deliberately overwrites kernel scratch
+aliases; all384 kernel words are checked intact before header reception.
+The separate full functional streams retain their8c08e finalizer frontier.
+
+This is a composed reference interpretation, not a vendor-simulator result
+or measured silicon waveform. Owner AVAILABLE-BUS grants do not couple the
+separate block/DMA arbiter. General cache/PM/DAG/mode conflicts, nested and
+short/register loops, arithmetic loops and interrupted loops need further
+implementation/qualification. No physical CCLK, complete startup, application,
+audio, USB, recovery or real-time performance claim follows from this path.
+
+Reproduce:
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^(sharc_fetched_long_counter_loops|original_sharc_images)$' --output-on-failure

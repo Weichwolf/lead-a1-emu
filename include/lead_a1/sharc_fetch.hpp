@@ -61,11 +61,30 @@ struct SharcFetchLoop {
   bool operator==(const SharcFetchLoop &) const = default;
 };
 
+struct SharcFetchLongCounter {
+  std::uint64_t total{};
+  std::uint64_t remaining{};
+  std::uint64_t retired{};
+  unsigned int saved_depth{};
+  bool terminal{};
+  bool operator==(const SharcFetchLongCounter &) const = default;
+};
+
+// Five-or-more instruction counter loop; the native DO resolves its count.
+struct SharcFetchLongLoop {
+  std::uint32_t setup{};
+  std::uint32_t end{};
+  std::uint64_t opcode{};
+  std::optional<SharcFetchLongCounter> counter;
+  bool operator==(const SharcFetchLongLoop &) const = default;
+};
+
 struct SharcFetchFlow {
   std::uint32_t next{};
   // Low bit suppresses this clock's Decode input; shifts on an advancing clock.
   unsigned int discard_decode{};
   std::optional<SharcFetchLoop> loop{std::nullopt};
+  std::optional<SharcFetchLongLoop> long_loop{std::nullopt};
   // PGR4-116: one further Decode hold after a multiplier flag producer issues.
   bool multiplier_branch_wait{};
   bool operator==(const SharcFetchFlow &) const = default;

@@ -41,6 +41,7 @@ target_sources(lead_a1_sharc PRIVATE src/sharc_memory_view.cpp src/sharc_memory_
 target_sources(lead_a1_sharc PRIVATE src/sharc_compare.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_fixed.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_interrupt.cpp)
+target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_long.cpp src/sharc_fetch_long_state.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_float.cpp src/sharc_float_compute.cpp src/sharc_fetch_multiplier.cpp)
 target_include_directories(lead_a1_sharc PUBLIC include)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
@@ -48,6 +49,9 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-fetch-long-test test/sharc_fetch_long_test.cpp)
+  target_link_libraries(lead-a1-sharc-fetch-long-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_fetched_long_counter_loops COMMAND lead-a1-sharc-fetch-long-test)
   add_executable(lead-a1-sharc-dag-loop-test test/sharc_dag_loop_test.cpp)
   target_link_libraries(lead-a1-sharc-dag-loop-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_dag_load_and_single_loop COMMAND lead-a1-sharc-dag-loop-test)
@@ -416,6 +420,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-fetch-loop-test
       lead-a1-sharc-dag-stall-test
       lead-a1-sharc-dag-loop-test
+      lead-a1-sharc-fetch-long-test
       lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test lead-a1-sharc-float-test lead-a1-sharc-float-multiply-test lead-a1-sharc-compare-test lead-a1-sharc-multiplier-branch-test lead-a1-sharc-float-fixed-stall-test lead-a1-sharc-idle-branch-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
       lead-a1-memory-test lead-a1-original-arm-test lead-a1-mmu-walk-test

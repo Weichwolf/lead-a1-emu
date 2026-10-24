@@ -304,7 +304,148 @@ void sequenced_first_clear(lead_a1::SharcMemory &memory,
   }
 }
 
-void sequenced_clock_setup(std::span<const std::byte> stream) {
+struct SerialInput {
+  std::span<const std::byte> stream;
+  unsigned int interval;
+  unsigned int elapsed{};
+  std::size_t bit = std::size_t{kernel_bytes} * 8;
+  bool started{};
+  bool high = true;
+
+  void advance(lead_a1::SharcSpi &spi, lead_a1::SharcMemory &memory) {
+    // The external source starts once after the guest arms its first receive.
+    // Thereafter its fixed edge cadence never depends on polls/record boundaries.
+    if (!started) { started = spi.state().serial.remaining != 0; }
+    if (!started || bit == stream.size() * 8) { return; }
+    ++elapsed;
+    if (elapsed != interval) { return; }
+    elapsed = 0;
+    high = !high;
+    if (high) {
+      const auto byte = std::to_integer<unsigned int>(stream[bit / 8]);
+      const bool value = ((byte >> (bit % 8)) & 1) != 0;
+      spi.observe(memory, {.selected = true, .clock = true, .mosi = value});
+      ++bit;
+    } else {
+      spi.observe(memory, {.selected = true, .clock = false, .mosi = {}});
+    }
+  }
+};
+
+struct HeaderDevices {
+  ObservedClock &clock;
+  lead_a1::SharcSpi &spi;
+  unsigned int interval;
+};
+
+void sequenced_first_record(lead_a1::SharcMemory &memory,
+                            lead_a1::Sharc &cpu,
+                            lead_a1::SharcFetch &fetch,
+                            std::span<const std::byte> stream,
+                            SerialInput &serial,
+                            HeaderDevices devices) {
+  require(word(stream, kernel_bytes) == 3);
+  const auto count = word(stream, kernel_bytes + 4);
+  const auto destination = word(stream, kernel_bytes + 8);
+  constexpr std::uint32_t next_header = 0x8c015;
+  constexpr std::uint32_t setup = 0x8c04d;
+  constexpr std::uint32_t reader_call = 0x8c04e;
+  constexpr unsigned int limit = 80000;
+  unsigned int clocks{};
+  unsigned int setups{};
+  unsigned int calls{};
+  while (cpu.state().pc != next_header && clocks < limit) {
+    devices.clock.accessed = false;
+    static_cast<void>(fetch.advance_sequenced(cpu));
+    ++clocks;
+    const auto executing = fetch.state().execute;
+    if (executing) {
+      const auto pc = executing->address;
+      require(cpu.step(fetch).minimum_core_cycles == 1);
+      if (pc == setup) {
+        const auto loop = cpu.state().count_loop;
+        require(loop && loop->total == count / 2);
+        ++setups;
+      }
+      if (pc == reader_call) { ++calls; }
+    }
+    require(!devices.clock.accessed);
+    devices.clock.device.advance({.core_cycles = 1});
+    serial.advance(devices.spi, memory);
+    static_cast<void>(devices.spi.service_dma(memory));
+    if (devices.spi.state().interrupt_pending) {
+      cpu.latch_interrupt(0x1000);
+      devices.spi.acknowledge_interrupt();
+    }
+    require(!devices.spi.state().overflow);
+  }
+  require(cpu.state().pc == next_header && !cpu.state().count_loop && cpu.state().depth == 0);
+  const auto flow = fetch.state().flow;
+  require(flow && !flow->long_loop && setups == 1 && calls == count / 2);
+  for (std::uint32_t index = 0; index < count; ++index) {
+    require(memory.read({.address = destination + index, .width = lead_a1::SharcWidth::short16}) ==
+            word(stream, kernel_bytes + header_bytes + (std::size_t{index} * 2), 2));
+  }
+  require(!memory.active());
+  std::cout << "  Sequenced first payload: " << count << " short words/" << calls
+            << " actual reader calls/" << clocks << " available-bus clocks, next PC0x8c015\n";
+}
+
+void sequenced_first_header(lead_a1::SharcMemory &memory,
+                            lead_a1::Sharc &cpu,
+                            lead_a1::SharcFetch &fetch,
+                            std::span<const std::byte> stream,
+                            HeaderDevices devices) {
+  SerialInput serial{.stream = stream, .interval = devices.interval};
+  constexpr unsigned int limit = 4096;
+  constexpr std::uint32_t parsed = 0x8c019;
+  unsigned int clocks{};
+  unsigned int instructions{};
+  while (cpu.state().pc != parsed && clocks < limit) {
+    devices.clock.accessed = false;
+    static_cast<void>(fetch.advance_sequenced(cpu));
+    ++clocks;
+    if (fetch.state().execute) {
+      require(cpu.step(fetch).minimum_core_cycles == 1);
+      ++instructions;
+    }
+    require(!devices.clock.accessed);
+    devices.clock.device.advance({.core_cycles = 1});
+    serial.advance(devices.spi, memory);
+    static_cast<void>(devices.spi.service_dma(memory));
+    if (devices.spi.state().interrupt_pending) {
+      constexpr std::uint32_t p1i = 0x1000;
+      cpu.latch_interrupt(p1i);
+      devices.spi.acknowledge_interrupt();
+    }
+    require(!devices.spi.state().overflow);
+  }
+  require(cpu.state().pc == parsed && cpu.state().depth == 0 && instructions != 0);
+  constexpr std::array<unsigned int, 3> registers{8, 2, 3};
+  constexpr std::uint32_t header = 0x92003;
+  constexpr std::uint64_t full40 = 0xffffffffff;
+  for (unsigned int index = 0; index < registers.size(); ++index) {
+    const auto value = word(stream, kernel_bytes + (index * 4));
+    require(memory.read({.address = header + index}) == value);
+    require(cpu.state().data[0][registers[index]] ==
+            (lead_a1::SharcKnown40{.value = std::uint64_t{value} << 8, .known = full40}));
+  }
+  require(devices.spi.state().serial.next_word == header + registers.size() &&
+          devices.spi.state().serial.remaining == 0);
+  constexpr std::uint32_t parent = 0x108c016;
+  require(cpu.state().pc_stack[0] == parent && !cpu.state().interrupt && !cpu.state().idle_pc);
+  require((cpu.state().effective[10].value & 0x1000) != 0 && cpu.state().effective[11].value == 3);
+  constexpr std::size_t header_end = std::size_t{kernel_bytes + header_bytes} * 8;
+  constexpr unsigned int word_bits = 32;
+  require(serial.bit >= header_end && serial.bit < header_end + word_bits);
+  require(!memory.active());
+  std::cout << "  Sequenced first header: " << instructions << " instructions/" << clocks
+            << " available-bus clocks, actual serial/DMA/header loads at " << devices.interval
+            << " clocks per edge, next PC0x8c019\n";
+  sequenced_first_record(memory, cpu, fetch, stream, serial, devices);
+}
+
+void sequenced_clock_setup(std::span<const std::byte> stream, unsigned int interval) {
   // This fixture owns fresh RAM and PMCTL: its writes cannot seed the full stream.
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
@@ -313,6 +454,9 @@ void sequenced_clock_setup(std::span<const std::byte> stream) {
   ObservedClock clock;
   memory.map_io({.first_word = 0x2000, .words = 1}, clock);
   lead_a1::SharcControl control(true);
+  lead_a1::SharcSpi spi(boot.state());
+  memory.map_io({.first_word = sysctl, .words = 1}, control);
+  memory.map_io({.first_word = spi_index, .words = 5}, spi);
   lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(reset), &control);
   lead_a1::SharcFetchState transport;
   transport.flow = lead_a1::SharcFetchFlow{.next = reset};
@@ -369,35 +513,9 @@ void sequenced_clock_setup(std::span<const std::byte> stream) {
           (lead_a1::SharcClockRatio{.numerator = external_numerator, .denominator = 5}));
   require(!memory.active());
   sequenced_first_clear(memory, cpu, fetch, clock, stream);
+  sequenced_first_header(
+      memory, cpu, fetch, stream, {.clock = clock, .spi = spi, .interval = interval});
 }
-
-struct SerialInput {
-  std::span<const std::byte> stream;
-  unsigned int interval;
-  unsigned int elapsed{};
-  std::size_t bit = std::size_t{kernel_bytes} * 8;
-  bool started{};
-  bool high = true;
-
-  void advance(lead_a1::SharcSpi &spi, lead_a1::SharcMemory &memory) {
-    // The external source starts once after the guest arms its first receive.
-    // Thereafter its fixed edge cadence never depends on polls/record boundaries.
-    if (!started) { started = spi.state().serial.remaining != 0; }
-    if (!started || bit == stream.size() * 8) { return; }
-    ++elapsed;
-    if (elapsed != interval) { return; }
-    elapsed = 0;
-    high = !high;
-    if (high) {
-      const auto byte = std::to_integer<unsigned int>(stream[bit / 8]);
-      const bool value = ((byte >> (bit % 8)) & 1) != 0;
-      spi.observe(memory, {.selected = true, .clock = true, .mosi = value});
-      ++bit;
-    } else {
-      spi.observe(memory, {.selected = true, .clock = false, .mosi = {}});
-    }
-  }
-};
 
 struct Inventory {
   std::map<std::uint32_t, std::uint16_t> cells;
@@ -503,7 +621,7 @@ void check_frontier(const lead_a1::Sharc &cpu,
 
 void run_stream(std::span<const std::byte> stream, Placement placement, unsigned int interval) {
   const auto expected = inventory(stream, placement); // Read-only oracle, never writes guest RAM.
-  sequenced_clock_setup(stream);
+  sequenced_clock_setup(stream, interval);
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
   auto boot = lead_a1::SharcSpiBoot::slave_reference_214xx();

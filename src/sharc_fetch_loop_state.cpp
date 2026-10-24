@@ -3,6 +3,7 @@
 #include "lead_a1/sharc_fetch.hpp"
 #include "sharc_dag_internal.hpp"
 #include "sharc_fetch_internal.hpp"
+#include "sharc_fetch_long.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -134,6 +135,7 @@ void context(const SharcState &cpu, const SharcFetchLoop &loop) {
 }
 
 void sharc_fetch_loop_validate(const SharcFetchState &transport) {
+  sharc_fetch_long_validate(transport);
   for (const auto &word : {transport.fetch2, transport.decode}) {
     if (word && (word->loop_body || word->loop_pop)) {
       throw std::invalid_argument("Invalid SHARC loop word before Address");
@@ -152,6 +154,10 @@ void sharc_fetch_loop_validate(const SharcFetchState &transport) {
 }
 
 void sharc_fetch_loop_guard(const SharcState &cpu, const SharcFetchState &transport) {
+  if (transport.flow && transport.flow->long_loop) {
+    sharc_fetch_long_guard(cpu, transport);
+    return;
+  }
   const auto loop = transport.flow ? transport.flow->loop : std::nullopt;
   if (!loop) {
     if (cpu.count_loop || cpu.loops_empty != true) {

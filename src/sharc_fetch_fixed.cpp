@@ -59,8 +59,9 @@ bool sharc_fetch_fixed_interlock(const SharcState &cpu, const SharcFetchState &s
     return false;
   }
   constexpr unsigned int mode1 = 0x72;
-  if (!state.flow || state.flow->loop || state.flow->discard_decode != 0 || cpu.branch ||
-      cpu.pending[sharc_mode1] || sharc_fetch_destination(state.address->opcode) == mode1) {
+  if (!state.flow || state.flow->loop || state.flow->long_loop || state.flow->discard_decode != 0 ||
+      cpu.branch || cpu.pending[sharc_mode1] ||
+      sharc_fetch_destination(state.address->opcode) == mode1) {
     throw std::runtime_error(
         "SHARC floating-to-fixed interlock with mode/control/loop not qualified");
   }

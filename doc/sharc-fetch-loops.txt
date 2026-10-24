@@ -1,5 +1,8 @@
 Single-instruction counter loops in the bound native fetch sequencer
 
+The separate five-or-more-instruction immediate/UREG path and original first
+SPI header/payload continuation are described in sharc-fetch-long-loops.txt.
+
 PGRrev2.4 4-59..63, Tables4-17..20, describe the qualified immediate-DO cases:
 counts2/3/4/5 and larger, with encoded zero meaning2^32 iterations. The body is
 one native NOP, supported compute-only instruction, immediate shifter

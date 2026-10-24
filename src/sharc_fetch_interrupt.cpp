@@ -22,7 +22,8 @@ std::optional<SharcInterruptStep> Sharc::service_interrupt(SharcFetch &fetch,
   if (fetch.state_.execute) {
     throw std::runtime_error("SHARC interrupt requires retired fetch Execute");
   }
-  if (fetch.state_.lookup || fetch.state_.fill || (fetch.state_.flow && fetch.state_.flow->loop)) {
+  if (fetch.state_.lookup || fetch.state_.fill ||
+      (fetch.state_.flow && (fetch.state_.flow->loop || fetch.state_.flow->long_loop))) {
     throw std::runtime_error("SHARC interrupt with pending cache/loop transport not qualified");
   }
   auto core = state_;
