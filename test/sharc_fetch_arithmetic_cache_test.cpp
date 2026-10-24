@@ -319,6 +319,114 @@ void rebound_cache_transfer(unsigned int checkpoint, bool occupied) {
   require(other_memory.read({.address = target, .width = lead_a1::SharcWidth::wide48}) == payload);
 }
 
+constexpr std::uint32_t tail_data = 0x80040;
+constexpr std::uint32_t tail_end = body + 5;
+
+void tail_program(lead_a1::SharcMemory &memory, bool writable) {
+  program(memory);
+  constexpr unsigned int cells = 512;
+  constexpr std::uint16_t known_half = 0xffff;
+  std::array<lead_a1::SharcCell, cells> zero{};
+  for (auto &cell : zero) { cell.known = known_half; }
+  memory.map(
+      {.bank = 0, .halfwords = cells, .name = "owned arithmetic tail data", .writable = writable},
+      zero);
+  constexpr std::uint64_t until_eq = 0x0e0000000006;
+  constexpr std::uint64_t decrement_r5 = 0x013e0002a550;
+  constexpr std::uint64_t store_px = 0x136b00000000;
+  code(memory, base, until_eq);
+  code(memory, body, decrement_r5);
+  code(memory, store, 0);
+  code(memory, tail_end, store_px | tail_data);
+}
+
+lead_a1::SharcState tail_initial() {
+  auto state = initial();
+  constexpr std::uint32_t all_bits = 0xffffffff;
+  constexpr std::uint64_t full40 = 0xffffffffff;
+  state.system[6] = {.known = all_bits};
+  state.system[7] = state.system[6];
+  state.effective = state.system;
+  state.data[0][5] = {.value = 256, .known = full40};
+  return state;
+}
+
+void issue_marked_tail(lead_a1::Sharc &cpu, lead_a1::SharcFetch &fetch) {
+  unsigned int firsts{};
+  constexpr unsigned int limit = 32;
+  for (unsigned int clock = 0; clock < limit; ++clock) {
+    const auto event = advance(cpu, fetch);
+    if (event.stalled) {
+      const auto &state = fetch.state();
+      require(!event.address_accepted && !event.control_stall && !event.dag_stall &&
+              state.execute && state.execute->arithmetic_exit &&
+              state.execute->address == tail_end && !state.decode && !state.address && state.flow &&
+              state.flow->discard_decode == 1 && state.fetch1 == tail_end + 1 && state.fetch2 &&
+              state.fetch2->address == body + 1);
+      require(firsts == 1 && cpu.state().pc == tail_end && cpu.state().depth == 1 &&
+              cpu.state().loops_empty == true && cpu.state().arithmetic_loop);
+      return;
+    }
+    if (fetch.state().execute) {
+      const auto step = cpu.step(fetch);
+      if (step.pc == body) { ++firsts; }
+      require(step.pc != tail_end);
+    }
+  }
+  throw std::runtime_error("Missing real marked-end cache partial stall");
+}
+
+void finish_marked_tail(lead_a1::Sharc &cpu,
+                        lead_a1::SharcFetch &fetch,
+                        lead_a1::SharcMemory &memory) {
+  require(cpu.step(fetch).pc == tail_end && !cpu.state().arithmetic_loop);
+  const auto flow = fetch.state().flow;
+  require(cpu.state().pc == tail_end + 1 && flow && flow->discard_decode == 1);
+  unsigned int post{};
+  constexpr unsigned int limit = 8;
+  for (unsigned int clock = 0; clock < limit && cpu.state().pc != tail_end + 2; ++clock) {
+    static_cast<void>(advance(cpu, fetch));
+    if (fetch.state().execute) {
+      const auto step = cpu.step(fetch);
+      require(step.pc == tail_end + 1 && step.opcode == 0);
+      ++post;
+    }
+  }
+  constexpr std::uint32_t parent = 0x10c0070;
+  require(post == 1 && cpu.state().pc == tail_end + 2 && cpu.state().depth == 1 &&
+          cpu.state().loops_empty == true && cpu.state().pc_stack[0] == parent &&
+          cpu.state().data[0][5].value == 0);
+  require(memory.read({.address = tail_data, .width = lead_a1::SharcWidth::wide48}) == payload);
+}
+
+void marked_tail_miss_and_failure(bool read_only) {
+  lead_a1::SharcMemory memory;
+  tail_program(memory, !read_only);
+  lead_a1::Sharc cpu(memory, tail_initial());
+  lead_a1::SharcFetch fetch(memory, sequenced());
+  issue_marked_tail(cpu, fetch);
+  if (!read_only) {
+    finish_marked_tail(cpu, fetch, memory);
+    return;
+  }
+  const auto native = cpu.state();
+  const auto transport = fetch.state();
+  try {
+    static_cast<void>(cpu.step(fetch));
+  } catch (const std::exception &error) {
+    require(std::string(error.what()).find("Read-only SHARC region") != std::string::npos);
+    require(cpu.state() == native && fetch.state() == transport && !memory.active());
+    require(memory.read({.address = tail_data, .width = lead_a1::SharcWidth::wide48}) == 0);
+    lead_a1::SharcMemory repaired_memory;
+    tail_program(repaired_memory, true);
+    lead_a1::Sharc repaired(repaired_memory, native);
+    lead_a1::SharcFetch repaired_fetch(repaired_memory, transport);
+    finish_marked_tail(repaired, repaired_fetch, repaired_memory);
+    return;
+  }
+  throw std::runtime_error("Missing marked-end read-only store failure");
+}
+
 }
 
 int main() try {
@@ -327,6 +435,8 @@ int main() try {
   unfilled_cache_modes();
   frozen_hit_executes_cached_word();
   pending_miss_termination_preserves_state();
+  marked_tail_miss_and_failure(false);
+  marked_tail_miss_and_failure(true);
   constexpr unsigned int checkpoints = 24;
   for (unsigned int checkpoint = 0; checkpoint < checkpoints; ++checkpoint) {
     for (const bool occupied : {false, true}) { rebound_cache_transfer(checkpoint, occupied); }

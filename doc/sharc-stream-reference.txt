@@ -69,3 +69,12 @@ The new P1I/RTI/ordinary-IDLE paths are not reached by either prefix; the curren
 direct runs explicitly require no active interrupt service or retired IDLE.
 Neither reference qualifies a completed ARM writer, physical readiness wiring
 or boot.
+
+The preceding counts describe the functional instruction-order runs. The
+separate bound sequenced fixture now also checks the actual RAM-clear/record
+prefix, terminal vector DMA, entry IDLE and temporary P1I/RTI. Its immediate
+memory-response profile preserves the quiet SYSCTL guard after the actual
+self-patch (sharc-arithmetic-cache.txt). The additional optional
+original_sharc_deferred_f2 CTest supplies the explicitly selected candidate
+late RAM response (sharc-fetch-memory.txt); it does not replace the immediate
+fixture or qualify a physical response phase. Neither executes the ARM uploader.

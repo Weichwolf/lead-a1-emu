@@ -106,10 +106,14 @@ struct SharcFetchState {
   std::optional<SharcFetchLookup> lookup;
   std::optional<SharcFetchFill> fill;
   std::optional<SharcFetchFlow> flow{std::nullopt};
+  // An issued, uncached RAM fetch whose data response has not arrived in F2.
+  // No opcode exists for this address until the owner completes the read.
+  std::optional<std::uint32_t> pending_fetch2{std::nullopt};
   bool operator==(const SharcFetchState &) const = default;
 };
 
 enum class SharcFetchBus : std::uint8_t { available, pm_data, block_conflict };
+enum class SharcFetchRead : std::uint8_t { immediate, deferred };
 
 struct SharcFetchEvent {
   bool address_accepted{};
@@ -138,6 +142,11 @@ public:
   // RAM port and does not resolve general conditional-transfer hazards.
   [[nodiscard]] bool address_pm_request(const Sharc &cpu) const;
 
+  // Complete an explicitly deferred uncached F2 read from actual instruction
+  // RAM. This is an owner memory-response event, not a processor clock. A ready
+  // fetched word cannot be refreshed, and failure retains the pending read.
+  void complete_fetch2(const Sharc &cpu);
+
   // One granted transport clock. nullopt injects a bubble, never a guest NOP.
   // Captures the previous F1 word in F2; later phases retain its actual data.
   // An occupied Execute phase must retire before another advancing clock.
@@ -148,20 +157,23 @@ public:
   // next_address; no guest NOP is inserted. Block arbitration stays guarded.
   [[nodiscard]] SharcFetchEvent advance(Sharc &cpu,
                                         std::optional<std::uint32_t> next_address,
-                                        SharcFetchBus bus = SharcFetchBus::available);
+                                        SharcFetchBus bus = SharcFetchBus::available,
+                                        SharcFetchRead read = SharcFetchRead::immediate);
   // Optional native sequencer: initialize state.flow.next to the entry address.
   // Generates sequential F1 and native direct JUMP/CALL/RTS targets, with
   // real delayed slots and suppressed speculative Decode inputs (PGR4-20/21).
   // The owner still grants clocks, supplies PM requests and retires Execute.
   [[nodiscard]] SharcFetchEvent advance_sequenced(Sharc &cpu,
-                                                  SharcFetchBus bus = SharcFetchBus::available);
+                                                  SharcFetchBus bus = SharcFetchBus::available,
+                                                  SharcFetchRead read = SharcFetchRead::immediate);
 
 private:
   friend class Sharc;
   [[nodiscard]] SharcFetchEvent advance_clock(Sharc &cpu,
                                               std::optional<std::uint32_t> next_address,
                                               SharcFetchBus bus,
-                                              bool sequenced);
+                                              bool sequenced,
+                                              SharcFetchRead read);
   [[nodiscard]] std::uint64_t for_execution(const SharcMemory &memory, std::uint32_t pc) const;
   SharcMemory &memory_;
   SharcFetchState state_;

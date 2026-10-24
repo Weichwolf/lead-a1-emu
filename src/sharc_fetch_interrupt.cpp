@@ -25,7 +25,7 @@ std::optional<SharcInterruptStep> Sharc::service_interrupt(SharcFetch &fetch,
   if (state_.arithmetic_loop && !fetch.state_.flow) {
     throw std::runtime_error("SHARC arithmetic interrupt requires its sequenced fetch transport");
   }
-  if (fetch.state_.lookup || fetch.state_.fill ||
+  if (fetch.state_.lookup || fetch.state_.fill || fetch.state_.pending_fetch2 ||
       (fetch.state_.flow && (fetch.state_.flow->loop || fetch.state_.flow->long_loop))) {
     throw std::runtime_error("SHARC interrupt with pending cache/loop transport not qualified");
   }

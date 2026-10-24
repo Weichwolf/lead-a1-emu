@@ -10,6 +10,10 @@ loop pass count or instruction retirement supplies the missing clock.
 Advancing clocks retain the ordinary end/start+1 comparisons and old-flag
 sampling. Known cache hits and fills may finish through the existing checked
 arithmetic drain; speculative F1/F2 words are still discarded at Decode.
+After termination, the marked actual PM end may issue a new miss. Its partial
+stall holds speculative inputs and discard mask1 while the real end moves
+from Address to Execute, performs its PM operation and closes the native frame.
+The remaining Decode discard is consumed only by a later advancing clock.
 Termination coincident with a new cache miss remains guarded: its stalled
 drain/flush ordering needs a separate reference. Deferred/suspended cache
 contexts, other simultaneous stalls and branch/cache compositions remain
@@ -28,6 +32,10 @@ Forty-eight occupied/retired-Execute checkpoints restore separate
 RAM/core/cache/transport and verify payloads.
 A new-miss termination rejection preserves CPU/cache/transport and prior RAM
 stores; it is an explicit remaining gap, not successful termination.
+Separate literal marked-end columns check a real PX store and the first
+post-loop instruction. A read-only final-store failure retains the committed
+cache reservation and earlier native pop; a separate writable owner retries
+the same retained end and completes the actual payload store.
 
 The optional original continuation now retires its actual foreground NOP
 and dual PM/SYSCTL instruction. RAM at8c004 equals the prepared R11 patch
@@ -36,9 +44,10 @@ unchanged. The next quiet clock fails at the existing SYSCTL Decode/Address
 width guard, with read4/effective204/pending4 and the old end word still
 captured in F2 while Decode holds the NOP. The failed clock preserves native,
 cache, transport and control state and the earlier committed RAM patch.
-Executing that rewritten word, restoring the saved vector, leaving the loader
-and application boot remain
-unqualified. The ordinary109318-cell oracle per cadence remains independent;
+The candidate explicit late-memory-response fixture is separate and described
+in sharc-fetch-memory.txt; physical rewritten-word visibility and timing remain
+unqualified. Leaving the loader and application boot remain open.
+The ordinary109318-cell oracle per cadence remains independent;
 instruction-only streams still stop at8c08e.
 
 Primary constraints: PGRrev2.4 4-5/8,4-53/58,4-79/85 Tables4-31/33,A-32/45;

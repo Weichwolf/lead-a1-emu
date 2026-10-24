@@ -20,7 +20,8 @@ namespace {
 void validate_clock(const SharcFetchState &state,
                     std::optional<std::uint32_t> next_address,
                     SharcFetchBus bus,
-                    bool sequenced) {
+                    bool sequenced,
+                    SharcFetchRead read) {
   if (state.execute) { throw std::runtime_error("SHARC fetch Execute word has not retired"); }
   if (sequenced != state.flow.has_value()) {
     throw std::runtime_error("SHARC sequenced fetch requires its sequenced clock");
@@ -31,6 +32,20 @@ void validate_clock(const SharcFetchState &state,
   }
   if (bus != SharcFetchBus::available && bus != SharcFetchBus::pm_data) {
     throw std::invalid_argument("Invalid SHARC fetch bus event");
+  }
+  if (read != SharcFetchRead::immediate && read != SharcFetchRead::deferred) {
+    throw std::invalid_argument("Invalid SHARC F2 memory response input");
+  }
+  if (read == SharcFetchRead::deferred && bus != SharcFetchBus::pm_data) {
+    throw std::runtime_error("SHARC deferred F2 reference requires an Address PM request");
+  }
+}
+
+void pending_context(const SharcState &cpu, const SharcFetchState &next) {
+  if (next.pending_fetch2 &&
+      (cpu.branch || (next.flow && (next.flow->loop || next.flow->long_loop ||
+                                    next.flow->discard_decode != 0)))) {
+    throw std::runtime_error("SHARC deferred F2 with branch/counter/flush transport not qualified");
   }
 }
 
@@ -60,7 +75,8 @@ SharcFetchEvent normal_clock(SharcMemory &memory,
                              SharcFetchState &next,
                              SharcKnown32 mode,
                              std::optional<std::uint32_t> address,
-                             SharcFetchBus bus) {
+                             SharcFetchBus bus,
+                             SharcFetchRead read) {
   SharcFetchEvent event{.address_accepted = true};
   next.execute = previous.address;
   next.address = previous.decode;
@@ -72,7 +88,12 @@ SharcFetchEvent normal_clock(SharcMemory &memory,
   next.decode = previous.fetch2;
   next.fetch2.reset();
   next.fill.reset();
-  if (previous.fetch1) {
+  if (read == SharcFetchRead::deferred) {
+    if (!previous.fetch1 || previous.lookup) {
+      throw std::runtime_error("SHARC deferred F2 requires an uncached RAM request");
+    }
+    next.pending_fetch2 = previous.fetch1;
+  } else if (previous.fetch1) {
     next.fetch2 = detail::sharc_fetch_read(memory, cache, previous, event.forwarded);
     if (previous.lookup && previous.lookup->entry && !previous.lookup->hit) {
       next.fill = SharcFetchFill{.mode = previous.lookup->mode, .entry = *previous.lookup->entry};
@@ -118,7 +139,11 @@ SharcFetchEvent clock_transport(SharcMemory &memory,
                                 SharcFetchState &next,
                                 std::optional<std::uint32_t> next_address,
                                 SharcFetchBus bus,
-                                bool sequenced) {
+                                bool sequenced,
+                                SharcFetchRead read) {
+  if (previous.pending_fetch2 && (!previous.lookup || !previous.lookup->wait)) {
+    throw std::runtime_error("SHARC F2 memory response must arrive before advancing Decode");
+  }
   if (sequenced && detail::sharc_fetch_dag_stall(cpu, previous, bus)) {
     const auto event = dag_stalled_clock(previous, next);
     // The unrelated DO still reaches Address while its body waits before Decode.
@@ -144,7 +169,7 @@ SharcFetchEvent clock_transport(SharcMemory &memory,
     return event;
   }
   const auto event =
-      normal_clock(memory, cache, previous, next, cpu.effective[4], next_address, bus);
+      normal_clock(memory, cache, previous, next, cpu.effective[4], next_address, bus, read);
   if (sequenced) { detail::sharc_fetch_flow(cpu, previous, next); }
   return event;
 }
@@ -191,21 +216,24 @@ bool SharcFetch::address_pm_request(const Sharc &cpu) const try {
   throw std::runtime_error(message.str());
 }
 
-SharcFetchEvent
-SharcFetch::advance(Sharc &cpu, std::optional<std::uint32_t> next_address, SharcFetchBus bus) {
-  return advance_clock(cpu, next_address, bus, false);
+SharcFetchEvent SharcFetch::advance(Sharc &cpu,
+                                    std::optional<std::uint32_t> next_address,
+                                    SharcFetchBus bus,
+                                    SharcFetchRead read) {
+  return advance_clock(cpu, next_address, bus, false, read);
 }
 
-SharcFetchEvent SharcFetch::advance_sequenced(Sharc &cpu, SharcFetchBus bus) {
+SharcFetchEvent SharcFetch::advance_sequenced(Sharc &cpu, SharcFetchBus bus, SharcFetchRead read) {
   const auto flow = state_.flow;
   if (!flow) { throw std::logic_error("SHARC sequenced clock requires its F1 cursor"); }
-  return advance_clock(cpu, flow->next, bus, true);
+  return advance_clock(cpu, flow->next, bus, true, read);
 }
 
 SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
                                           std::optional<std::uint32_t> next_address,
                                           SharcFetchBus bus,
-                                          bool sequenced) try {
+                                          bool sequenced,
+                                          SharcFetchRead read) try {
   if (&cpu.memory_ != &memory_ || memory_.active()) {
     throw std::logic_error("SHARC cache fetch requires its idle bound memory");
   }
@@ -215,7 +243,7 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
   if (cpu.state_.idle_pc) {
     throw std::runtime_error("SHARC IDLE fetch requires an owner wake event");
   }
-  validate_clock(state_, next_address, bus, sequenced);
+  validate_clock(state_, next_address, bus, sequenced, read);
   if (sequenced) {
     detail::sharc_fetch_flow_guard(cpu.state_, state_);
     detail::sharc_fetch_multiplier_guard(state_);
@@ -226,7 +254,8 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
   auto next = state_;
   auto cache = cpu.state_.cache;
   const auto event =
-      clock_transport(memory_, cpu.state_, cache, state_, next, next_address, bus, sequenced);
+      clock_transport(memory_, cpu.state_, cache, state_, next, next_address, bus, sequenced, read);
+  pending_context(cpu.state_, next);
   auto core = cpu.state_;
   core.cache = cache;
   if (sequenced) { detail::sharc_fetch_arithmetic_clock(core, next, event); }

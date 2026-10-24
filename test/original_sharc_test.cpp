@@ -345,6 +345,7 @@ struct HeaderDevices {
   lead_a1::SharcSpi &spi;
   lead_a1::SharcControl &control;
   unsigned int interval;
+  bool deferred_memory{};
 };
 
 void check_frontier(const lead_a1::Sharc &cpu,
@@ -457,6 +458,82 @@ void sequenced_loop_interrupt(lead_a1::SharcMemory &memory,
   std::cout << "  Sequenced P1I/RTI: original vector executed, native loop restored at PC0x8c003\n";
 }
 
+void retire_deferred_foreground(lead_a1::Sharc &cpu,
+                                lead_a1::SharcFetch &fetch,
+                                bool stalled,
+                                std::uint64_t original_end,
+                                std::uint64_t patch,
+                                unsigned int &foreground) {
+  if (!fetch.state().execute) { return; }
+  constexpr std::uint32_t loop_start = 0x8c003;
+  const std::array<std::uint64_t, 4> opcodes{0, original_end, 0, patch};
+  const auto step = cpu.step(fetch);
+  require(foreground < opcodes.size());
+  require(step.pc == loop_start + (foreground % 2) && step.minimum_core_cycles == 1 &&
+          stalled == (foreground % 2 == 1) && step.opcode == opcodes[foreground]);
+  ++foreground;
+}
+
+void complete_foreground_response(lead_a1::SharcMemory &memory,
+                                  lead_a1::Sharc &cpu,
+                                  lead_a1::SharcFetch &fetch,
+                                  std::uint64_t patch,
+                                  lead_a1::SharcControl &control,
+                                  unsigned int foreground) {
+  if (foreground != 2 || !fetch.state().pending_fetch2) { return; }
+  require(memory.read({.address = self_modify, .width = lead_a1::SharcWidth::wide48}) == patch);
+  const auto before = cpu.state();
+  const auto controller = control.snapshot();
+  fetch.complete_fetch2(cpu); // Explicit candidate response order; reads RAM, not patch bytes.
+  const auto word = fetch.state().fetch2;
+  require(word && word->address == self_modify && word->opcode == patch && cpu.state() == before &&
+          control.snapshot() == controller);
+}
+
+void sequenced_deferred_foreground(lead_a1::SharcMemory &memory,
+                                   lead_a1::Sharc &cpu,
+                                   lead_a1::SharcFetch &fetch,
+                                   SerialInput &serial,
+                                   HeaderDevices devices) {
+  const auto original_end =
+      memory.read({.address = self_modify, .width = lead_a1::SharcWidth::wide48});
+  const auto patch = cpu.state().data[0][11].value << 8;
+  const auto saved_px = cpu.state().px;
+  unsigned int foreground{};
+  unsigned int partial_stalls{};
+  bool issued{};
+  constexpr unsigned int limit = 32;
+  for (unsigned int clock = 0; clock < limit && cpu.state().pc != self_modify + 1; ++clock) {
+    const bool requested = fetch.address_pm_request(cpu);
+    const bool defer = requested && !issued;
+    if (defer) { require(fetch.state().fetch1 == self_modify && !fetch.state().lookup); }
+    const auto bus =
+        requested ? lead_a1::SharcFetchBus::pm_data : lead_a1::SharcFetchBus::available;
+    const auto read =
+        defer ? lead_a1::SharcFetchRead::deferred : lead_a1::SharcFetchRead::immediate;
+    const auto event = fetch.advance_sequenced(cpu, bus, read);
+    if (defer) {
+      issued = true;
+      require(fetch.state().pending_fetch2 == self_modify && !fetch.state().fetch2);
+    }
+    if (event.stalled) { ++partial_stalls; }
+    retire_deferred_foreground(cpu, fetch, event.stalled, original_end, patch, foreground);
+    complete_foreground_response(memory, cpu, fetch, patch, devices.control, foreground);
+    advance_devices(memory, cpu, serial, devices);
+  }
+  require(issued && foreground == 4 && partial_stalls == 2 && cpu.state().pc == self_modify + 1);
+  require(cpu.state().depth == 0 && cpu.state().loops_empty == true &&
+          !cpu.state().arithmetic_loop && !cpu.state().interrupt && !cpu.state().branch &&
+          !fetch.state().pending_fetch2);
+  require(cpu.state().px == saved_px && cpu.state().dag[0][0][8].value == saved_vector);
+  require(memory.read({.address = saved_vector, .width = lead_a1::SharcWidth::wide48}) ==
+          (saved_px.value >> 16));
+  const auto controller = devices.control.snapshot();
+  require(controller.control == 4 && controller.effective == 4 && !controller.delayed);
+  std::cout << "  Deferred F2 input:4 original foreground instructions, saved SPI vector restored, "
+               "PC0x8c005; response phase is not hardware-qualified\n";
+}
+
 void sequenced_arithmetic_entry(lead_a1::SharcMemory &memory,
                                 lead_a1::Sharc &cpu,
                                 lead_a1::SharcFetch &fetch,
@@ -473,6 +550,10 @@ void sequenced_arithmetic_entry(lead_a1::SharcMemory &memory,
   advance_devices(memory, cpu, serial, devices);
   sequenced_vector_receive(memory, cpu, fetch, serial, devices);
   sequenced_loop_interrupt(memory, cpu, fetch, serial, devices);
+  if (devices.deferred_memory) {
+    sequenced_deferred_foreground(memory, cpu, fetch, serial, devices);
+    return;
+  }
   constexpr std::uint32_t loop_start = 0x8c003;
   constexpr std::uint64_t full40 = 0xffffffffff;
   const auto patch_register = cpu.state().data[0][11];
@@ -732,7 +813,8 @@ void sequenced_first_header(lead_a1::SharcMemory &memory,
 
 void sequenced_clock_setup(std::span<const std::byte> stream,
                            unsigned int interval,
-                           const CellExpectations &expected) {
+                           const CellExpectations &expected,
+                           bool deferred_memory) {
   // This fixture owns fresh RAM and PMCTL: its writes cannot seed the full stream.
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
@@ -804,7 +886,11 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                          cpu,
                          fetch,
                          stream,
-                         {.clock = clock, .spi = spi, .control = control, .interval = interval});
+                         {.clock = clock,
+                          .spi = spi,
+                          .control = control,
+                          .interval = interval,
+                          .deferred_memory = deferred_memory});
   check_cells(memory, expected);
   std::cout << "  Sequenced final payload cells: " << expected.size() << " matched\n";
 }
@@ -910,9 +996,15 @@ void check_frontier(const lead_a1::Sharc &cpu,
   require(serial.bit >= (terminal + header_bytes) * 8 && serial.bit < serial.stream.size() * 8);
 }
 
-void run_stream(std::span<const std::byte> stream, Placement placement, unsigned int interval) {
+void run_stream(std::span<const std::byte> stream,
+                Placement placement,
+                unsigned int interval,
+                bool deferred_memory) {
   const auto expected = inventory(stream, placement); // Read-only oracle, never writes guest RAM.
-  sequenced_clock_setup(stream, interval, expected.cells);
+  sequenced_clock_setup(stream, interval, expected.cells, deferred_memory);
+  if (deferred_memory) {
+    return;
+  } // The existing instruction-only aggregate remains a separate fixture.
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
   auto boot = lead_a1::SharcSpiBoot::slave_reference_214xx();
@@ -988,8 +1080,9 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
 
 int main(int argc, char **argv) {
   try {
-    if (argc != 2) {
-      throw std::runtime_error("Usage: original-sharc-test decoded-image-directory");
+    if (argc < 2 || argc > 3 || (argc == 3 && std::string(argv[2]) != "--deferred-f2")) {
+      throw std::runtime_error(
+          "Usage: original-sharc-test decoded-image-directory [--deferred-f2]");
     }
     const std::filesystem::path directory(argv[1]);
     for (unsigned int part = 0; part < placements.size(); ++part) {
@@ -1001,7 +1094,7 @@ int main(int argc, char **argv) {
         const auto stream = std::span(image).subspan(placement.offset, placement.bytes);
         for (const auto interval : {2U, 3U}) {
           std::cout << "Part " << part << " transport " << transport << ": " << std::flush;
-          run_stream(stream, placement, interval);
+          run_stream(stream, placement, interval, argc == 3);
         }
       }
     }

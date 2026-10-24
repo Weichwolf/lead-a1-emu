@@ -40,11 +40,12 @@ rollback. Twenty occupied/retired-Execute continuations bind separate RAM,
 core/cache and transport. A real last-DB-slot SYSCTL store, following quiet
 clock and actual PX store check width independence and owner failure/retry.
 
-The prepared original finalizer patch uses this format. That is static/input
-evidence; its execution is not yet qualified. The original fetched fixture
-still stops after its first self-modifying dual store at the quiet SYSCTL
-boundary, with the old end word in F2. Instruction visibility, complete dual
-operand capture, vector restoration and application boot remain open.
+The prepared original finalizer patch uses this format. The default immediate
+original fixture still stops after its first self-modifying dual store at the
+quiet SYSCTL boundary, with the old end word in F2. The explicit candidate
+late-response fixture is described in sharc-fetch-memory.txt. Physical
+instruction visibility, complete dual operand capture and application boot
+remain open.
 Neither an unmodified original program nor an existing captured word is
 patched to bypass that failure. Full instrument acceptance is unchanged.
 

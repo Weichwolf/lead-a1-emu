@@ -64,6 +64,12 @@ void sharc_fetch_address(std::uint32_t address) {
 }
 
 void sharc_fetch_validate(const SharcFetchState &state) {
+  if (state.pending_fetch2) {
+    sharc_fetch_address(*state.pending_fetch2);
+    if (state.fetch2 || state.fill) {
+      throw std::invalid_argument("Invalid SHARC pending F2 memory response");
+    }
+  }
   if (state.fetch1) { sharc_fetch_address(*state.fetch1); }
   for (const auto &word : {state.fetch2, state.decode, state.address, state.execute}) {
     if (word) {
@@ -103,6 +109,9 @@ void SharcFetch::advance(SharcKnown32 effective_mode2,
   }
   if (state_.lookup || state_.fill) {
     throw std::runtime_error("SHARC pending cache fetch requires its bound owner");
+  }
+  if (state_.pending_fetch2) {
+    throw std::runtime_error("SHARC pending F2 memory response requires its bound owner");
   }
   if ((effective_mode2.value & ~effective_mode2.known) != 0) {
     throw std::invalid_argument("Invalid SHARC fetch MODE2 knowledge");

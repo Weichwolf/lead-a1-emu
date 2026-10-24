@@ -20,6 +20,11 @@ bool exit_marker(const std::optional<SharcFetchWord> &word) {
   return word && word->arithmetic_exit;
 }
 
+bool marked_pm_end(const std::optional<SharcFetchWord> &word) {
+  return word && word->arithmetic_exit && word->pm_data == true &&
+         sharc_cache_pm_encoding(word->opcode);
+}
+
 void entry_branch(const SharcArithmeticLoop &loop, const SharcFetchWord &word) {
   if (!sharc_fetch_branch_encoding(word.opcode)) { return; }
   constexpr unsigned int class_shift = 40;
@@ -92,6 +97,12 @@ void drain_columns(const SharcArithmeticLoop &loop, const SharcFetchState &trans
   } else if (transport.address && transport.address->arithmetic_exit) {
     valid =
         mask == 1 && !transport.decode && transport.fetch1 == loop.end + 1 && f2 == loop.body + 1;
+  } else if (marked_pm_end(transport.execute) && transport.lookup && !transport.lookup->hit &&
+             !transport.lookup->wait && mask == 1) {
+    // Table4-31's partial stall advances the marked Address word to Execute;
+    // it does not consume either held speculative Decode input.
+    valid = !transport.decode && !transport.address && transport.fetch1 == loop.end + 1 &&
+            f2 == loop.body + 1;
   } else {
     valid = mask == 0 && !transport.decode && !transport.address &&
             transport.fetch1 == loop.end + 2 && f2 == loop.end + 1;
@@ -173,7 +184,8 @@ void sharc_fetch_arithmetic_guard(const SharcState &cpu, const SharcFetchState &
   }
   if (!transport.flow) { throw std::logic_error("Missing SHARC fetched arithmetic-loop context"); }
   const bool suspended = cpu.arithmetic_loop->phase == SharcArithmeticPhase::fetched_suspended;
-  const bool draining_cache = draining(cpu) && (!transport.lookup || !transport.lookup->wait);
+  const bool draining_cache = draining(cpu) && (!transport.lookup || !transport.lookup->wait ||
+                                                marked_pm_end(transport.address));
   const bool cached = cpu.arithmetic_loop->phase == SharcArithmeticPhase::fetched || draining_cache;
   if (cpu.count_loop || (cpu.interrupt && !suspended) || transport.flow->loop ||
       transport.flow->long_loop || ((transport.lookup || transport.fill) && !cached)) {
@@ -197,9 +209,13 @@ void sharc_fetch_arithmetic_clock(SharcState &cpu,
   if (!transport.flow) { throw std::logic_error("Missing arithmetic fetch cursor"); }
   if (event.stalled && !event.address_accepted && !event.control_stall && !event.loop_stall &&
       !event.dag_stall && !event.compute_stall && transport.lookup && !transport.lookup->wait &&
-      cpu.arithmetic_loop->phase == SharcArithmeticPhase::fetched && !cpu.branch &&
-      transport.flow->discard_decode == 0) {
-    return; // The cache-miss partial stall holds F1; do not sample the held address again.
+      !cpu.branch) {
+    const auto phase = cpu.arithmetic_loop->phase;
+    if ((phase == SharcArithmeticPhase::fetched && transport.flow->discard_decode == 0) ||
+        (phase == SharcArithmeticPhase::fetched_draining && transport.flow->discard_decode == 1 &&
+         marked_pm_end(transport.execute))) {
+      return; // Held F1 and the flush mask do not advance on the cache partial stall.
+    }
   }
   if (!event.address_accepted || event.stalled) {
     throw std::runtime_error("SHARC arithmetic-loop fetch stall/cache timing not qualified");

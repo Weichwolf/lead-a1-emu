@@ -236,17 +236,22 @@ ID  State    Evidence / remaining work
              the prepared register. The next quiet SYSCTL width clock still
              fails with read4/effective204/pending4, old end in F2/NOP in Decode,
              preserving native/cache/transport/controller and prior RAM store.
-             Rewritten-instruction execution, new-miss terminating drains,
-             general loop IRQ/stall/operand-width composition, saved-vector
-             restore and complete application remain open
+             A marked PM end may now issue a cache miss after termination;
+             its literal partial-stall columns retain mask1/speculative inputs.
+             Actual PX payload and read-only-store retry check the native pop.
+             New-miss-at-termination and general loop IRQ/stall/operand-width
+             composition remain guarded. The explicit candidate late uncached
+             F2 response has a separate sharc-fetch-memory.txt contract;
+             physical visibility/timing and complete application remain open
              (sharc-arithmetic-cache.txt).
              Native Type15a32-bit immediate pre-modify now supports qualified
              R/S/PX transfers with unchanged indices and explicit DM/PM cache
              requests. Bound Decode retains address/bank/modifier; native48 PX
              does not depend on SYSCTL.IMDW. Real last-slot SYSCTL/quiet-clock
              and PX-store cases retain controller ownership/width boundaries.
-             Original rewritten-word visibility is still unqualified; no
-             original Type15 execution follows (sharc-immediate-indexed.txt).
+             Physical original rewritten-word visibility remains unqualified;
+             the candidate response fixture is separate from the default
+             immediate profile (sharc-immediate-indexed.txt,sharc-fetch-memory.txt).
              A separate internal RAM-port reference grants IO0>IO1>DM>PM per block,
              retains losing IO1 into the following clock and alternates new
              I/O launch eligibility from an explicit owner phase. Actual reads,
@@ -562,6 +567,12 @@ ID  State    Evidence / remaining work
              knowledge, distinct cached-NOP/RAM-decrement results and48
              independent occupied/retired cache continuations.
              New-miss termination preserves state and prior committed stores.
+             Pending F2 tests distinguish immediate/early old-word execution
+             from late actual replacement, missing/failed response retention,
+             independent RAM/core/controller restores and ready-word refresh
+             rejection. An owned relocated self-modifying loop also composes
+             actual dual SYSCTL/PM stores, quiet-width maturation, a native48
+             PX end, its new cache miss and the native frame pop.
              Type15a tests add literal read/write encodings,768 directed
              DM/PM/direction/register-bank/width/index/offset combinations,
              actual PM/cache and I-producer stalls, complement/count2/3/5
@@ -579,8 +590,14 @@ ID  State    Evidence / remaining work
              RTI. The following original NOP/dual PM-SYSCTL and RAM patch are
              checked before the remaining8c003 quiet SYSCTL width failure;
              prior writes survive while the failed clock preserves state.
-             No rewritten-word/vector restore or startup is qualified
-             (sharc-loop-idle.txt,sharc-arithmetic-cache.txt).
+             original_sharc_deferred_f2 separately selects the explicit
+             candidate response order. All8 runs execute the original
+             NOP/dual/NOP/PX sequence, restore the saved SPI vector from PX
+             and reach8c005 with a popped loop and settled SYSCTL4. The
+             ordinary109318-cell oracle per cadence is retained. No physical
+             F2 phase or startup is qualified
+             (sharc-loop-idle.txt,sharc-arithmetic-cache.txt,
+             sharc-fetch-memory.txt).
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

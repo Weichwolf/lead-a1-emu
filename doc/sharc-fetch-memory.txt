@@ -1,0 +1,57 @@
+Explicit uncached instruction-memory response
+
+The default bound fetch clock retains its existing immediate F2 RAM read.
+SharcFetchRead::deferred instead records the previous F1 address as
+pending_fetch2, with no opcode and no ready F2 word. This is an explicit
+owner input, currently qualified only when an Address-stage PM request
+coincides with a previously uncached internal RAM fetch. It does not change
+an already selected cache response, choose physical latency or grant a port.
+
+complete_fetch2 reads actual executable wide48 RAM at that pending address.
+The event creates a ready F2 word without advancing a clock, CPU, controller,
+cursor or instruction retirement. A ready word cannot be refreshed. An
+unknown/unmapped/non-executable read or foreign/active resource fails with
+PC, pending address, fetch operation and width; the pending read survives.
+CPU and memory ownership follows the existing bound transport contract.
+
+A pending response can remain absent through the existing cache-miss
+partial stall: F1/F2/Decode hold while Address advances to Execute. Before
+Decode advances again, the owner must complete the real read. Missing data
+fails rather than becoming a bubble/NOP. Snapshots retain the address and
+absence of data; the restored owner still supplies the response event.
+IRQ recognition, branch/counter/flush combinations and cached-source
+deferral remain guarded. General RAM-port scheduling is separate work.
+
+Owned tests independently distinguish three response orders. Immediate
+and early completion retain the old decrement despite a later actual PM
+store; late completion reads the replacement increment. Failed advancement,
+foreign/active owners, read repair, ready-word refresh rejection and separate
+occupied/retired RAM/core/controller/transport restores preserve state.
+A relocated backward DO/PCSTK/DB loop uses different registers, data bank,
+SYSCTL width and replacement operands from the original fixture. Its actual
+dual store replaces its own end; explicit late completion executes a real
+native48 PX PM store through the marked-end cache miss and native pop.
+
+The optional original_sharc_deferred_f2 fixture freshly verifies the entire
+OS1.36 bundle, all six decoded sections and four kernels, then runs all four
+streams at both supplied grant cadences. It selects the explicit candidate
+response order after original P1I/RTI: issue the first uncached end fetch,
+leave its response pending through the actual dual-store partial stall,
+complete from RAM after that store commits. No bytes are injected into the
+response or refreshed after capture. The immediate original_sharc_images
+fixture and its width-guard expectation remain separate and unchanged.
+All eight candidate runs retire the actual NOP/dual/NOP/PX sequence, restore
+the saved SPI vector from unchanged PX, pop the native arithmetic frame and
+reach PC8c005 with SYSCTL read/effective4 and no pending response/effect.
+The ordinary109318-cell oracle per cadence remains checked. This is the
+result under the selected response input, not physical timing qualification.
+
+Primary constraints are PGRrev2.4 4-5/8 (F1/F2/Decode/Address/Execute),4-84
+Table4-31 (partial stall) and7-23/24 (forwarding future reads after writes).
+They do not establish the Nord memory-response phase used in the candidate
+fixture. A passing explicitly selected order cannot qualify physical timing,
+a complete board schedule or a successful original boot. The working stock
+firmware remains the reference; resolving that phase is emulator/input work.
+
+  cmake --build --preset strict --target lead-a1-sharc-fetch-memory-test lead-a1-original-sharc-test lead-a1-emu
+  ctest --preset strict -R '^(sharc_f2_memory_responses|sharc_fetched_arithmetic_cache|original_sharc_deferred_f2|original_sharc_images)$' --output-on-failure

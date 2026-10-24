@@ -39,6 +39,9 @@ Snapshots preserve all five phases, including already fetched data that now
 differs from RAM. Restoration validates native address/word bounds; it must
 not re-read current RAM in place of saved latches. CPU, memory and device
 snapshots remain separate owner resources.
+The additional explicit pending uncached RAM response and its completion
+event have the bounded sharc-fetch-memory.txt contract. They never refresh
+an already captured instruction; immediate capture remains the default.
 
 Owned tests check every phase of Table4-2, four warmup clocks without guest
 retirement, a real NOP among real ALU instructions, explicit bubbles/drain,
