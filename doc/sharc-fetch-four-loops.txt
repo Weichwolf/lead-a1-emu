@@ -1,0 +1,56 @@
+Four-instruction counter loops in the bound native fetch sequencer
+
+Primary evidence: PGRrev2.4 4-45..48/Tables4-13/14,4-67/Table4-27,
+4-71..75,4-119 and A-10. This is a composed reference interpretation; no vendor
+simulator or physical waveform is claimed. Count>=2 and encoded zero/2^32
+use immediate or UREG setup. Count1 fetched startup remains explicitly
+guarded; its separate functional limitations are in sharc-four-loops.txt.
+
+The actual DO resolves count in Execute. The second body word is retained
+raw when its initial Decode is aborted. The startup clock holds F1/F2,
+advances the first body instruction to Execute, leaves Address empty and
+releases that retained Decode word. Actual DAG capture occurs on release,
+not on the aborted Decode. Branch suppression already accounts for the
+retained word and holds across this release. There is no executable NOP
+substitute, hidden instruction or host wait. The native instruction-only
+two-clock lower bound is not counted again by this fetched path.
+
+The qualified body can make a real CALL(DB) from its first instruction,
+execute both actual delay slots, run ordinary callee calls/conditional
+polls/RTS and return to its end. Its speculative end fetch decrements once
+and preserves the CALL redirect. When RTS reaches Address with the end as
+its target, one partial stall lets the actual RTS execute and pop its frame
+before the end is fetched (4-119). The matched end refetch then consumes an
+explicit freeze marker without decrementing again. Native instructions
+still own loop counts, separate CALL frames and the final e-3 pre-pop;
+the final steady CALL retains the original bit25 special frame.
+
+Independent owned evidence: literal startup/iteration/termination columns,
+immediate/UREG counts2/3/4/27 with straight and real CALL(DB) bodies,
+independent RAM/controller/CPU/fetch continuations, actual conditional callee
+countdowns, malformed startup phases and count1 rejection, and a faulting
+final indexed DM store followed by mapping repair and unchanged retry.
+An unknown DAG address survives the aborted Decode; a rebound architectural
+address is captured only on release and drives both actual stores.
+
+The fresh original sequenced fixture now continues beyond the first tag3
+payload through the first tag4 normal-word record, for all four streams at
+both explicit2/3-grant serial-edge cadences. Part0 writes27 words at92180 in
+3831/5756 further grants. Part1 transport0 first executes the real tag1 skip
+of420 words (391/580 grants), then stores54 words at92324 in7290/10937
+grants. Transport1 skips580 words (391/580 grants), then stores52 words at
+923c4 in7033/10554 grants. Every actual NW32 store matches its original
+stream; each real return reaches8c015 with no active loop/frame. The serial
+source continues across all records. The oracle only reads original data.
+
+Count1 startup, other body control, nested/arithmetic/interrupted loops,
+mixed PM/cache/DAG/mode stalls and complete instruction/global timing remain
+guarded or open. The owner grants AVAILABLE-BUS clocks without coupling the
+separate block/DMA arbiter. These counts are not physical CCLK or board-clock
+measurements. Separate full functional streams remain at8c08e; no terminal
+vectors, complete boot, application, MIDI/audio/USB/recovery/hardware or
+real-time performance qualification follows. The complete objective remains.
+
+Reproduce:
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_fetched_long_counter_loops|original_sharc_images)$' --output-on-failure

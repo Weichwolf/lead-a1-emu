@@ -187,7 +187,9 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
   auto core = cpu.state_;
   core.cache = cache;
   if (sequenced) { detail::sharc_fetch_loop_clock(core, state_, next, event.loop_stall); }
-  if (sequenced && event.address_accepted) {
+  if (sequenced &&
+      (event.address_accepted || (event.loop_stall && state_.flow && state_.flow->long_loop &&
+                                  state_.flow->long_loop->four == SharcFetchFourPhase::hold))) {
     detail::sharc_fetch_dag_prepare(core, next, cpu.control_);
   }
   if (!next.execute) { detail::sharc_fetch_quiet_effects(core, next, cpu.control_); }

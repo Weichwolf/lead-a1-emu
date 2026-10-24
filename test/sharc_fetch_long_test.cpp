@@ -387,6 +387,259 @@ void unsupported_body_control() {
   }
 }
 
+void four_program(lead_a1::SharcMemory &memory, bool with_call) {
+  if (with_call) {
+    calls(memory);
+  } else {
+    program(memory);
+  }
+  constexpr std::uint64_t do_four = 0x0d0200000004;
+  constexpr std::uint64_t delayed = 0x4000000;
+  code(memory, base, do_four);
+  if (with_call) { code(memory, base + 1, call | delayed | subroutine); }
+}
+
+void four_startup_and_termination() {
+  // PGR4-67 Table4-27 startup and4-47 termination, two iterations.
+  const Address bubble;
+  const std::array<Stages, 11> expected{{{3, 2, 1, 0, bubble},
+                                         {4, 3, bubble, 1, 0},
+                                         {4, 3, 2, bubble, 1},
+                                         {1, 4, 3, 2, bubble},
+                                         {2, 1, 4, 3, 2},
+                                         {3, 2, 1, 4, 3},
+                                         {4, 3, 2, 1, 4},
+                                         {5, 4, 3, 2, 1},
+                                         {6, 5, 4, 3, 2},
+                                         {7, 6, 5, 4, 3},
+                                         {8, 7, 6, 5, 4}}};
+  lead_a1::SharcMemory memory;
+  four_program(memory, false);
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, initial(2), &control);
+  lead_a1::SharcFetch fetch(memory, sequenced());
+  constexpr unsigned int warmup = 3;
+  for (unsigned int clock = 1; clock <= warmup + expected.size(); ++clock) {
+    const auto event = fetch.advance_sequenced(cpu);
+    require(event.loop_stall == (clock == 6) && event.stalled == event.loop_stall);
+    if (clock > warmup) { require(stages(fetch) == expected[clock - warmup - 1]); }
+    if (fetch.state().execute) { require(cpu.step(fetch).minimum_core_cycles == 1); }
+    if (clock >= 5) { require(cpu.state().depth == (clock < 11 ? 2U : 1U)); }
+  }
+  finish(fetch, cpu, {.length = 4, .sum = 8});
+}
+
+void four_calls_and_reentry() {
+  constexpr unsigned int checkpoints = 96;
+  for (unsigned int checkpoint = 0; checkpoint < checkpoints; ++checkpoint) {
+    lead_a1::SharcMemory memory;
+    four_program(memory, true);
+    lead_a1::SharcControl control(true);
+    lead_a1::Sharc cpu(memory, initial(2), &control);
+    lead_a1::SharcFetch fetch(memory, sequenced());
+    for (unsigned int clock = 0; clock < checkpoint && cpu.state().pc != base + 5; ++clock) {
+      tick(fetch, cpu);
+    }
+    lead_a1::SharcMemory other_memory;
+    four_program(other_memory, true);
+    auto other_control = lead_a1::SharcControl::from_snapshot(control.snapshot());
+    lead_a1::Sharc other(other_memory, cpu.state(), &other_control);
+    lead_a1::SharcFetch transport(other_memory, fetch.state());
+    finish(transport, other, {.length = 4, .sum = 8});
+    finish(fetch, cpu, {.length = 4, .sum = 8});
+    constexpr std::uint32_t final_frame = 0x30c0004;
+    require(cpu.state().pc_stack[1] == final_frame);
+    require(cpu.state() == other.state() && fetch.state() == transport.state());
+  }
+}
+
+void four_count_matrix() {
+  constexpr unsigned int larger = 27;
+  constexpr unsigned int count_shift = 24;
+  for (const bool reg : {false, true}) {
+    for (const bool with_call : {false, true}) {
+      for (const unsigned int count : {2U, 3U, 4U, larger}) {
+        lead_a1::SharcMemory memory;
+        four_program(memory, with_call);
+        if (!reg) { code(memory, base, immediate_do | (std::uint64_t{count} << count_shift) | 4); }
+        lead_a1::SharcControl control(true);
+        lead_a1::Sharc cpu(memory, initial(count), &control);
+        lead_a1::SharcFetch fetch(memory, sequenced());
+        finish(fetch, cpu, {.length = 4, .sum = 4 * count});
+      }
+    }
+  }
+}
+
+void four_phase_failures() {
+  lead_a1::SharcMemory memory;
+  four_program(memory, true);
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, initial(2), &control);
+  lead_a1::SharcFetch fetch(memory, sequenced());
+  constexpr unsigned int hold_clock = 5;
+  for (unsigned int clock = 0; clock < hold_clock; ++clock) { tick(fetch, cpu); }
+  const auto before = fetch.state();
+  for (unsigned int variant = 0; variant < 5; ++variant) {
+    auto invalid = before;
+    if (!invalid.flow || !invalid.flow->long_loop || !invalid.flow->long_loop->counter ||
+        !invalid.flow->long_loop->held) {
+      throw std::logic_error("Missing four-loop hold");
+    }
+    auto &loop = *invalid.flow->long_loop;
+    switch (variant) {
+      case 0: loop.held.reset(); break;
+      case 1: loop.held->address = base + 3; break;
+      case 2:
+        loop.counter->total = 1;
+        loop.counter->remaining = 1;
+        break;
+      case 3: loop.refetch_end = true; break;
+      case 4: loop.counter->remaining = 1; break;
+      default: throw std::logic_error("Invalid four-loop test");
+    }
+    rejected([&] { const lead_a1::SharcFetch broken(memory, invalid); }, "four-loop");
+  }
+  finish(fetch, cpu, {.length = 4, .sum = 8});
+  lead_a1::Sharc one(memory, initial(1), &control);
+  lead_a1::SharcFetch transport(memory, sequenced());
+  constexpr unsigned int before_do = 4;
+  for (unsigned int clock = 0; clock < before_do; ++clock) { tick(transport, one); }
+  static_cast<void>(transport.advance_sequenced(one));
+  const auto native = one.state();
+  const auto pending = transport.state();
+  rejected([&] { static_cast<void>(one.step(transport)); }, "count-one startup");
+  require(one.state() == native && transport.state() == pending && !memory.active());
+}
+
+void four_failed_end_store() {
+  lead_a1::SharcMemory memory;
+  four_program(memory, true);
+  constexpr std::uint32_t data = 0x80000;
+  constexpr std::uint32_t payload = 0x12345678;
+  constexpr std::uint64_t store = 0x64fe08800000;
+  constexpr std::uint32_t full32 = 0xffffffff;
+  memory.map({.bank = 0, .halfwords = 2, .name = "owned four-loop first store"});
+  code(memory, base + 4, store);
+  auto state = initial(2);
+  state.data[0][1] = {.value = std::uint64_t{payload} << 8, .known = full40};
+  state.dag[0][0][2] = {.value = data, .known = full32};
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, state, &control);
+  lead_a1::SharcFetch fetch(memory, sequenced());
+  constexpr unsigned int limit = 256;
+  bool reached{};
+  for (unsigned int clock = 0; clock < limit && !reached; ++clock) {
+    static_cast<void>(fetch.advance_sequenced(cpu));
+    const auto executing = fetch.state().execute;
+    const auto loop = cpu.state().count_loop;
+    reached = executing && executing->address == base + 4 && loop && loop->remaining == 1;
+    if (executing && !reached) { require(cpu.step(fetch).minimum_core_cycles == 1); }
+  }
+  const auto native = cpu.state();
+  const auto before = fetch.state();
+  const auto controller = control.snapshot();
+  require(reached && native.count_loop && !native.count_loop->frame_live && native.depth == 1);
+  rejected([&] { static_cast<void>(cpu.step(fetch)); }, "Unmapped SHARC physical");
+  require(cpu.state() == native && fetch.state() == before && !memory.active());
+  require(control.snapshot() == controller && memory.read({.address = data}) == payload);
+  memory.map({.bank = 0, .first_halfword = 2, .halfwords = 2, .name = "repaired four-loop end"});
+  require(cpu.step(fetch).minimum_core_cycles == 1);
+  finish(fetch, cpu, {.length = 4, .sum = 6});
+  require(memory.read({.address = data}) == payload &&
+          memory.read({.address = data + 1}) == payload);
+  require(cpu.state().dag[0][0][2].value == data + 2);
+}
+
+void four_full_counter_prefix() {
+  constexpr unsigned int large = 65536;
+  constexpr std::uint64_t full_count = std::uint64_t{1} << 32;
+  for (const bool reg : {false, true}) {
+    for (const unsigned int count : {0U, large}) {
+      if (!reg && count != 0) { continue; }
+      lead_a1::SharcMemory memory;
+      four_program(memory, false);
+      if (!reg) { code(memory, base, immediate_do | 4); }
+      lead_a1::SharcControl control(true);
+      lead_a1::Sharc cpu(memory, initial(count), &control);
+      lead_a1::SharcFetch fetch(memory, sequenced());
+      constexpr unsigned int clocks = 14;
+      for (unsigned int clock = 0; clock < clocks; ++clock) { tick(fetch, cpu); }
+      const auto native = cpu.state().count_loop;
+      require(native && native->total == (count == 0 ? full_count : count));
+      require(native && native->remaining == native->total - 2 && native->frame_live);
+      require(cpu.state().pc == base + 1 && cpu.state().data[0][7].value == 8ULL * 256);
+    }
+  }
+}
+
+void four_deferred_dag_capture() {
+  lead_a1::SharcMemory memory;
+  four_program(memory, false);
+  constexpr std::uint64_t store = 0x64fe08800000;
+  constexpr std::uint32_t data = 0x80000;
+  constexpr std::uint32_t payload = 0x12345678;
+  constexpr std::uint32_t full32 = 0xffffffff;
+  code(memory, base + 2, store);
+  memory.map({.bank = 0, .halfwords = 4, .name = "owned released Decode stores"});
+  auto state = initial(2);
+  state.data[0][1] = {.value = std::uint64_t{payload} << 8, .known = full40};
+  state.dag[0][0][2] = {}; // No address may be read by the aborted Decode.
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, state, &control);
+  lead_a1::SharcFetch fetch(memory, sequenced());
+  constexpr unsigned int hold_clock = 5;
+  for (unsigned int clock = 0; clock < hold_clock; ++clock) { tick(fetch, cpu); }
+  require(!fetch.state().decode && cpu.state().dag[0][0][2].known == 0);
+  // Rebind with an independently supplied architectural address before release.
+  // The raw held word must acquire this value, not a cached/fabricated address.
+  auto restored_state = cpu.state();
+  restored_state.dag[0][0][2] = {.value = data, .known = full32};
+  lead_a1::Sharc restored(memory, restored_state, &control);
+  lead_a1::SharcFetch transport(memory, fetch.state());
+  require(transport.advance_sequenced(restored).loop_stall);
+  const auto decoded = transport.state().decode;
+  require(decoded && decoded->dag && decoded->dag->address == data);
+  require(restored.step(transport).minimum_core_cycles == 1);
+  finish(transport, restored, {.length = 4, .sum = 6});
+  require(memory.read({.address = data}) == payload &&
+          memory.read({.address = data + 1}) == payload);
+  require(restored.state().dag[0][0][2].value == data + 2);
+}
+
+void four_return_stall_columns() {
+  lead_a1::SharcMemory memory;
+  four_program(memory, true);
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, initial(2), &control);
+  lead_a1::SharcFetch fetch(memory, sequenced());
+  constexpr unsigned int limit = 256;
+  bool reached{};
+  for (unsigned int clock = 0; clock < limit && !reached; ++clock) {
+    tick(fetch, cpu);
+    const auto word = fetch.state().address;
+    reached = word && word->address == subroutine + 4;
+  }
+  require(reached && cpu.state().depth == 3 && cpu.state().pc == subroutine + 4);
+  const auto previous = fetch.state();
+  const auto before = stages(fetch);
+  require(fetch.advance_sequenced(cpu).loop_stall);
+  const auto held = stages(fetch);
+  require(held[0] == before[0] && held[1] == before[1] && held[2] == before[2]);
+  require(!held[3] && held[4] == before[3]); // Actual RTS advances; F1/F2/Decode hold.
+  require(cpu.step(fetch).minimum_core_cycles == 1);
+  require(cpu.state().depth == 2 && cpu.state().pc == base + 4);
+  const auto event = fetch.advance_sequenced(cpu);
+  require(event.address_accepted && !event.stalled && fetch.state().fetch1 == base + 4);
+  const auto flow = fetch.state().flow;
+  require(flow && flow->long_loop && !flow->long_loop->refetch_end);
+  require(previous.flow && previous.flow->long_loop && previous.flow->long_loop->counter);
+  require(flow && flow->long_loop && flow->long_loop->counter && previous.flow &&
+          previous.flow->long_loop && previous.flow->long_loop->counter &&
+          flow->long_loop->counter->remaining == previous.flow->long_loop->counter->remaining);
+  finish(fetch, cpu, {.length = 4, .sum = 8});
+}
+
 }
 
 int main() try {
@@ -400,6 +653,14 @@ int main() try {
   captured_word_and_changed_ram();
   failed_store_before_final_pop();
   unsupported_body_control();
+  four_startup_and_termination();
+  four_calls_and_reentry();
+  four_count_matrix();
+  four_phase_failures();
+  four_failed_end_store();
+  four_full_counter_prefix();
+  four_deferred_dag_capture();
+  four_return_stall_columns();
   std::cout << "SHARC fetched long counter loops passed\n";
   return 0;
 } catch (const std::exception &error) {

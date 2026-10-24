@@ -70,12 +70,17 @@ struct SharcFetchLongCounter {
   bool operator==(const SharcFetchLongCounter &) const = default;
 };
 
-// Five-or-more instruction counter loop; the native DO resolves its count.
+enum class SharcFetchFourPhase : std::uint8_t { none, setup, hold, stream };
+
+// Multi-instruction counter loop; the native DO resolves its count.
 struct SharcFetchLongLoop {
   std::uint32_t setup{};
   std::uint32_t end{};
   std::uint64_t opcode{};
   std::optional<SharcFetchLongCounter> counter;
+  SharcFetchFourPhase four{SharcFetchFourPhase::none};
+  std::optional<SharcFetchWord> held{std::nullopt};
+  bool refetch_end{};
   bool operator==(const SharcFetchLongLoop &) const = default;
 };
 

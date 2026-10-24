@@ -338,6 +338,72 @@ struct HeaderDevices {
   unsigned int interval;
 };
 
+void advance_devices(lead_a1::SharcMemory &memory,
+                     lead_a1::Sharc &cpu,
+                     SerialInput &serial,
+                     HeaderDevices devices) {
+  require(!devices.clock.accessed);
+  devices.clock.device.advance({.core_cycles = 1});
+  serial.advance(devices.spi, memory);
+  static_cast<void>(devices.spi.service_dma(memory));
+  if (devices.spi.state().interrupt_pending) {
+    cpu.latch_interrupt(0x1000);
+    devices.spi.acknowledge_interrupt();
+  }
+  require(!devices.spi.state().overflow);
+}
+
+void sequenced_next_records(lead_a1::SharcMemory &memory,
+                            lead_a1::Sharc &cpu,
+                            lead_a1::SharcFetch &fetch,
+                            SerialInput &serial,
+                            HeaderDevices devices) {
+  const auto stream = serial.stream;
+  std::size_t cursor =
+      kernel_bytes + header_bytes + (std::size_t{word(stream, kernel_bytes + 4)} * 2);
+  constexpr unsigned int limit = 80000;
+  constexpr std::uint32_t parsed = 0x8c019;
+  constexpr std::uint32_t returned = 0x8c015;
+  constexpr std::uint32_t buffer = 0x92003;
+  constexpr unsigned int max_records = 8;
+  for (unsigned int record = 0; record < max_records; ++record) {
+    const auto tag = word(stream, cursor);
+    const auto count = word(stream, cursor + 4);
+    const auto destination = word(stream, cursor + 8);
+    require(tag == 1 || tag == 4);
+    bool header_seen{};
+    unsigned int clocks{};
+    while ((!header_seen || cpu.state().pc != returned) && clocks < limit) {
+      devices.clock.accessed = false;
+      static_cast<void>(fetch.advance_sequenced(cpu));
+      ++clocks;
+      if (fetch.state().execute) { require(cpu.step(fetch).minimum_core_cycles == 1); }
+      advance_devices(memory, cpu, serial, devices);
+      if (cpu.state().pc == parsed) {
+        header_seen = true;
+        for (unsigned int index = 0; index < 3; ++index) {
+          require(memory.read({.address = buffer + index}) ==
+                  word(stream, cursor + (std::size_t{index} * 4)));
+        }
+      }
+    }
+    require(header_seen && cpu.state().pc == returned && cpu.state().depth == 0);
+    require(!cpu.state().count_loop && !memory.active());
+    cursor += header_bytes;
+    if (tag == 4) {
+      for (std::uint32_t index = 0; index < count; ++index) {
+        require(memory.read({.address = destination + index}) ==
+                word(stream, cursor + (std::size_t{index} * 4)));
+      }
+      std::cout << "  Sequenced first normal-word record: " << count << " words/" << clocks
+                << " available-bus clocks, next PC0x8c015\n";
+      return;
+    }
+    std::cout << "  Sequenced skipped record: " << count << " words/" << clocks << " grants\n";
+  }
+  throw std::runtime_error("Original first normal-word record not reached");
+}
+
 void sequenced_first_record(lead_a1::SharcMemory &memory,
                             lead_a1::Sharc &cpu,
                             lead_a1::SharcFetch &fetch,
@@ -389,6 +455,7 @@ void sequenced_first_record(lead_a1::SharcMemory &memory,
   require(!memory.active());
   std::cout << "  Sequenced first payload: " << count << " short words/" << calls
             << " actual reader calls/" << clocks << " available-bus clocks, next PC0x8c015\n";
+  sequenced_next_records(memory, cpu, fetch, serial, devices);
 }
 
 void sequenced_first_header(lead_a1::SharcMemory &memory,

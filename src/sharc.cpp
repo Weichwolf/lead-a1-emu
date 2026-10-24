@@ -377,6 +377,8 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     } else {
       if (detail::sharc_four_loop(next)) {
         minimum_cycles = detail::sharc_four_loop_prepare(next, *opcode);
+        // The bound transport already emits the actual four-loop startup bubble.
+        if (loop_clock != SharcLoopClock::functional) { minimum_cycles = 1; }
       } else {
         detail::sharc_long_loop_prepare(next, *opcode);
       }

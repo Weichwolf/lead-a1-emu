@@ -1,5 +1,8 @@
 Native SHARC four-instruction counter loops
 
+The bounded native fetch startup/reentry path and first original tag4 record
+are described separately in sharc-fetch-four-loops.txt.
+
 The functional native-48 reference executes Type12a four-instruction
 DO/UNTIL LCE loops through the ordinary instruction decoder. Immediate and
 UREG counts share the existing zero-means-2^32 rule. No body, callee, polling

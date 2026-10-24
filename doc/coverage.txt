@@ -176,6 +176,16 @@ ID  State    Evidence / remaining work
              cases pass; continuous2/3-grant serial edges are explicit inputs.
              Neither this prefix nor the separate functional streams qualifies
              a complete cold boot or physical bus/clock timing.
+             Fetched four-instruction count>=2 startup now retains the raw
+             aborted Decode word, inserts the real bubble and captures DAG
+             inputs on release. CALL(DB), both actual slots and RTS/end refetch
+             preserve separate frames without decrementing twice. Literal
+             columns, count/source cases, independent state continuations and
+             failed actual end-store repair check the bounded composition
+             (sharc-fetch-four-loops.txt). All8 original prefixes additionally
+             execute their first tag4 record:27/54/52 exact normal words and
+             original part1 tag1 skips420/580, with real return to8c015.
+             Count1 fetched startup and broader stall/loop timing remain open.
              A separate internal RAM-port reference grants IO0>IO1>DM>PM per block,
              retains losing IO1 into the following clock and alternates new
              I/O launch eligibility from an explicit owner phase. Actual reads,
@@ -472,6 +482,13 @@ ID  State    Evidence / remaining work
              All eight optional original fixtures now execute all four clear
              loops and native initialization return (sharc-dag-loop.txt);
              their separate direct record streams retain the8c08e frontier.
+             Fetched multi-instruction loop tests add literal five-stage
+             startup/termination tables, actual count producers, ordinary and
+             delayed CALLs/RTS, independent memory/controller/CPU/fetch rebind,
+             retained RAM words, zero/full32 count prefixes, malformed phases
+             and actual failed final stores with repair. Original prefixes now
+             check the first short- and normal-word records and real skip paths
+             (sharc-fetch-long-loops.txt,sharc-fetch-four-loops.txt).
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

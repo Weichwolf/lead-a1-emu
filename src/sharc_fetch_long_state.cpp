@@ -43,6 +43,36 @@ void counter(const SharcFetchLongLoop &loop) {
   }
 }
 
+void four(const SharcFetchLongLoop &loop) {
+  const bool short_loop = loop.end - loop.setup == 4;
+  if (loop.four > SharcFetchFourPhase::stream ||
+      short_loop != (loop.four != SharcFetchFourPhase::none) ||
+      loop.held.has_value() != (loop.four == SharcFetchFourPhase::hold) ||
+      (!short_loop && loop.refetch_end) ||
+      (short_loop && loop.counter && loop.counter->total == 1)) {
+    throw std::invalid_argument("Invalid SHARC four-loop phase");
+  }
+  if ((loop.four == SharcFetchFourPhase::setup && loop.counter) ||
+      (loop.four == SharcFetchFourPhase::stream && !loop.counter) ||
+      (loop.four == SharcFetchFourPhase::hold && loop.refetch_end)) {
+    throw std::invalid_argument("Invalid SHARC four-loop count phase");
+  }
+  if (loop.four == SharcFetchFourPhase::hold && loop.counter) {
+    const auto count = *loop.counter;
+    if (count.remaining != count.total || count.retired != 0 || count.terminal) {
+      throw std::invalid_argument("Invalid SHARC four-loop initial count");
+    }
+  }
+  if (loop.held) {
+    const auto word = *loop.held;
+    constexpr std::uint64_t native_bits = 0xffffffffffff;
+    if (word.address != loop.setup + 2 || word.branch || word.dag || word.loop_body ||
+        word.loop_pop || word.pm_data || (word.opcode & ~native_bits) != 0) {
+      throw std::invalid_argument("Invalid SHARC four-loop held Decode");
+    }
+  }
+}
+
 }
 
 void sharc_fetch_long_validate(const SharcFetchState &transport) {
@@ -60,26 +90,29 @@ void sharc_fetch_long_validate(const SharcFetchState &transport) {
   constexpr std::uint64_t address_mask = 0xffffff;
   constexpr std::uint64_t reserved = 0x80ff000000;
   const auto type = loop.opcode >> class_shift;
-  if ((type != immediate && type != ureg) || loop.end <= loop.setup || loop.end - loop.setup < 5 ||
+  if ((type != immediate && type != ureg) || loop.end <= loop.setup || loop.end - loop.setup < 4 ||
       (loop.opcode & address_mask) != loop.end - loop.setup ||
       (type == ureg && (loop.opcode & reserved) != 0) ||
       (!loop.counter && !setup_word(loop, transport))) {
     throw std::invalid_argument("Invalid SHARC fetched long-loop setup");
   }
   counter(loop);
+  four(loop);
 }
 
 void sharc_fetch_long_guard(const SharcState &cpu, const SharcFetchState &transport) {
   if (!transport.flow || !transport.flow->long_loop) {
     throw std::logic_error("Missing SHARC fetched long-loop context");
   }
-  if (cpu.branch || cpu.interrupt || cpu.arithmetic_loop || transport.lookup || transport.fill) {
+  const auto loop = *transport.flow->long_loop;
+  const bool short_loop = loop.four != SharcFetchFourPhase::none;
+  if ((cpu.branch && !short_loop) || cpu.interrupt || cpu.arithmetic_loop || transport.lookup ||
+      transport.fill) {
     throw std::runtime_error("SHARC fetched long loop with branch/ISR/cache context not qualified");
   }
   for (const auto &pending : cpu.pending) {
     if (pending) { throw std::runtime_error("SHARC fetched long loop with pending control"); }
   }
-  const auto loop = *transport.flow->long_loop;
   if (!loop.counter) {
     if (cpu.count_loop || cpu.loops_empty != true || (cpu.pc > loop.setup && cpu.pc <= loop.end)) {
       throw std::runtime_error("SHARC fetched long loop before native DO mismatch");
@@ -94,11 +127,13 @@ void sharc_fetch_long_guard(const SharcState &cpu, const SharcFetchState &transp
     }
     return;
   }
+  const bool pending_end = transport.execute && transport.execute->address == loop.end;
+  const unsigned int lead = short_loop && pending_end ? 2U : 1U;
   if (!native || native->body != loop.setup + 1 || native->end != loop.end ||
       native->total != count.total || native->remaining != count.total - count.retired ||
       native->saved_depth != count.saved_depth || native->control ||
-      count.remaining > native->remaining || native->remaining - count.remaining > 1 ||
-      (count.terminal && native->remaining != 1) || (!count.terminal && !native->frame_live)) {
+      count.remaining > native->remaining || native->remaining - count.remaining > lead ||
+      (count.terminal && native->remaining > lead) || (!count.terminal && !native->frame_live)) {
     throw std::runtime_error("SHARC fetched long-loop/native counter mismatch");
   }
   sharc_validate_count_loop(cpu);

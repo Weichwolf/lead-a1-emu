@@ -12,7 +12,8 @@ namespace lead_a1::detail {
 SharcLoopClock sharc_fetch_loop_retirement(const SharcState &cpu, SharcFetchState &transport) {
   if (transport.flow && transport.flow->long_loop) {
     sharc_fetch_long_retirement(cpu, transport);
-    return SharcLoopClock::functional;
+    return transport.flow->long_loop->four == SharcFetchFourPhase::none ? SharcLoopClock::functional
+                                                                        : SharcLoopClock::clocked;
   }
   if (!transport.flow || !transport.flow->loop) { return SharcLoopClock::functional; }
   auto &loop = *transport.flow->loop;

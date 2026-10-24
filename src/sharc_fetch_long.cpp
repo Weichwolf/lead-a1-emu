@@ -37,6 +37,9 @@ void begin(const SharcState &cpu, const SharcFetchState &previous, SharcFetchSta
                                             .end = static_cast<std::uint32_t>(end),
                                             .opcode = word.opcode,
                                             .counter = {}};
+  if (end == std::uint64_t{word.address} + 4) {
+    next.flow->long_loop->four = SharcFetchFourPhase::setup;
+  }
 }
 
 void body_control(const SharcFetchLongLoop &loop, const SharcFetchState &next) {
@@ -49,11 +52,41 @@ void body_control(const SharcFetchLongLoop &loop, const SharcFetchState &next) {
   if (!inside(loop, word.address) || !word.branch) { return; }
   constexpr unsigned int absolute = 6;
   constexpr unsigned int relative = 7;
+  if (loop.four != SharcFetchFourPhase::none) {
+    if ((type != absolute && type != relative) ||
+        (word.opcode & (call | delayed)) != (call | delayed) || word.address != loop.setup + 1 ||
+        (word.branch->target && inside(loop, *word.branch->target))) {
+      throw std::runtime_error("SHARC fetched four-loop body branch not qualified");
+    }
+    return;
+  }
   if ((type != absolute && type != relative) || (word.opcode & call) == 0 ||
       (word.opcode & delayed) != 0 || word.address > loop.end - 4 ||
       (word.branch->target && inside(loop, *word.branch->target))) {
     throw std::runtime_error("SHARC fetched long-loop body branch not qualified");
   }
+}
+
+void end_fetch(const SharcState &cpu, SharcFetchState &next, bool preserve_next) {
+  if (!next.flow || !next.flow->long_loop) { throw std::logic_error("Missing SHARC end fetch"); }
+  auto &loop = *next.flow->long_loop;
+  if (!loop.counter || !cpu.count_loop || !cpu.depth ||
+      *cpu.depth != cpu.count_loop->saved_depth + (cpu.count_loop->frame_live ? 1U : 0U)) {
+    throw std::runtime_error("SHARC long-loop end fetch during a callee not qualified");
+  }
+  auto &count = *loop.counter;
+  if (loop.refetch_end) {
+    loop.refetch_end = false;
+  } else {
+    if (count.terminal) { throw std::runtime_error("SHARC repeated long-loop end fetch"); }
+    if (count.remaining == 1) {
+      count.terminal = true;
+    } else {
+      --count.remaining;
+    }
+    loop.refetch_end = preserve_next;
+  }
+  if (!preserve_next) { next.flow->next = count.terminal ? loop.end + 1 : loop.setup + 1; }
 }
 
 }
@@ -66,7 +99,7 @@ bool sharc_fetch_long_flow(const SharcState &cpu,
     const auto word = next.address;
     const auto type = word ? word->opcode >> class_shift : 0;
     if (!word || (type != immediate_do && type != register_do) ||
-        (word->opcode & sharc_pc_mask) < 5) {
+        (word->opcode & sharc_pc_mask) < 4) {
       return false;
     }
     begin(cpu, previous, next);
@@ -75,22 +108,44 @@ bool sharc_fetch_long_flow(const SharcState &cpu,
   auto &loop = next.flow->long_loop;
   if (!loop) { throw std::logic_error("Lost SHARC fetched long loop"); }
   body_control(*loop, next);
+  if (loop->four == SharcFetchFourPhase::setup) {
+    if (!next.decode || next.decode->address != loop->setup + 2) {
+      throw std::runtime_error("SHARC missing four-loop startup Decode");
+    }
+    loop->held = next.decode;
+    next.decode.reset();
+    loop->four = SharcFetchFourPhase::hold;
+    // The held raw word already consumed its position in the branch mask.
+    return true;
+  }
   if (next.fetch1 != loop->end) { return true; }
-  if (!loop->counter || loop->counter->terminal) {
-    throw std::runtime_error("SHARC unresolved/repeated long-loop end fetch");
-  }
-  if (!cpu.count_loop || !cpu.depth ||
-      *cpu.depth != cpu.count_loop->saved_depth + (cpu.count_loop->frame_live ? 1U : 0U)) {
-    throw std::runtime_error("SHARC long-loop end fetch during a callee not qualified");
-  }
-  auto &count = *loop->counter;
-  if (count.remaining == 1) {
-    count.terminal = true;
-  } else {
-    --count.remaining;
-    next.flow->next = loop->setup + 1;
-  }
+  const auto word = next.address;
+  end_fetch(cpu, next, word && word->branch && word->branch->taken);
   return true;
+}
+
+void sharc_fetch_long_clock(const SharcState &cpu, SharcFetchState &next) {
+  if (!next.flow || !next.flow->long_loop ||
+      next.flow->long_loop->four != SharcFetchFourPhase::hold) {
+    throw std::logic_error("Missing SHARC four-loop release");
+  }
+  auto &loop = *next.flow->long_loop;
+  if (!loop.held || next.decode) { throw std::logic_error("Invalid SHARC four-loop held Decode"); }
+  next.decode = loop.held;
+  loop.held.reset();
+  loop.four = SharcFetchFourPhase::stream;
+  const auto word = next.execute;
+  end_fetch(cpu, next, word && word->branch && word->branch->taken);
+}
+
+bool sharc_fetch_long_return_stall(const SharcFetchState &transport) {
+  if (!transport.flow || !transport.flow->long_loop) { return false; }
+  const auto loop = *transport.flow->long_loop;
+  if (loop.four != SharcFetchFourPhase::stream || !loop.refetch_end) { return false; }
+  const auto word = transport.address;
+  constexpr unsigned int rts = 10;
+  return word && (word->opcode >> class_shift) == rts && word->branch && word->branch->taken &&
+         word->branch->target == loop.end;
 }
 
 void sharc_fetch_long_retirement(const SharcState &cpu, SharcFetchState &transport) {
@@ -110,6 +165,9 @@ void sharc_fetch_long_retirement(const SharcState &cpu, SharcFetchState &transpo
     sharc_begin_count_loop(checked, word.opcode);
     if (!checked.count_loop) { throw std::logic_error("Missing validated native counter"); }
     const auto native = *checked.count_loop;
+    if (loop.four != SharcFetchFourPhase::none && native.total == 1) {
+      throw std::runtime_error("SHARC fetched four-loop count-one startup not qualified");
+    }
     loop.counter = SharcFetchLongCounter{
         .total = native.total, .remaining = native.total, .saved_depth = native.saved_depth};
     return;

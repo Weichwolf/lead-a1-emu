@@ -1,5 +1,8 @@
 Long counter loops in the bound native fetch sequencer
 
+The four-instruction startup/reentry extension has a separate contract in
+sharc-fetch-four-loops.txt; this document describes the longer body path.
+
 Primary reference: PGRrev2.4 4-45..48, Tables4-13/14, 9-48/10-18.
 The bounded path accepts immediate or UREG counter setup with at least five
 native body instructions. Address selects the loop; Execute resolves the

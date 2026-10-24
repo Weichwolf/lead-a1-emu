@@ -55,7 +55,7 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
   constexpr unsigned int last_other_control = 14;
   constexpr unsigned int immediate_loop = 12;
   constexpr unsigned int register_loop = 13;
-  if (type == immediate_loop || (type == register_loop && (word.opcode & sharc_pc_mask) >= 5)) {
+  if (type == immediate_loop || (type == register_loop && (word.opcode & sharc_pc_mask) >= 4)) {
     return {};
   }
   constexpr std::uint64_t idle = 0x008000000000;

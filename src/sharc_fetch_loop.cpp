@@ -85,8 +85,11 @@ void counter(SharcFetchFlow &flow, SharcFetchLoop &loop, std::optional<std::uint
 }
 
 bool sharc_fetch_loop_stall(const SharcFetchState &transport) {
-  return transport.flow && transport.flow->loop &&
-         transport.flow->loop->phase == SharcFetchLoopPhase::hold;
+  if (!transport.flow) { return false; }
+  return (transport.flow->loop && transport.flow->loop->phase == SharcFetchLoopPhase::hold) ||
+         (transport.flow->long_loop &&
+          transport.flow->long_loop->four == SharcFetchFourPhase::hold) ||
+         sharc_fetch_long_return_stall(transport);
 }
 
 void sharc_fetch_loop_flow(const SharcState &cpu,
@@ -122,6 +125,12 @@ void sharc_fetch_loop_clock(SharcState &cpu,
                             const SharcFetchState &previous,
                             SharcFetchState &next,
                             bool startup_stall) {
+  if (startup_stall && previous.flow && previous.flow->long_loop) {
+    if (previous.flow->long_loop->four == SharcFetchFourPhase::hold) {
+      sharc_fetch_long_clock(cpu, next);
+    }
+    return;
+  }
   if (!previous.flow || !previous.flow->loop) { return; }
   if (!next.flow) { throw std::logic_error("Missing SHARC loop clock flow"); }
   const auto old_loop = *previous.flow->loop;
