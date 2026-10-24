@@ -1,0 +1,59 @@
+Direct original SHARC serial-stream reference
+
+The optional original_sharc_images CTest freshly decodes the unchanged OS1.36
+bundle and verifies all six section lengths/SHA256 identities and all four
+kernel hashes. It then runs lead-a1-original-sharc-test on those temporary
+inputs. Firmware, raw streams and manufacturer instructions remain local;
+the public test contains only the owned driver and factual placement metadata.
+
+For every placement, the hardcoded boot receiver clocks the actual1536 kernel
+bytes into RAM. All256 native48 words are compared with the independent input
+packing. The original kernel then executes from the explicit reset-register,
+5-Mbit RAM, settled CLK_CFG0 and valid-boot/SYSCTL references. Its actual clock
+setup and RAM-clearing instructions run; the host does not initialize that RAM.
+PMCTL access itself does not advance time. Other retired instructions supply
+only their existing clock lower bounds, including CLKIN time while bypassed.
+
+The external stream source starts once when the guest first arms receive DMA.
+Thereafter it presents one serial edge after every2 or3 committed instructions,
+independent of polls, record boundaries or subsequent DMA state. Real LSB-first
+sampling, finite receive FIFO, requested grouped DMA writes, peripheral event
+acknowledgement and the masked processor P1I latch remain separate owner actions.
+Neither busy reads nor the independent oracle move time or write guest payloads.
+Each run is single-threaded and bounded to12 million actual DSP instructions;
+budget exhaustion fails rather than counting as boot or transfer completion.
+
+A separate read-only tag/padding walker builds last-write-wins expectations for
+final physical16-bit cells. The core must write every compared value through
+its instructions and DMA. Tag1 remains the original skip, not a host zero-fill.
+The terminal header supplies an independent PX alias oracle. The following
+1536 vector bytes are excluded from payload acceptance. Failed arithmetic DO
+at native PC8c083 must preserve CPU, SPI, SYSCTL and transaction state.
+
+Both cadences pass all four placements with the same payload/PX/control state.
+Counts are actual retired instructions, not measured physical clock cycles:
+
+Part Transport Records Payload cells 2instr/edge 3instr/edge
+0    0         608     51869         3725074     5501716
+0    1         600     51755         3714707     5486162
+1    0          26      4042          440722      575188
+1    1          21      1652          285844      342868
+
+Each cadence covers1251 nonterminal records/109318 final-cell comparisons.
+This independently exercises original BSET, SYSCTL width selection, I12 setup
+and the old-value parallel PASS/register move after the previously qualified
+PX read. Arithmetic DO, final vector restoration, IRQ/cache/IDLE/VISA and
+application execution remain open (sharc-finalizer.txt).
+
+Reproduce after preparing the pinned local bundle:
+  cmake --build --preset strict --target lead-a1-original-sharc-test lead-a1-emu
+  ctest --test-dir build/strict -R '^original_sharc_images$' --output-on-failure
+
+The existing original_images aggregate and original ARM/SPI/DSP composition
+remain separate integration gates; the direct test does not execute the ARM
+uploader, GPIO or TI master. These two cadences and the original composition's
+one-DSP-step-per-ARM-step profile are owned functional schedules, not physical
+wiring, readiness/FLAG timing or CPU-frequency ratios. Passing them does not
+establish a completed outer upload, cold boot, slot allocation or audio.
+The original composition also passes all four placements through the same
+arithmetic-DO boundary; its distinct counts are in sharc-four-loops.txt.

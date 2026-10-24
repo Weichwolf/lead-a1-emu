@@ -7,6 +7,9 @@ ID  State    Evidence / remaining work
              English manual pinned in reference/manual.json. ARM-state startup
              evidence received; exact SoC/DSP, roles, board/clock identity and
              required factory/storage inputs remain unresolved (firmware-format.txt).
+             Static DSP dataflow supports synthesis/filter/effects in both main
+             transport programs, with replace/add and final-conversion differences
+             (dsp-roles.txt). Physical package and slot A-D bindings remain open.
              Candidate TI AM18xx primary documentation is pinned and corroborates
              observed RAM/peripheral bases; exact SoC/loader state is unproven.
              reference/sharc.json pins the shared kernel identities and analysis
@@ -106,10 +109,19 @@ ID  State    Evidence / remaining work
              Type6 no-access encoding is independently corroborated against the
              duplicate PGR diagram (sharc-shifts.txt); memory/OR/other shifter
              forms remain guarded.
+             BSET/BCLR/BTGL/BTST register/immediate SISD/SIMD operations use
+             full32-bit positions, selected-bit knowledge and exact SZ/SV/SS;
+             negative positions are off-scale per A-19/20. All256 immediate
+             encodings, aliases, flags and rollback have owned checks
+             (sharc-bit-operations.txt).
              Compute-free SISD Type5a transfers capture old UREG values with
              reviewed32-bit DREG/DAG/SREG alignment, split source fields,
              Bx/Ix side effects, bank/condition/latency and rejection tests
-             (sharc-register-moves.txt). Data-to-data width remains guarded.
+             (sharc-register-moves.txt). Full40 data-file copies and SISD
+             parallel compute capture old operands, apply UREG write precedence
+             and preserve compute flags.8192 bank/PE/RND32/knowledge cases,
+             literal priority/source/flag/control/rollback tests qualify this
+             extension. Combined-PX parallel,swap and SIMD transfers remain open.
              Runtime SPI RX DMA has a completed-bootstrap handoff, finite
              four-word FIFO plus receive buffer, explicit grouped memory grants,
              signed cursor steps, zero-count65536 semantics and transactional
@@ -208,14 +220,22 @@ ID  State    Evidence / remaining work
              A separate one-DSP-step-per-ARM-instruction cooperative reference
              now qualifies all four placements' remaining ordinary records:
              1251 nonterminal records and109318 final payload-cell comparisons.
-             Each executes finalizer PX at PC0x8c07e and reaches unsupported
-             BSET at PC0x8c07f; per-placement counts and
+             Each executes finalizer PX, BSET, SYSCTL width selection and the
+             old-value parallel PASS/move to unsupported arithmetic DO at
+             PC0x8c083; per-placement counts and
              committed-instruction totals are in sharc-four-loops.txt.
              All64 PX bits match the independent original terminal-header
              alias oracle, including low16 zero (sharc-px.txt).
              Final vectors are excluded and the ARM writer has not returned.
              Count1 architectural stack arbitration and physical timing remain
              unqualified (sharc-four-loops.txt).
+             A separate direct SHARC serial reference qualifies all four streams
+             at two fixed edge cadences through BSET/SYSCTL and the old-value
+             parallel PASS/move, stopping at arithmetic DO/native PC0x8c083.
+             Each cadence retains1251 ordinary records/109318 final-cell checks
+             and the independent PX oracle (sharc-stream-reference.txt). This
+             exercises the original DSP code/DMA without an ARM/physical wiring
+             or completed-upload claim; final vectors and application remain open.
              This paced composition supplies no
              physical ready wiring or full-uploader schedule (sharc-spi.txt).
              This does not qualify physical MHz, bridge/mux timing or board reset; general
@@ -235,6 +255,9 @@ ID  State    Evidence / remaining work
              checked. Complete CPU/boot/MIDI/audio/update, fuzz harnesses and
              performance remain pending.
              TSan preset prepared; no concurrent native code or TSan claim yet.
+             original_sharc_images freshly verifies bundle/sections/kernels and
+             drives all four original DSP streams at two fixed serial cadences.
+             The separate original_images ARM integration aggregate is retained.
 9   partial  Private reconstruction repo verified; coordination contract and
              bootstrap handoff issue. Source-built ARM0 identity evidence received;
              no reconstructed source copied. Full source-only bundle pending.

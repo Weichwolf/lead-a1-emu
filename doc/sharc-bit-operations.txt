@@ -1,0 +1,43 @@
+Native SHARC data-register bit operations
+
+Compute-only Type2a/register-count and Type6/no-memory immediate forms support
+BSET/BCLR/BTGL/BTST in SISD/SIMD, using opcodec0/c4/c8/cc from Table12-11.
+Conditions are captured per processing element before either lane executes;
+register operands use the existing effective low/high alternate banks.
+
+Positions0..31 select one bit in DREG39:8. Set/clear makes
+that bit known, toggle preserves its knowledge, and unrelated bits retain
+both value and knowledge. Destination low8 becomes known zero. SZ reflects
+the result; SV and SS clear. At all other32-bit positions, the data is unchanged,
+low8 still clears, SV sets and SZ still reflects the result. Counts are never
+masked to five bits or passed as unsafe host shifts.
+
+BTST writes no data register or extension, including its unused Rn field.
+SZ depends only on the selected bit: a known zero sets SZ, a known one
+clears it, and an unknown bit leaves SZ unknown. Other input bits need not
+be known. An off-scale test sets SZ and SV. SS clears. All other
+ASTAT bits and all STKY bits are preserved. Flag effects are visible to the
+next committed instruction, using the shared shifter status merge.
+
+A-19 defines SV for testing/setting/clearing a bit outside the32-bit field;
+A-20 additionally defines SZ for an out-of-field bit test. These explicit
+rules qualify negative positions as off-scale, in addition to positions>31.
+The narrower comparison wording in11-64..67 does not imply modulo32 indices
+or guessed negative-position flags. Memory/parallel-compute forms and other
+shifter operations retain their existing guards.
+
+Owned tests include literal encodings/results; all256 DATA8 encodings for each
+operation over zero/full inputs, including signed-negative positions;
+13 full32-bit register positions; unknown source/selected-bit knowledge;
+four source/count/destination alias cases; secondary SIMD banks and different
+per-lane counts; unknown PEy count rolling back tentative PEx writes; false predicates;
+unknown count rollback; untouched BTST data files; preserved flags; and a genuine
+two-iteration self-toggling loop through the common decoder. No random fuzz.
+
+Primary evidence: SHARC Programming Reference rev2.4,3-23/30,11-64..67,
+Table12-11,10-11 andA-19/20. Provenance in reference/sharc.json. The original
+kernel's BSET at0x8c07f uses position9. The direct original stream reference
+executes it at all four placements/two serial cadences, then checks the
+SYSCTL and parallel-transfer prefix up to arithmetic DO8c083
+(sharc-stream-reference.txt). The remaining finalizer, VISA application boot,
+audio and physical timing remain open.

@@ -59,6 +59,24 @@ void sharc_indexed_move(SharcMemory &memory,
 sharc_compute_register(SharcState &state, unsigned int reg, unsigned int element);
 void sharc_compute(SharcState &state, std::uint64_t opcode);
 void sharc_shift(SharcState &state, std::uint64_t opcode, bool immediate);
+void sharc_shift_status(SharcState &state, SharcKnown32 flags, unsigned int element);
+enum class SharcBitOperation : std::uint8_t {
+  set = 0xc0,
+  clear = 0xc4,
+  toggle = 0xc8,
+  test = 0xcc
+};
+
+struct SharcBitInstruction {
+  std::uint32_t position{};
+  SharcBitOperation operation{};
+  unsigned int destination{};
+};
+
+void sharc_bit_shift(SharcState &state,
+                     SharcKnown32 input,
+                     SharcBitInstruction instruction,
+                     unsigned int element);
 void sharc_register_move(SharcState &state, std::uint64_t opcode);
 void sharc_data_move(SharcMemory &memory,
                      SharcState &state,

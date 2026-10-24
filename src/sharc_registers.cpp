@@ -12,6 +12,41 @@ namespace {
 constexpr unsigned int complement_base = 0x50;
 constexpr unsigned int complement_end = 0x60;
 constexpr std::uint64_t low_byte = 0xff;
+constexpr std::uint64_t compute_mask = 0x7fffff;
+
+bool data_file(unsigned int reg) {
+  return reg < 16 || (reg >= complement_base && reg < complement_end);
+}
+
+void parallel_compute(SharcState &state, std::uint64_t compute) {
+  if (compute == 0) { return; }
+  constexpr std::uint64_t unconditional_native_compute = 0x013e00000000;
+  sharc_compute(state, unconditional_native_compute | compute);
+}
+
+struct RegisterMove {
+  unsigned int source{};
+  unsigned int destination{};
+  std::uint64_t compute{};
+};
+
+void copy_register(SharcState &state, RegisterMove move) {
+  if (data_file(move.source) && data_file(move.destination)) {
+    const auto captured = sharc_data_register(state, move.source);
+    parallel_compute(state, move.compute);
+    // PGR2-6..7: the UREG transfer wins over a computation's DREG write.
+    sharc_data_register(state, move.destination) = captured;
+    return;
+  }
+  constexpr unsigned int combined_px = 0x6b;
+  if (move.compute != 0 && (move.source == combined_px || move.destination == combined_px)) {
+    throw std::runtime_error("SHARC parallel combined-PX register transfer not qualified");
+  }
+  if (sharc_px_register_move(state, move.source, move.destination)) { return; }
+  const auto captured = sharc_ureg(state, move.source);
+  parallel_compute(state, move.compute);
+  sharc_ureg(state, move.destination, captured);
+}
 
 unsigned int selection(const SharcState &state, unsigned int bit) {
   const auto mode = state.effective[sharc_mode1];
@@ -103,9 +138,8 @@ void sharc_validate_registers(const SharcState &state) {
 void sharc_register_move(SharcState &state, std::uint64_t opcode) {
   constexpr std::uint64_t swap = std::uint64_t{1} << 43;
   constexpr std::uint64_t reserved = std::uint64_t{1} << 30;
-  constexpr std::uint64_t compute = 0x7fffff;
-  if ((opcode & (swap | reserved | compute)) != 0) {
-    throw std::runtime_error("SHARC swap/reserved/parallel-compute register move not implemented");
+  if ((opcode & (swap | reserved)) != 0) {
+    throw std::runtime_error("SHARC swap/reserved register move not implemented");
   }
   const auto mode = state.effective[sharc_mode1];
   if ((mode.known & sharc_simd) == 0 || (mode.value & sharc_simd) != 0) {
@@ -117,16 +151,8 @@ void sharc_register_move(SharcState &state, std::uint64_t opcode) {
   const auto source =
       static_cast<unsigned int>((((opcode >> source_high_shift) & 31) << 2) | ((opcode >> 31) & 3));
   const auto destination = static_cast<unsigned int>((opcode >> 23) & 127);
-  if (sharc_px_register_move(state, source, destination)) { return; }
-  const auto data_file = [](unsigned int reg) {
-    return reg < 16 || (reg >= complement_base && reg < complement_end);
-  };
-  if (data_file(source) && data_file(destination)) {
-    throw std::runtime_error("SHARC data-to-data register transfer width not qualified");
-  }
-  // Capture before the destination write, including Bx's implicit Ix update.
-  const auto value = sharc_ureg(state, source);
-  sharc_ureg(state, destination, value);
+  copy_register(state,
+                {.source = source, .destination = destination, .compute = opcode & compute_mask});
 }
 
 }

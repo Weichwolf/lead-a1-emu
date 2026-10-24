@@ -136,16 +136,14 @@ void system_effect_latency() {
 void unsupported_fields_and_modes() {
   constexpr std::uint64_t reserved = 0x703fe0000000; // Bit30 is not a source bit.
   constexpr std::uint64_t swap = 0x783e00000000;
-  constexpr std::uint64_t parallel_compute = 0x703fa0000001;
-  constexpr std::uint64_t data_copy = 0x703e81800000; // R3=R1: separate40-bit qualification.
-  constexpr std::array<std::uint64_t, 4> opcodes{reserved, swap, parallel_compute, data_copy};
+  constexpr std::uint64_t parallel_px = 0x703e35800001;
+  constexpr std::array<std::uint64_t, 3> opcodes{reserved, swap, parallel_px};
   for (const auto opcode : opcodes) {
     lead_a1::SharcMemory memory;
     map(memory, opcode);
     lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(base));
     const auto before = cpu.state();
-    const auto *reason =
-        opcode == data_copy ? "width not qualified" : "swap/reserved/parallel-compute";
+    const auto *reason = opcode == parallel_px ? "parallel combined-PX" : "swap/reserved";
     rejected([&] { static_cast<void>(cpu.step()); }, reason);
     require(cpu.state() == before && !memory.active());
   }

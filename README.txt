@@ -12,9 +12,13 @@ entry/return; explicit transactional MMIO and a TI-family AINTC reference. Both
 original SVC and FIQ/IRQ dispatch handlers are exercised, including nested priority
 dispatch after original vector/controller initialization under explicit fixtures.
 Image parsing, safe LZO decoding, verified references, strict build gates and the
-snapshot viewer work. Complete CPU/board boot, DSP, MIDI, audio and a parameter-state producer
+snapshot viewer work. Complete CPU/board/DSP boot, MIDI, audio and a parameter-state producer
 remain pending. The UI starts with unknown values and waits for snapshots.
 See doc/arm-reference.txt, doc/arm-exceptions.txt and doc/aintc.txt.
+Native SHARC references execute original loader streams through the finalizer
+prefix; remaining arithmetic-loop/interrupt/VISA execution still blocks DSP
+application boot. See doc/sharc-stream-reference.txt and doc/dsp-roles.txt for
+the qualified boundaries and static synthesis/routing observations.
 
 Build and checks (Linux, regular user)
 Requires LLVM 19 (clang++, clang-tidy, clang-format, sanitizer runtimes),

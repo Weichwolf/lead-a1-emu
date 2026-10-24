@@ -887,18 +887,30 @@ void continuous_stream(Fixture &fixture,
   } catch (const std::exception &error) {
     fixture.cooperative_dsp = nullptr;
     const std::string message(error.what());
-    require(message.find("native48 pc=0x8c07f") != std::string::npos);
-    require(message.find("other shifter operation") != std::string::npos);
+    require(message.find("native48 pc=0x8c083") != std::string::npos);
+    require(message.find("instruction class not implemented") != std::string::npos);
     stopped = true;
   }
   fixture.cooperative_dsp = nullptr;
-  constexpr std::uint32_t frontier = 0x8c07f;
+  constexpr std::uint32_t frontier = 0x8c083;
   require(stopped && cpu.state().pc == frontier && !fixture.dsp_memory.active());
   require(cpu.state().depth == 0 && !cpu.state().count_loop && cpu.state().loops_empty == true);
   constexpr std::uint32_t saved_instruction = 0x8c030;
   constexpr std::uint64_t template_value = 0xb16b000000;
   require(cpu.state().dag[0][0][8].value == saved_instruction);
-  require(cpu.state().data[0][9].value == template_value);
+  require(cpu.state().data[0][11].value == template_value);
+  constexpr std::uint64_t original_control = 0x400;
+  require(cpu.state().data[0][9].value == original_control &&
+          cpu.state().data[0][9] == cpu.state().data[0][12]);
+  constexpr std::uint32_t self_modify = 0x8c004;
+  require(cpu.state().dag[0][0][12].value == self_modify);
+  constexpr std::uint32_t widened_control = 0x204;
+  const auto control = fixture.control.device.state();
+  require(control.control == widened_control && control.effective == widened_control &&
+          !control.delayed);
+  constexpr std::uint32_t alu_flags = 0x43f;
+  require((cpu.state().system[6].value & alu_flags) == 0 &&
+          (cpu.state().system[6].known & alu_flags) == alu_flags);
   constexpr std::uint32_t final_vectors_bytes = 1536;
   constexpr std::uint32_t header_bytes = 12;
   const auto header = input.end - final_vectors_bytes - header_bytes;
@@ -917,7 +929,7 @@ void continuous_stream(Fixture &fixture,
   const auto cells = verify_stream_payload(fixture, input);
   std::cout << "Cooperative original ARM/DSP transfer: " << input.records << " records, " << cells
             << " final payload cells, " << fixture.dsp_steps
-            << " committed DSP instructions; finalizer PX loaded, BSET remains unsupported\n"
+            << " committed DSP instructions; finalizer reaches arithmetic DO\n"
             << std::flush;
 }
 
@@ -1181,7 +1193,7 @@ void kernel_transfer(std::span<const std::byte> image,
                  .records = records[part][channel]});
     std::cout << "Part " << part << " transport " << channel
               << ": original ARM/SPI first code record stored through native SW reads and indexed "
-                 "writes; cooperative remaining records load finalizer PX\n";
+                 "writes; cooperative finalizer reaches arithmetic DO\n";
   }
 }
 

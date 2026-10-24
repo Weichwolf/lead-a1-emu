@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Check native decoding against independent pinned section SHA-256 identities."""
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -12,7 +13,37 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def native_checks(arguments, directory, specs):
+    if len(arguments) >= 4:
+        for part in specs["parts"]:
+            subprocess.run([arguments[2], arguments[3], directory, str(part["index"])],
+                           check=True)
+    if len(arguments) >= 6:
+        subprocess.run([arguments[4], arguments[3], directory, arguments[5]], check=True)
+    if len(arguments) >= 8:
+        subprocess.run([arguments[6], arguments[3], directory, arguments[7]], check=True)
+    if len(arguments) >= 10:
+        subprocess.run([arguments[8], arguments[3], directory, arguments[9]], check=True)
+    if len(arguments) >= 11:
+        subprocess.run([arguments[10], arguments[3], directory], check=True)
+    if len(arguments) >= 13:
+        subprocess.run([arguments[11], arguments[3], directory, arguments[12]], check=True)
+    if len(arguments) >= 14:
+        subprocess.run([arguments[13], arguments[3], directory], check=True)
+    if len(arguments) >= 15:
+        subprocess.run([arguments[14], arguments[3], directory], check=True)
+    if len(arguments) >= 16:
+        subprocess.run([arguments[15], directory], check=True)
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("emulator", help="native image decoder")
+    parser.add_argument("native", nargs="*", help="optional native comparison executables/fixtures")
+    parser.add_argument("--sharc-only", type=Path, help="run only this original DSP stream checker")
+    args = parser.parse_args()
+    if args.sharc_only and args.native:
+        parser.error("--sharc-only cannot be combined with the aggregate native comparisons")
     reference = ROOT / "doc/local/reference/firmware.bin"
     if not reference.exists():
         print("SKIP: original reference absent")
@@ -21,7 +52,7 @@ def main():
     if hashlib.sha256(reference.read_bytes()).hexdigest() != specs["bundle_sha256"]:
         raise ValueError("Unexpected original bundle hash")
     with tempfile.TemporaryDirectory(dir=ROOT / "doc/local") as directory:
-        subprocess.run([sys.argv[1], "--extract", str(reference), directory], check=True)
+        subprocess.run([args.emulator, "--extract", str(reference), directory], check=True)
         for part in specs["parts"]:
             for section in part["sections"]:
                 name = f"{part['index']}-{section['tag']}.bin"
@@ -39,26 +70,10 @@ def main():
             if (len(kernel) != sharc["bytes"]
                     or hashlib.sha256(kernel).hexdigest() != sharc["sha256"]):
                 raise ValueError("Original SHARC kernel identity mismatch")
-        if len(sys.argv) >= 4:
-            for part in specs["parts"]:
-                subprocess.run([sys.argv[2], sys.argv[3], directory, str(part["index"])],
-                               check=True)
-        if len(sys.argv) >= 6:
-            subprocess.run([sys.argv[4], sys.argv[3], directory, sys.argv[5]], check=True)
-        if len(sys.argv) >= 8:
-            subprocess.run([sys.argv[6], sys.argv[3], directory, sys.argv[7]], check=True)
-        if len(sys.argv) >= 10:
-            subprocess.run([sys.argv[8], sys.argv[3], directory, sys.argv[9]], check=True)
-        if len(sys.argv) >= 11:
-            subprocess.run([sys.argv[10], sys.argv[3], directory], check=True)
-        if len(sys.argv) >= 13:
-            subprocess.run([sys.argv[11], sys.argv[3], directory, sys.argv[12]], check=True)
-        if len(sys.argv) >= 14:
-            subprocess.run([sys.argv[13], sys.argv[3], directory], check=True)
-        if len(sys.argv) >= 15:
-            subprocess.run([sys.argv[14], sys.argv[3], directory], check=True)
-        if len(sys.argv) >= 16:
-            subprocess.run([sys.argv[15], directory], check=True)
+        if args.sharc_only:
+            subprocess.run([str(args.sharc_only), directory], check=True)
+        else:
+            native_checks([sys.argv[0], args.emulator, *args.native], directory, specs)
     print("All six native decoded sections match independent pinned hashes")
     return 0
 

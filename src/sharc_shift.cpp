@@ -13,6 +13,8 @@ constexpr std::uint32_t all_bits = std::numeric_limits<std::uint32_t>::max();
 constexpr std::uint32_t sign_bit = 0x80000000;
 constexpr unsigned int word_bits = 32;
 constexpr unsigned int arithmetic_shift = 4;
+constexpr unsigned int bit_set = 0xc0;
+constexpr unsigned int bit_test = 0xcc;
 constexpr std::uint64_t immediate_operation_mask = 63;
 constexpr std::uint64_t byte_mask = 0xff;
 constexpr std::uint32_t shift_zero = 0x1000;
@@ -25,7 +27,7 @@ struct ShiftInstruction {
   unsigned int count_register{};
   std::uint32_t count{};
   bool immediate{};
-  bool arithmetic{};
+  unsigned int operation{};
 };
 
 ShiftInstruction decode(std::uint64_t opcode, bool immediate) {
@@ -54,10 +56,11 @@ ShiftInstruction decode(std::uint64_t opcode, bool immediate) {
     fields.destination = static_cast<unsigned int>((opcode >> 8) & 15);
     fields.count_register = static_cast<unsigned int>(opcode & 15);
   }
-  if (operation != 0 && operation != arithmetic_shift) {
+  if (operation != 0 && operation != arithmetic_shift &&
+      (operation < bit_set || operation > bit_test || (operation & 3) != 0)) {
     throw std::runtime_error("SHARC rotate/OR/bit-field/other shifter operation not implemented");
   }
-  fields.arithmetic = operation == arithmetic_shift;
+  fields.operation = operation;
   return fields;
 }
 
@@ -107,18 +110,23 @@ void status(SharcState &state, ShiftResult result, unsigned int element) {
     flags.known |= shift_zero;
     if (result.word.value == 0) { flags.value |= shift_zero; }
   }
-  for (auto *view :
-       {&state.system[sharc_astat_x + element], &state.effective[sharc_astat_x + element]}) {
-    view->value = (view->value & ~shift_flags) | flags.value;
-    view->known = (view->known & ~shift_flags) | flags.known;
-  }
+  sharc_shift_status(state, flags, element);
 }
 
 void lane(SharcState &state, ShiftInstruction fields, unsigned int element) {
   const auto input = operand(state, fields.source, element);
   const auto count =
       fields.immediate ? fields.count : sharc_value(operand(state, fields.count_register, element));
-  const auto result = shifted(input, count, fields.arithmetic);
+  if (fields.operation >= bit_set) {
+    sharc_bit_shift(state,
+                    input,
+                    {.position = count,
+                     .operation = static_cast<SharcBitOperation>(fields.operation),
+                     .destination = fields.destination},
+                    element);
+    return;
+  }
+  const auto result = shifted(input, count, fields.operation == arithmetic_shift);
   constexpr std::uint64_t extension = 0xff;
   sharc_compute_register(state, fields.destination, element) = {
       .value = std::uint64_t{result.value} << 8,
@@ -126,6 +134,14 @@ void lane(SharcState &state, ShiftInstruction fields, unsigned int element) {
   status(state, {.word = result, .left = count != 0 && (count & sign_bit) == 0}, element);
 }
 
+}
+
+void sharc_shift_status(SharcState &state, SharcKnown32 flags, unsigned int element) {
+  for (auto *view :
+       {&state.system[sharc_astat_x + element], &state.effective[sharc_astat_x + element]}) {
+    view->value = (view->value & ~shift_flags) | flags.value;
+    view->known = (view->known & ~shift_flags) | flags.known;
+  }
 }
 
 void sharc_shift(SharcState &state, std::uint64_t opcode, bool immediate) {

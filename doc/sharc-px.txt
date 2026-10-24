@@ -22,7 +22,8 @@ third physical-column store also rolls back the first two columns.
 
 This initial qualification is SISD, non-LW and normal-word RAM only. Forced
 LW/long-word/SW/external/IOP PX transfers, PX1/PX2 RAM operands, combined-PX
-non-data-register/immediate moves, SIMD and parallel compute remain guarded.
+non-data-register/immediate moves, SIMD and combined-PX parallel compute remain
+guarded. Split-PX32 parallel moves follow sharc-register-moves.txt.
 No pipeline/peripheral timing or full finalizer/application execution follows
 from these register-transfer checks.
 
@@ -48,7 +49,9 @@ It checks all64 known bits against that value, using the original CODE input,
 without reading the expected value back through the emulated PX/RAM decoder.
 The saved value is not assumed to be surviving bootstrap code.
 
-Each placement retires exactly one further instruction and stops on unsupported
-BSET at nativePC0x8c07f. The final1536 vector bytes remain excluded and the
-original ARM writer has not returned. This qualifies the functional PX prefix;
-full finalization, IRQ/cache/pipeline/physical timing, VISA boot and audio remain open.
+The qualified composition continues through BSET, SYSCTL width selection and
+the parallel transfer to unsupported arithmetic DO/nativePC0x8c083; counts are
+in sharc-four-loops.txt and the separate direct cadences in sharc-stream-reference.txt.
+The final1536 vector bytes remain excluded and the original ARM writer has
+not returned. This qualifies the functional prefix; full finalization,
+IRQ/cache/pipeline/physical timing, VISA boot and audio remain open.

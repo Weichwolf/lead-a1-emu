@@ -1,0 +1,34 @@
+SHARC finalizer evidence and remaining execution boundary
+
+The qualified PX prefix is in sharc-px.txt. The following generic bit-operation
+and parallel-transfer extensions are documented separately; arithmetic DO,
+modified PC-stack loop starts, IRQ/RTI, cache/prefetch and IDLE sequencing still
+need execution qualification. No vector load or application boot is implied.
+
+Primary-reference provenance is recorded in reference/sharc.json:
+- PGRrev2.4,4-53/54: arithmetic-loop termination tests when the second body
+  instruction is fetched;4-58 describes short-loop draining. The counter-loop
+  e-4 rule must not be reused as the arithmetic-loop rule.
+- PGR A-11 keeps a loop type in LADDR separately from the PC-stack start.
+  A later PCSTK write must not silently reclassify a loop by its new length.
+- PGR4-22/23 delays interrupt service across a delayed branch and describes
+  an IDLE-in-delay-slot deadlock. HWRrev1.1,24-25..27 explicitly describes
+  the final vector DMA with delayed branch and IDLE instead.
+- CCES2.9rev2.3,10-16..19 documents saved-header instruction packing and
+  vector restoration. Its finalization explanation separates IDLE completion,
+  branch completion/mask clear, interrupt entry and RTI. The illustrated
+  ADSP-2126x listing does not qualify ADSP-21489 pipeline details or counts.
+- The official2148x anomaly list NR004008L distinguishes IRQx/timer status
+  returns (15000002), external-data control latency (15000004) and VISA
+  internal-write visibility (15000024). Its IDLE case15000021 concerns a
+  debugger/core-timer sequence; no FINAL_INIT wake exception is established.
+  Physical silicon revision and applicability remain unknown. The document
+  was reviewed online; reference/sharc.json does not claim a local byte hash.
+
+These sources constrain the required behavior but leave the generic PGR
+IDLE statement and boot procedure to reconcile. Do not replace IDLE by NOP,
+copy vectors through the host, patch a branch or summarize the self-modifying
+loop. Wake, interrupt acceptance/service, pending control latency, fetched
+instruction visibility and loop-stack effects require independent tests.
+The original final header's saved instruction and vector addresses are factual
+input metadata; the hypothesized number of loop passes is not qualified timing.

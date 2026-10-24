@@ -37,6 +37,23 @@
       "official_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADSP-21483_21486_21487_21488_21489.pdf",
       "provenance": "Official document consulted directly; local byte identity not yet pinned.",
       "sections": "Table5 5-Mbit RAM geometry for ADSP-21486/21487/21489; not exact Nord part identification"
+    },
+    {
+      "author": "Analog Devices",
+      "title": "CCES 2.9.0 Loader and Utilities Manual, Revision 2.3, May 2019, 82-100114-01",
+      "official_url": "https://www.analog.com/media/en/dsp-documentation/software-manuals/cces-loaderutilities-manual.pdf",
+      "local_copy_url": "https://www.analog.com/media/en/dsp-documentation/software-manuals/cces-loaderutilities-manual.pdf",
+      "local_copy_bytes": 1223134,
+      "local_copy_sha256": "f821f28a72f633f39f939c2f9a12a461ce26c2f95ee6eb831355809439cb899f",
+      "provenance": "Direct manufacturer download, analysis-only; no manufacturer source or listing reused. Does not identify the Nord toolchain/version.",
+      "sections": "10-16/17 FINAL_INIT header packing and ADSP-214xx SPI vector0x8c030; 10-18/19 DMA completion, IDLE wake, completed delayed branch, mask clear, interrupt entry and return/self-modifying initialization. Illustrated ADSP-2126x listing is not an ADSP-21489 pipeline/layout/cycle-count oracle; reconcile with PGR4-23 and HWR24-25/27 before execution claims."
+    },
+    {
+      "author": "Analog Devices",
+      "title": "ADSP-21483/21486/21487/21488/21489 SHARC Silicon Anomaly List, NR004008L, Revision L, January 2018",
+      "official_url": "https://www.analog.com/media/en/dsp-documentation/integrated-circuit-anomalies/adsp-21483_21486_21487_21488_21489_sharc-anomaly.pdf",
+      "provenance": "Official PDF consulted online; local byte identity not established. No implementation reused. Physical Nord silicon revision remains unknown.",
+      "sections": "Pages3-4:15000002 delayed IRQx/timer return status-stack anomaly,15000004 external-data system-register effect latency and15000005 DMA-conflicted loop-register loads. Pages11-13:15000021 debugger/core-timer IDLE case and15000023/24 VISA delayed access/internal-write FIFO visibility. These revision-specific cases do not establish a target FINAL_INIT IDLE/wake exception or physical chip profile."
     }
   ],
   "spi_slave_reference": {

@@ -1,0 +1,40 @@
+DSP application roles: static evidence and unresolved routing
+
+The two main-image DSP streams contain substantial shared synthesis, control,
+filter and effect code. Their logical transport numbers are the original ARM
+uploader arguments, not an established physical package order or slot assignment.
+The two bundle parts must also remain separate from these transport indices.
+
+The private reconstruction's factual main-frame-engine, main-table-calls,
+main-filters-and-delay and main-effects contracts identify the following
+unchanged OS1.36 structures. These are static instruction/dataflow observations,
+not sound output, physical measurements or imported implementation:
+- Both programs prepare modulation/control records and phase callbacks, render
+  and filter sums, and invoke selected effect/mix and feedback-network callbacks.
+- The shared main filter range is DSP short-word addresses1c3e8a..1c47d0.
+  Equivalent instruction schedules use different explicit state/table bindings.
+- The four-iteration audio loop begins at1c572e for transport0 and1c5733 for1.
+  Four loop iterations do not establish four user slots, voices or SIMD lanes.
+- Transport0 replaces four frame words with scaled sums. Transport1 adds its
+  scaled sums to existing words. Both then retain effect/mix processing.
+- Transport0's final path contains saturation, CLIP/FIX conversion and
+  accumulator operations. Transport1 copies work words to its frame cursor
+  without that final conversion path. This does not identify codec/sample format.
+
+The evidence supports distributed synthesis with different audio-routing roles;
+it does not support assigning one chip exclusively to synthesis and the other
+exclusively to effects. Two slots per chip remains a hypothesis. Slot A-D and
+voice ownership, physical SPORT directions/interconnect, sample rate, block
+timing, silicon revision and the binding of either stream to a photographed
+package need execution and hardware evidence. Callback/record counts alone
+must not become a host voice-allocation policy.
+
+Preserve both original programs and their causal exchanges in the emulator.
+Choose host SIMD packing or concurrency from observed workloads after exact
+reference arithmetic and inter-processor scheduling exist. AVX512 availability
+does not establish safe four-slot batching or independent physical DSP clocks.
+
+Evidence is the private factual contracts at reconstruction451227479304608ec879f079cf581c3ff4fec353,
+not a copy of its assembler, decoder, source or manufacturer instructions.
+Kernel transfer qualification in sharc-four-loops.txt/sharc-px.txt is separate
+from application execution; full boot, slot behavior and audio remain open.

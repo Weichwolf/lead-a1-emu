@@ -84,9 +84,11 @@ An independent read-only oracle walks tag1/3/4 headers with their original
 padding, accumulates the last payload halfword for each physical cell and
 compares every such final cell against actual DSP RAM. It does not copy any
 payload into DSP memory. Tag1 remains the original skip, not a host zero fill.
-The terminal header's following1536 vector bytes are excluded: execution
-now executes PX=PM at native word PC0x8c07e, then stops on unsupported BSET
-at0x8c07f before loading them (sharc-px.txt).
+The terminal header's following1536 vector bytes are excluded. Execution
+retires PX=PM, BSET, SYSCTL width selection, I12 setup and the old-value
+parallel PASS/register transfer, then stops on unsupported arithmetic DO
+at native PC0x8c083 (sharc-px.txt,sharc-bit-operations.txt,
+sharc-register-moves.txt).
 The ARM writer has not returned at this frontier; in-flight serial state is
 not reported as a completed whole-array transfer.
 
@@ -94,10 +96,10 @@ All four original placements reach that frontier. Record counts include the
 terminal header; payload-cell counts are final last-write-wins comparisons:
 
 Part  Transport  Records  Payload cells  Committed DSP instructions
-0     0          608      51869          6415776
-0     1          600      51755          6397471
-1     0           26       4042           617460
-1     1           21       1652           344001
+0     0          608      51869          6415780
+0     1          600      51755          6397475
+1     0           26       4042           617464
+1     1           21       1652           344005
 
 This covers1251 nonterminal records and109318 final-cell comparisons across
 the placements. Architectural count1 startup stack arbitration above,
