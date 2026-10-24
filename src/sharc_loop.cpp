@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "lead_a1/sharc.hpp"
+#include "sharc_immediate_indexed.hpp"
 #include "sharc_internal.hpp"
 
 #include <cstdint>
@@ -106,7 +107,8 @@ bool sharc_loop_body_supported(std::uint64_t opcode) {
   constexpr unsigned int class_shift = 40;
   return opcode == 0 || (opcode >> class_shift) == 1 || (opcode >> class_shift) == 2 ||
          (opcode & indexed_mask) == indexed_move ||
-         (opcode & register_indexed_mask) == register_indexed;
+         (opcode & register_indexed_mask) == register_indexed ||
+         sharc_immediate_indexed_instruction(opcode).has_value();
 }
 
 void sharc_clocked_loop_pop(SharcState &state) {

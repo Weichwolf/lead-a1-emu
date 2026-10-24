@@ -240,6 +240,13 @@ ID  State    Evidence / remaining work
              general loop IRQ/stall/operand-width composition, saved-vector
              restore and complete application remain open
              (sharc-arithmetic-cache.txt).
+             Native Type15a32-bit immediate pre-modify now supports qualified
+             R/S/PX transfers with unchanged indices and explicit DM/PM cache
+             requests. Bound Decode retains address/bank/modifier; native48 PX
+             does not depend on SYSCTL.IMDW. Real last-slot SYSCTL/quiet-clock
+             and PX-store cases retain controller ownership/width boundaries.
+             Original rewritten-word visibility is still unqualified; no
+             original Type15 execution follows (sharc-immediate-indexed.txt).
              A separate internal RAM-port reference grants IO0>IO1>DM>PM per block,
              retains losing IO1 into the following clock and alternates new
              I/O launch eligibility from an explicit owner phase. Actual reads,
@@ -555,6 +562,13 @@ ID  State    Evidence / remaining work
              knowledge, distinct cached-NOP/RAM-decrement results and48
              independent occupied/retired cache continuations.
              New-miss termination preserves state and prior committed stores.
+             Type15a tests add literal read/write encodings,768 directed
+             DM/PM/direction/register-bank/width/index/offset combinations,
+             actual PM/cache and I-producer stalls, complement/count2/3/5
+             stores with unchanged indices, source knowledge, malformed width,
+             late-unknown operands,20 independent occupied/retired checkpoints
+             and actual SYSCTL/quiet-width/owner failure-retry expectations
+             (sharc-immediate-indexed.txt).
              Loop-entry IDLE tests add actual192-word DMA replacement, invalid
              new slot RAM, native handler LADDR/IRQ-PCSTK/depth readback and RTI,
              one independent held-state restoration and48 occupied/retired

@@ -28,6 +28,9 @@ termination/flush references. Original loop-entry IDLE, final vector DMA and
 P1I/RTI now execute through restored8c003. The actual first self-modifying
 PM/SYSCTL store retires; the next quiet SYSCTL width clock remains guarded
 (doc/sharc-fetch-arithmetic.txt, doc/sharc-arithmetic-cache.txt).
+The prepared Type15a immediate-indexed PX operation has a separate native and
+captured-address reference (doc/sharc-immediate-indexed.txt); original execution
+of the rewritten instruction remains unqualified.
 P1I/RTI, ordinary delayed branches and unlooped fetched DB/IDLE wake
 have bounded references; self-modifying loop/fetch visibility, general loop IDLE and VISA
 still block DSP application boot. See doc/sharc-stream-reference.txt and

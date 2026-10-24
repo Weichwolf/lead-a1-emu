@@ -5,6 +5,7 @@
 #include "lead_a1/sharc_control.hpp"
 #include "lead_a1/sharc_memory.hpp"
 #include "sharc_dag_internal.hpp"
+#include "sharc_immediate_indexed.hpp"
 #include "sharc_internal.hpp"
 
 #include <cstdint>
@@ -171,6 +172,10 @@ std::optional<std::uint32_t> execute(SharcMemory &memory,
                                      bool fetched = false) {
   if (dag != nullptr) {
     detail::sharc_execute_dag(memory, state, opcode, control, *dag);
+    return {};
+  }
+  if (const auto instruction = detail::sharc_immediate_indexed_instruction(opcode)) {
+    detail::sharc_immediate_indexed_move(memory, state, *instruction, control);
     return {};
   }
   constexpr std::uint64_t dual_mask = 0xe00000000000;

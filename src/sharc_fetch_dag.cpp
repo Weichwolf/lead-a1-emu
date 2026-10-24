@@ -2,6 +2,7 @@
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_fetch.hpp"
 #include "sharc_fetch_internal.hpp"
+#include "sharc_immediate_indexed.hpp"
 #include "sharc_internal.hpp"
 
 #include <cstdint>
@@ -32,6 +33,10 @@ std::uint32_t bit(std::uint64_t opcode, unsigned int shift, unsigned int group =
 }
 
 std::optional<DagUse> consumer(std::uint64_t opcode) {
+  if (const auto instruction = sharc_immediate_indexed_instruction(opcode)) {
+    return DagUse{.indices = std::uint32_t{1} << instruction->index,
+                  .qualified = !instruction->long_word};
+  }
   constexpr std::uint64_t immediate_move = 0x600000000000;
   constexpr std::uint64_t indexed_mask = 0xe00000000000;
   constexpr std::uint64_t indexed_move = 0x400000000000;

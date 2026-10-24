@@ -5,6 +5,7 @@
 #include "lead_a1/sharc_fetch.hpp"
 #include "sharc_dag_internal.hpp"
 #include "sharc_fetch_internal.hpp"
+#include "sharc_immediate_indexed.hpp"
 #include "sharc_internal.hpp"
 
 #include <array>
@@ -31,10 +32,11 @@ void older_guard(const SharcFetchWord &word, SharcDagInstruction consumer) {
   constexpr std::uint32_t sysctl = 0x30024;
   constexpr unsigned int dm_write = 17;
   constexpr unsigned int pm_write = 19;
+  constexpr unsigned int combined_px = 0x6b;
   const auto type = word.opcode >> class_shift;
   if (sharc_fetch_destination(word.opcode) == mode1 ||
       ((type == dm_write || type == pm_write) &&
-       static_cast<std::uint32_t>(word.opcode) == sysctl)) {
+       static_cast<std::uint32_t>(word.opcode) == sysctl && consumer.reg != combined_px)) {
     throw std::runtime_error("SHARC DAG Decode with in-flight mode/width write not qualified");
   }
   constexpr std::uint64_t dual_mask = 0xe00000000000;
@@ -55,7 +57,8 @@ SharcDagAddress capture(const SharcState &cpu,
   if (cpu.pending[sharc_mode1]) {
     throw std::runtime_error("SHARC DAG Decode with pending MODE1 not qualified");
   }
-  if (control != nullptr && control->snapshot().delayed) {
+  constexpr unsigned int combined_px = 0x6b;
+  if (control != nullptr && control->snapshot().delayed && instruction.reg != combined_px) {
     throw std::runtime_error("SHARC DAG Decode with pending SYSCTL width not qualified");
   }
   auto forwarded = cpu;
@@ -70,6 +73,7 @@ SharcDagAddress capture(const SharcState &cpu,
     }
   }
   sharc_addressing_guard(forwarded, instruction.index);
+  sharc_dag_register_guard(instruction.reg, instruction.program ? 1U : 0U);
   const auto before = sharc_value(sharc_register_read(forwarded, 16 + instruction.index));
   const auto modifier =
       instruction.modifier_register
@@ -83,7 +87,7 @@ SharcDagAddress capture(const SharcState &cpu,
           .after = instruction.post ? sum : before,
           .index = instruction.index,
           .bank = bank(forwarded, instruction.index),
-          .width = sharc_dag_width(control, address),
+          .width = sharc_dag_width(control, address, instruction),
           .post = instruction.post};
 }
 

@@ -8,6 +8,9 @@ compute-free Type3/Type4 R/S data-register transfers. It records the resolved
 logical index, physical bank, old index, modifier, bus word address, post-update
 value and selected SW16/NW32/extended40 width. Opcode bits are not changed. Raw
 standalone/explicit-address paths keep their existing contract.
+The separate Type15a32-bit immediate pre-modify and native-width PX extension
+is in sharc-immediate-indexed.txt. It retains the index and captures its
+complete modifier/address; it does not turn UREG bits into condition bits.
 
 A normal advancing clock captures its new Decode input after actual control
 suppression. F2 words have no operand capture. Stalls retain existing operands;
@@ -27,9 +30,10 @@ values and RAM contents still use the ordinary native transfer transaction; this
 is not full data-operand or memory-bus response-latch capture. A RAM edit after
 Decode but before Address remains visible to a load.
 
-Width must still match at retirement; a changed controller profile fails before
-memory/index mutation. Pending/in-flight MODE1 or SYSCTL width changes and
-foreign controller ownership cannot supply guessed Decode inputs. Shape
+For R/S transfers, width must still match at retirement; a changed controller
+profile fails before memory/index mutation. Pending/in-flight MODE1, SYSCTL
+width changes for R/S and foreign controller ownership cannot supply guessed
+Decode inputs. Shape
 validation checks opcode eligibility, index/bank bounds, modular arithmetic,
 immediate modifiers, pre/post relations, memory domains and widths. Pre-modify
 cannot cross address spaces (PGR6-10). Early, absent or unexpected operand
@@ -54,6 +58,10 @@ expected distinct bus addresses. Paired RAM/controller/CPU/transport snapshots,
 failed memory with pending pre-pop and malformed metadata supplement these
 numerical/phase oracles. No manufacturer/private implementation is a build
 input.
+The Type15a PX extension additionally permits pending/in-flight SYSCTL width
+writes because its native48 width is independent of IMDW. Its captured address
+and controller ownership still validate; ordinary R/S width changes keep their
+existing guard. Complete mode/width transitions are not inferred.
 
 The optional original test extends its fresh sequenced PLL fixture through the
 first unchanged RAM-clear loop. It performs48768 actual NW32 zero stores from

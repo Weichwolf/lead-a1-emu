@@ -5,6 +5,7 @@
 #include "lead_a1/sharc_control.hpp"
 #include "lead_a1/sharc_memory.hpp"
 #include "sharc_dag_internal.hpp"
+#include "sharc_immediate_indexed.hpp"
 #include "sharc_internal.hpp"
 
 #include <cstdint>
@@ -12,19 +13,6 @@
 #include <stdexcept>
 
 namespace lead_a1::detail {
-namespace {
-
-unsigned int address_space(std::uint32_t address) {
-  constexpr std::uint32_t normal = 0x80000;
-  constexpr std::uint32_t short_word = 0x100000;
-  constexpr std::uint32_t ram_end = 0x200000;
-  if (address >= normal && address < short_word) { return 1; }
-  if (address >= short_word && address < ram_end) { return 2; }
-  return 0;
-}
-
-}
-
 std::optional<SharcDagInstruction> sharc_dag_instruction(std::uint64_t opcode) {
   constexpr std::uint64_t immediate_mask = 0xf00000000000;
   constexpr std::uint64_t immediate_move = 0x600000000000;
@@ -36,6 +24,20 @@ std::optional<SharcDagInstruction> sharc_dag_instruction(std::uint64_t opcode) {
   constexpr unsigned int index_shift = 41;
   constexpr unsigned int data_shift = 23;
   SharcDagInstruction result;
+  if (const auto instruction = sharc_immediate_indexed_instruction(opcode)) {
+    constexpr unsigned int combined_px = 0x6b;
+    constexpr unsigned int complement_begin = 0x50;
+    constexpr unsigned int complement_end = 0x60;
+    result.index = instruction->index;
+    result.reg = instruction->reg;
+    result.immediate = instruction->modifier;
+    result.program = instruction->program;
+    result.write = instruction->write;
+    result.qualified = !instruction->long_word &&
+                       (result.reg < 16 || result.reg == combined_px ||
+                        (result.reg >= complement_begin && result.reg < complement_end));
+    return result;
+  }
   bool plain_width = true;
   if ((opcode & immediate_mask) == immediate_move) {
     constexpr unsigned int program_shift = 40;
@@ -96,8 +98,16 @@ void sharc_validate_dag_address(std::uint64_t opcode, const SharcDagAddress &add
   constexpr std::uint32_t normal = 0x80000;
   constexpr std::uint32_t short_word = 0x100000;
   constexpr std::uint32_t ram_end = 0x200000;
-  if (!address.post && address_space(address.before) != address_space(address.address)) {
+  if (!address.post && !sharc_pre_modify_space(address.before, address.address)) {
     throw std::invalid_argument("Invalid SHARC captured DAG pre-modify space crossing");
+  }
+  constexpr unsigned int combined_px = 0x6b;
+  if (instruction->reg == combined_px) {
+    if (address.address < normal || address.address >= short_word ||
+        address.width != SharcWidth::wide48) {
+      throw std::invalid_argument("Invalid SHARC captured DAG PX width/domain");
+    }
+    return;
   }
   if (address.address >= normal && address.address < short_word) {
     if (address.width != SharcWidth::normal32 && address.width != SharcWidth::extended40) {
@@ -109,7 +119,18 @@ void sharc_validate_dag_address(std::uint64_t opcode, const SharcDagAddress &add
   }
 }
 
-SharcWidth sharc_dag_width(const SharcControl *control, std::uint32_t address) {
+SharcWidth sharc_dag_width(const SharcControl *control,
+                           std::uint32_t address,
+                           const SharcDagInstruction &instruction) {
+  constexpr unsigned int combined_px = 0x6b;
+  if (instruction.reg == combined_px) {
+    constexpr std::uint32_t normal = 0x80000;
+    constexpr std::uint32_t normal_end = 0x100000;
+    if (address < normal || address >= normal_end) {
+      throw std::runtime_error("SHARC DAG PX transfer outside normal-word RAM not qualified");
+    }
+    return SharcWidth::wide48;
+  }
   constexpr std::uint32_t short_word = 0x100000;
   constexpr std::uint32_t ram_end = 0x200000;
   if (address >= short_word && address < ram_end) { return SharcWidth::short16; }
@@ -126,10 +147,13 @@ void sharc_execute_dag(SharcMemory &memory,
                        const SharcDagAddress &address) {
   sharc_validate_dag_address(opcode, address);
   const auto instruction = sharc_dag_instruction(opcode);
-  if (!instruction || !sharc_data_move_condition(state, opcode)) {
+  if (!instruction) { throw std::runtime_error("SHARC captured DAG retirement form changed"); }
+  if (sharc_immediate_indexed_instruction(opcode)) {
+    sharc_addressing_guard(state, instruction->index);
+  } else if (!sharc_data_move_condition(state, opcode)) {
     throw std::runtime_error("SHARC captured DAG retirement form changed");
   }
-  if (sharc_dag_width(control, address.address) != address.width) {
+  if (sharc_dag_width(control, address.address, *instruction) != address.width) {
     throw std::runtime_error("SHARC captured DAG width changed before retirement");
   }
   if (instruction->program) { sharc_cache_program_access(state); }

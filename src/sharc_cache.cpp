@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "lead_a1/sharc.hpp"
+#include "sharc_immediate_indexed.hpp"
 #include "sharc_internal.hpp"
 
 #include <cstdint>
@@ -14,6 +15,9 @@ constexpr std::uint64_t instruction_bits = 0xffffffffffff;
 constexpr std::uint64_t flush = 0x170200000000;
 
 bool program_data(std::uint64_t opcode) {
+  if (const auto instruction = sharc_immediate_indexed_instruction(opcode)) {
+    return instruction->program;
+  }
   constexpr unsigned int class_shift = 40;
   const auto type = opcode >> class_shift;
   constexpr std::uint64_t type4_mask = 0xf00000000000;

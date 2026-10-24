@@ -2,12 +2,26 @@
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_control.hpp"
 #include "lead_a1/sharc_fetch.hpp"
+#include "lead_a1/sharc_memory.hpp"
 #include "sharc_fetch_internal.hpp"
+#include "sharc_immediate_indexed.hpp"
 #include "sharc_internal.hpp"
 
+#include <optional>
 #include <stdexcept>
 
 namespace lead_a1::detail {
+namespace {
+
+bool width_independent(const std::optional<SharcFetchWord> &word) {
+  if (!word || word->opcode == 0) { return true; }
+  const auto instruction = sharc_immediate_indexed_instruction(word->opcode);
+  constexpr unsigned int combined_px = 0x6b;
+  return instruction && !instruction->long_word && instruction->reg == combined_px && word->dag &&
+         word->dag->width == SharcWidth::wide48;
+}
+
+}
 
 void sharc_fetch_quiet_effects(SharcState &cpu,
                                const SharcFetchState &transport,
@@ -17,7 +31,8 @@ void sharc_fetch_quiet_effects(SharcState &cpu,
   if (cpu.pending[sharc_mode1] && (transport.fetch1 || transport.fetch2 || decoded)) {
     throw std::runtime_error("SHARC quiet MODE1 pipeline effect interlock not qualified");
   }
-  if (control != nullptr && control->state().delayed && decoded) {
+  if (control != nullptr && control->state().delayed &&
+      (!width_independent(transport.decode) || !width_independent(transport.address))) {
     throw std::runtime_error("SHARC quiet SYSCTL Decode/Address width interlock not qualified");
   }
   if (cpu.cache.pending_flush) {

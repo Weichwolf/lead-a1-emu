@@ -1,0 +1,56 @@
+Native Type15a immediate-indexed transfers
+
+PGR9-56/59 and10-21 define the native101 class: G selects DM/PM, three
+index bits select I0..7/I8..15, D selects direction, L requests forced LW,
+seven bits select UREG and the low32 bits supply the modifier. The effective
+word address is the32-bit modular sum of I and that modifier. I is not updated.
+There is no condition or compute field; unresolved ASTAT is not sampled.
+
+Qualified SISD transfers use the existing R/S data-register and combined-PX
+memory transactions. R/S widths still follow the selected memory view and
+explicit SYSCTL. PX uses native48 bits at PX63:16, independent of IMDW.
+Same-DAG UREG/index combinations are prohibited. Forced LW, other UREG memory
+semantics, unsupported domains/address modes and unknown operands fail with
+context. Pre-modify does not cross memory address spaces. No memory, index,
+cache or control mutation survives a failed native instruction transaction.
+
+The bound sequencer captures the actual Decode address, modifier and physical
+DAG bank for qualified data/PX forms. Validation retains the complete32-bit
+modifier and pre-modify relation. Retirement uses that captured address;
+unknown later I or DAG-bank selection does not replace it. PX metadata must
+have a normal-word RAM domain and native48 width. Data-width/profile changes
+remain guarded for R/S transfers. PM forms issue real Address bus requests and
+use the existing cache lookup/partial-stall/data-operation path.
+
+Combined-PX address capture does not depend on SYSCTL.IMDW, including an
+in-flight or pending width write. MODE1 and dual forwarding remain guarded.
+A quiet granted clock may mature SYSCTL with absent words, NOPs or captured
+Type15a PX words in Decode/Address. Other operand-width transitions remain
+explicitly unsupported. Foreign controller ownership rejects before commit.
+No instruction retires to supply this clock and no fetched word is reread.
+
+Owned tests use separate literal native PM/PX read/write encodings and768
+DM/PM/direction/PX/data/register-bank/width/index/offset combinations, with
+independent RAM/register expectations. Additional cases cover complement
+registers, real count2/3/5 DM loop stores with invariant indices and native
+frames, two actual I-producer stalls followed by a separate PM-cache stall,
+unresolved flags, late unknown index/bank, malformed PX width,
+forced LW, same-DAG combinations, unknown source/index, unmapped memory and
+rollback. Twenty occupied/retired-Execute continuations bind separate RAM,
+core/cache and transport. A real last-DB-slot SYSCTL store, following quiet
+clock and actual PX store check width independence and owner failure/retry.
+
+The prepared original finalizer patch uses this format. That is static/input
+evidence; its execution is not yet qualified. The original fetched fixture
+still stops after its first self-modifying dual store at the quiet SYSCTL
+boundary, with the old end word in F2. Instruction visibility, complete dual
+operand capture, vector restoration and application boot remain open.
+Neither an unmodified original program nor an existing captured word is
+patched to bypass that failure. Full instrument acceptance is unchanged.
+
+Primary constraints: PGRrev2.4 2-11/12,4-5/8,4-111/114,6-10/17,9-56/59,
+10-21,A-32/45; pinned provenance in reference/sharc.json. This is a bounded
+software reference, not a vendor-simulator or physical timing qualification.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_immediate_indexed_moves|sharc_captured_dag_addresses|sharc_dag_load_stalls|sharc_quiet_clock|sharc_fetch_cache|sharc_px_transfers|original_sharc_images)$' --output-on-failure

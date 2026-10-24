@@ -25,6 +25,11 @@ not use SYSCTL.IMDW. A pending FLUSH CACHE remains guarded: effect/follower
 prohibition and outstanding lookup/fill ordering are not inferred from a
 quiet cycle. These limits preserve qualified behavior while the full pipeline
 is incomplete; no physical Nord clock profile is established.
+The Type15a extension in sharc-immediate-indexed.txt permits SYSCTL maturation
+with absent words, NOPs or captured native48 PX words in Decode/Address.
+Their width is independent of IMDW. Other decoded width-sensitive transfers
+and MODE1/FLUSH ordering remain guarded; no instruction is reread or retired
+to supply this quiet clock.
 
 SharcControl.advance_internal_clocks now accepts a positive one-clock quiet
 internal interval. PGR A-45 explicitly gives SYSCTL one cycle of effect
