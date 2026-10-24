@@ -52,11 +52,12 @@ A failed actual producer retains its waiting Decode branch until repaired
 and retried. These are finite
 deterministic inputs, not random fuzzing or physical measurements.
 
-The optional original-stream test also executes each actual serially loaded
+The optional original-stream test executes each actual serially loaded
 kernel's first eight instructions through the sequencer: five NOPs, CALL(DB)
 and both real mask/latch writes. Twelve granted fetch clocks reach8c091 with
 the actual CALL frame108c008 and retained first target instruction in Decode.
-No IOP read, peripheral clock or automatic IRQ is performed by that prefix.
+The further quiet-clock step and actual ninth PMCTL read now have the
+sharc-quiet-clocks.txt contract; no peripheral time or automatic IRQ is inferred.
 The full original stream then starts with a separate fresh functional CPU and
 retains its existing8c08e frontier. This is not a pipeline-qualified complete
 loader, terminal-vector acceptance, ARM writer return, coldboot or audio.

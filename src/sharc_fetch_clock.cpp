@@ -12,6 +12,7 @@
 #include <optional>
 #include <sstream>
 #include <stdexcept>
+#include <type_traits>
 
 namespace lead_a1 {
 namespace {
@@ -88,17 +89,6 @@ SharcFetchEvent normal_clock(SharcMemory &memory,
   return event;
 }
 
-void bubble_guard(const SharcState &cpu, const SharcControl *control) {
-  for (const auto &pending : cpu.pending) {
-    if (pending) {
-      throw std::runtime_error("SHARC fetch bubble control-effect clock not qualified");
-    }
-  }
-  if (cpu.cache.pending_flush || (control != nullptr && control->state().delayed)) {
-    throw std::runtime_error("SHARC fetch bubble cache/SYSCTL effect clock not qualified");
-  }
-}
-
 }
 
 SharcFetchEvent
@@ -135,11 +125,18 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
     event = normal_clock(memory_, cache, state_, next, mode, next_address, bus);
     if (sequenced) { detail::sharc_fetch_flow(cpu.state_, state_, next); }
   }
-  if (!next.execute) { bubble_guard(cpu.state_, cpu.control_); }
+  auto core = cpu.state_;
+  core.cache = cache;
+  if (!next.execute) { detail::sharc_fetch_quiet_effects(core, next, cpu.control_); }
   detail::sharc_fetch_validate(next);
-  detail::sharc_validate_cache(cache);
+  detail::sharc_validate_cache(core.cache);
+  // The only external commit can reject ownership before any state change.
+  // Fixed-value assignments below cannot throw after a successful device clock.
+  static_assert(std::is_nothrow_copy_assignable_v<SharcState>);
+  static_assert(std::is_nothrow_copy_assignable_v<SharcFetchState>);
+  if (!next.execute && cpu.control_ != nullptr) { cpu.control_->advance_internal_clocks(1); }
   state_ = next;
-  cpu.state_.cache = cache;
+  cpu.state_ = core;
   return event;
 } catch (const std::exception &error) {
 

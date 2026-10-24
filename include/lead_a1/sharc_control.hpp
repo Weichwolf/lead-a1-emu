@@ -23,12 +23,14 @@ class SharcControl final : public MemoryDevice {
 public:
   explicit SharcControl(std::optional<bool> valid_boot_mode);
   [[nodiscard]] SharcControlState state() const;
+  [[nodiscard]] SharcControlState snapshot() const;
+  [[nodiscard]] static SharcControl from_snapshot(SharcControlState initial);
   [[nodiscard]] SharcWidth data_width(std::uint32_t address) const;
   void begin_core_instruction();
   void commit_core_instruction() noexcept;
   void abort_core_instruction() noexcept;
-  // Settles the bounded internal effect after a quiet interval of at least
-  // two core clocks. Partial intervals with a pending effect remain guarded.
+  // Settles the supported one-cycle effect after a positive quiet internal
+  // processor-clock interval (PGR A-32/A-45); no guest instruction retires.
   void advance_internal_clocks(unsigned int core_cycles);
   [[nodiscard]] std::uint64_t read(MemoryAccess access) override;
   void write(MemoryAccess access, std::uint64_t value) override;
@@ -37,6 +39,8 @@ public:
   void abort_instruction() noexcept override;
 
 private:
+  enum class Restore : std::uint8_t { snapshot };
+  SharcControl(SharcControlState initial, Restore restore);
   [[nodiscard]] SharcControlState &working();
   [[nodiscard]] const SharcControlState &working() const;
   SharcControlState current_;

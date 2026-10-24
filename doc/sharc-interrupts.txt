@@ -18,8 +18,9 @@ inferred from this lower bound or the functional owner placement.
 PGR A-32 counts effect latency in processor clocks, including interrupts.
 The accepted internal branch's clock interval therefore settles pending
 MODE1/IMASK/FLAGS and cache-flush effects before the first ISR instruction.
-Bound SYSCTL effects also settle; a partial one-clock interval or an active
-controller transaction is guarded. No fictional guest NOP supplies this time.
+Bound SYSCTL effects also settle; active controller transactions are guarded.
+The separate quiet-clock effect reference now also supports one-clock internal
+SYSCTL intervals (sharc-quiet-clocks.txt). No fictional guest NOP supplies time.
 
 During an ordinary unlooped internal delayed JUMP/CALL/RTS, explicit delivery
 attempts return no event and preserve the latch/CPU state until both slots

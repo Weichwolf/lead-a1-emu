@@ -28,6 +28,9 @@ Primary-reference provenance is recorded in reference/sharc.json:
   interrupt breaks. The ordinary reference settles pending core/SYSCTL effects
   during accepted internal entry; a first-handler bank/width regression rejects
   the old instruction-only pending-effect interpretation.
+- sharc-quiet-clocks.txt separately qualifies selected core/SYSCTL effects with
+  no Execute instruction. Mode/width/flush interlocks remain guarded; the
+  separate original prefix reaches its first PMCTL read, not the finalizer.
 - PGR4-22/23 delays interrupt service across a delayed branch and describes
   an IDLE-in-delay-slot deadlock. HWRrev1.1,24-25..27 explicitly describes
   the final vector DMA with delayed branch and IDLE instead.

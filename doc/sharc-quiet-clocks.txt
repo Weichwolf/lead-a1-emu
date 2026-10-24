@@ -1,0 +1,70 @@
+Granted processor clocks with no Execute instruction
+
+The CPU-bound SharcFetch clock now matures supported pending IRPTL, IMASK
+and FLAGS effects at the end of a granted clock whose Execute phase is absent.
+PGRrev2.4 A-32/A-33 counts effect latency in processor clocks, including
+stalls/interrupts, rather than retired instructions. One extra quiet clock
+therefore supplies the represented one-cycle latency. Read views, PC, data,
+stack, loop and branch-slot state are unchanged. No guest NOP or instruction
+finish callback supplies time. Real Execute words still mature their previous
+effects only when the actual native instruction transaction commits.
+
+Externally routed latches still join a pending IRPTL write; a new request
+after a guest clear survives quiet maturation. An IMASK effect can make a
+latched request eligible at the next boundary. It does not acknowledge or
+deliver it automatically. The existing recognition/ISR/pipeline-redirect
+boundaries remain; sequenced execution rejects eligible unhandled requests.
+FLAGS output latches mature without inventing sampled input feedback.
+
+MODE1 can mature only with the entire resulting transport empty. F1/F2,
+Decode/Address and a new fetch address remain guarded, because A-34 requires
+mode interlocks and Decode operand capture. SYSCTL maturation is permitted
+before Decode/Address operands exist; its data-width interlock with already
+decoded instructions remains guarded. Native instruction fetch width does
+not use SYSCTL.IMDW. A pending FLUSH CACHE remains guarded: effect/follower
+prohibition and outstanding lookup/fill ordering are not inferred from a
+quiet cycle. These limits preserve qualified behavior while the full pipeline
+is incomplete; no physical Nord clock profile is established.
+
+SharcControl.advance_internal_clocks now accepts a positive one-clock quiet
+internal interval. PGR A-45 explicitly gives SYSCTL one cycle of effect
+latency. Its separate requirement for two non-external accesses before an
+external access is not an internal two-clock delay. Zero clocks do nothing;
+active controller transactions reject without mutation. Only the existing
+supported IIVT/IMDW controls are qualified, not reset/mux/external arbitration.
+
+Cache/transport/core changes are staged before the controller clock. Its
+ownership rejection occurs before mutation; all final CPU/transport copies
+are statically checked nothrow. A fetch, mode/width, flush, validation or
+ownership failure preserves all resources, including pending effects and
+another owner's transaction. Earlier committed clocks are never rolled back.
+
+Idle SYSCTL snapshots retain read/effective values and knowledge plus the
+pending one-cycle effect. Capture during a transaction rejects; a separately
+bound controller can be restored through from_snapshot. Unsupported/nonzero
+unmodeled bits, unknown one bits, mismatched pending values and inconsistent
+views without an effect reject. Supported partial knowledge is retained: an
+unknown selected width or whole read fails rather than becoming zero. This
+is a typed device snapshot, not a complete board save-file or GUI contract.
+
+Owned tests use actual native last-DB-slot IRPTL/IMASK/FLAGS writes followed
+by an absent Execute clock and a real target computation. Independent
+CPU/control/FLAG oracles and checkpoint continuation distinguish maturation
+from a retired NOP. Fully drained MODE1 and actual guest SYSCTL stores select
+new register banks/data widths before later Decode. Independent RAM/controller
+restoration, partial-bit and branch-slot preservation, routed requests after
+clear, newly eligible requests, late fetch failure, controller ownership,
+repair/retry and still-guarded mode/width/flush boundaries are checked.
+
+Each actual serially loaded original kernel now continues its separate bound
+prefix past eight instructions/12 granted fetch clocks. Clock13 matures the
+real pending IRPTL effect without retiring a word. Clock14 executes the
+retained original PMCTL read at8c091: USTAT3 receives the independent reset
+reference8, and the explicitly bound clock device is read without modification.
+PC8c092/frame108c008 follows after nine actual instructions. No PLL/peripheral
+time or board frequency is inferred. The full stream still starts from a
+fresh functional CPU and retains8c08e; complete loader/finalizer, original
+delayed-IDLE/loop reentry, boot, audio and hardware qualification remain open.
+
+Primary evidence: PGRrev2.4,4-5/8,4-20/21,4-86,A-31/35,A-45/47;
+provenance is in reference/sharc.json. No manufacturer/private source input.

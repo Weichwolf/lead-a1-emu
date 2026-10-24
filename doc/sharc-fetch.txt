@@ -16,7 +16,8 @@ internal fetches bypass the cache; conflicts select cached data or an actual
 partial stall and RAM fill. Pending operations require their bound owner.
 External/VISA addresses, unresolved controls and active memory transactions
 fail with phase/PC/MODE2/access context. Neither path infers grants from DMA
-traffic or advances CPU control effects, peripherals or global time.
+traffic or advances peripherals or global time. The bound clock's supported
+quiet core/SYSCTL maturation has the separate sharc-quiet-clocks.txt contract.
 DAG operand capture, address/data arbitration, control interlocks and IDLE/IRQ
 control remain separate unqualified pipeline work. The optional cursor and
 JUMP/CALL/RTS redirects have the bounded sharc-fetch-flow.txt contract; retained
@@ -55,8 +56,9 @@ failed IOP instruction retry and preservation of a fetched opcode after RAM
 repair. Manufacturer/private program bytes are not test/build inputs.
 
 The full-stream original loader regressions still use the functional
-instruction-order path and stop at8c08e. A separate first8-instruction prefix
-now exercises the bound sequencer/transport (sharc-branch-pipeline.txt).
+instruction-order path and stop at8c08e. A separate nine-instruction prefix
+exercises the bound sequencer/transport through the first PMCTL read
+(sharc-quiet-clocks.txt).
 Neither establishes finalizer, vector restoration, complete boot or audio.
 The native fetch-data contract is a prerequisite for self-modification qualification;
 Complete cache/pipeline integration and the original delayed-branch/loop IDLE

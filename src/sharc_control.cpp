@@ -2,6 +2,7 @@
 #include "lead_a1/sharc_control.hpp"
 
 #include "lead_a1/memory.hpp"
+#include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_memory.hpp"
 
 #include <cstdint>
@@ -16,6 +17,24 @@ constexpr std::uint32_t all_bits = std::numeric_limits<std::uint32_t>::max();
 constexpr std::uint32_t internal_vectors = 4;
 constexpr std::uint32_t data_widths = 0x1e00;
 constexpr std::uint32_t supported = internal_vectors | data_widths;
+
+void validate_state(const SharcControlState &state) {
+  for (const auto fields :
+       {SharcKnown32{.value = state.control, .known = state.known},
+        SharcKnown32{.value = state.effective, .known = state.effective_known}}) {
+    if ((fields.value & ~supported) != 0 || (fields.value & ~fields.known) != 0 ||
+        (fields.known & ~supported) != ~supported) {
+      throw std::invalid_argument("Invalid SHARC SYSCTL snapshot value/knowledge");
+    }
+  }
+  if (state.delayed) {
+    if (state.known != all_bits || state.delayed != state.control) {
+      throw std::invalid_argument("Invalid SHARC SYSCTL snapshot pending effect");
+    }
+  } else if (state.control != state.effective || state.known != state.effective_known) {
+    throw std::invalid_argument("Invalid SHARC SYSCTL snapshot without pending effect");
+  }
+}
 
 void validate(MemoryAccess access) {
   if (access.address != 0 || access.size != 4) {
@@ -33,6 +52,24 @@ SharcControl::SharcControl(std::optional<bool> valid_boot_mode) {
   }
   current_.effective = current_.control;
   current_.effective_known = current_.known;
+}
+
+SharcControl::SharcControl(SharcControlState initial, Restore restore) : current_(initial) {
+  if (restore != Restore::snapshot) {
+    throw std::invalid_argument("Invalid SHARC SYSCTL restore mode");
+  }
+  validate_state(current_);
+}
+
+SharcControl SharcControl::from_snapshot(SharcControlState initial) {
+  return {initial, Restore::snapshot};
+}
+
+SharcControlState SharcControl::snapshot() const {
+  if (staged_ || core_active_) {
+    throw std::logic_error("SHARC SYSCTL snapshot during a transaction");
+  }
+  return current_;
 }
 
 SharcControlState &SharcControl::working() {
@@ -64,7 +101,7 @@ SharcWidth SharcControl::data_width(std::uint32_t address) const {
 std::uint64_t SharcControl::read(MemoryAccess access) {
   validate(access);
   if (working().known != all_bits) {
-    throw std::runtime_error("Unknown SHARC SYSCTL boot-mode input");
+    throw std::runtime_error("Unknown SHARC SYSCTL read-view bits");
   }
   return working().control;
 }
@@ -112,9 +149,7 @@ void SharcControl::advance_internal_clocks(unsigned int core_cycles) {
   }
   const auto delayed = current_.delayed;
   if (core_cycles == 0 || !delayed) { return; }
-  if (core_cycles < 2) {
-    throw std::runtime_error("SHARC SYSCTL partial clock effect interval not qualified");
-  }
+  // PGR A-32/A-45: one extra internal processor clock, not a retired instruction.
   current_.effective = *delayed;
   current_.effective_known = all_bits;
   current_.delayed.reset();

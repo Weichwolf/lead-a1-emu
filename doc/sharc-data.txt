@@ -43,8 +43,10 @@ an instruction cannot consume a delayed change. The owner stages control at
 instruction entry and joins any actual IOP access into that same transaction.
 Accepted internal P1I entry also settles pending width effects before its first
 handler operation (PGR A-32; sharc-interrupts.txt). Explicit quiet internal
-clock intervals of at least two cycles settle the supported delayed effect;
-partial one-clock intervals and active transactions fail without mutation.
+clock intervals of one or more cycles settle the supported delayed effect
+(PGR A-45); active transactions fail without mutation. Idle device snapshots
+preserve pending effects and bit knowledge. Bound quiet-clock effects and
+remaining Decode/Address width guards are in sharc-quiet-clocks.txt.
 This is a bounded functional reference, not an external-access/pipeline model.
 
 RAM moves and loops

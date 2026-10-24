@@ -31,5 +31,8 @@ void sharc_fetch_branch_validate(const SharcFetchState &state);
 void sharc_fetch_flow(const SharcState &cpu,
                       const SharcFetchState &previous,
                       SharcFetchState &next);
+void sharc_fetch_quiet_effects(SharcState &cpu,
+                               const SharcFetchState &transport,
+                               const SharcControl *control);
 
 }

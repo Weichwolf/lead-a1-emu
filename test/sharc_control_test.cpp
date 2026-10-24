@@ -36,7 +36,7 @@ template <typename Function> void rejected(const Function &action, const std::st
 
 void boot_inputs_and_widths() {
   lead_a1::SharcControl unknown({});
-  rejected([&] { static_cast<void>(unknown.read(word)); }, "Unknown SHARC SYSCTL boot-mode");
+  rejected([&] { static_cast<void>(unknown.read(word)); }, "Unknown SHARC SYSCTL read-view bits");
   constexpr std::uint32_t normal = 0x80000;
   require(unknown.data_width(normal) == lead_a1::SharcWidth::normal32);
   lead_a1::SharcControl valid(true);
@@ -139,16 +139,55 @@ void quiet_internal_clock_effects() {
   const auto before = control.state();
   control.advance_internal_clocks(0);
   require(control.state() == before);
-  rejected([&] { control.advance_internal_clocks(1); }, "partial clock effect interval");
-  require(control.state() == before);
   control.begin_instruction();
   const auto owned = control.state();
   rejected([&] { control.advance_internal_clocks(4); }, "clock advance during a transaction");
   require(control.state() == owned);
   control.abort_instruction();
   require(control.state() == before);
-  control.advance_internal_clocks(2);
+  control.advance_internal_clocks(1);
   require(control.state().effective == extended_bank2 && !control.state().delayed);
+}
+
+void snapshots_and_corruption() {
+  lead_a1::SharcControl control(true);
+  constexpr std::uint32_t extended_bank0 = 0x204;
+  constexpr std::uint32_t bank0_width = 0x200;
+  control.write(word, extended_bank0);
+  const auto saved = control.snapshot();
+  auto restored = lead_a1::SharcControl::from_snapshot(saved);
+  require(restored.state() == saved);
+  control.begin_instruction();
+  rejected([&] { static_cast<void>(control.snapshot()); }, "snapshot during a transaction");
+  require(control.state() == saved);
+  control.abort_instruction();
+  restored.advance_internal_clocks(1);
+  require(restored.state().effective == extended_bank0 && !restored.state().delayed);
+  require(control.state() == saved); // Independently restored controller, no shared effect.
+  std::array<lead_a1::SharcControlState, 6> invalid_states;
+  invalid_states.fill(saved);
+  invalid_states[0].control |= 1;
+  invalid_states[1].known &= ~std::uint32_t{1};
+  invalid_states[2].known &= ~bank0_width;
+  invalid_states[3].delayed = 4;
+  invalid_states[4].delayed.reset();
+  invalid_states[5].effective |= 1;
+  for (const auto state : invalid_states) {
+    rejected([&] { const auto invalid = lead_a1::SharcControl::from_snapshot(state); },
+             "SYSCTL snapshot");
+  }
+  const lead_a1::SharcControl reset(true);
+  auto partial = reset.snapshot();
+  partial.known &= ~bank0_width;
+  partial.effective_known &= ~bank0_width;
+  auto unknown = lead_a1::SharcControl::from_snapshot(partial);
+  constexpr std::uint32_t bank0 = 0x80000;
+  constexpr std::uint32_t bank1 = 0xa0000;
+  rejected([&] { static_cast<void>(unknown.data_width(bank0)); },
+           "Unknown SHARC SYSCTL data-width");
+  require(unknown.data_width(bank1) == lead_a1::SharcWidth::normal32);
+  rejected([&] { static_cast<void>(unknown.read(word)); }, "Unknown SHARC SYSCTL read-view bits");
+  require(unknown.snapshot() == partial);
 }
 
 }
@@ -160,6 +199,7 @@ int main() {
     invalid_fields();
     cpu_effects_and_failed_store();
     quiet_internal_clock_effects();
+    snapshots_and_corruption();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

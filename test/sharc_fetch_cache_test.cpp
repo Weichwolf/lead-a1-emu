@@ -345,9 +345,13 @@ void ownership_and_effect_guards() {
   auto pending = initial();
   pending.pending[2] = pending.system[2];
   lead_a1::Sharc delayed(memory, pending);
+  lead_a1::SharcFetchState in_flight;
+  in_flight.fetch2 = lead_a1::SharcFetchWord{.address = base, .opcode = store_px | data};
+  lead_a1::SharcFetch guarded(memory, in_flight);
   const auto before = delayed.state();
-  rejected([&] { static_cast<void>(fetch.advance(delayed, base)); }, "bubble control-effect clock");
-  require(delayed.state() == before && fetch.state() == lead_a1::SharcFetchState{});
+  rejected([&] { static_cast<void>(guarded.advance(delayed, base + 1)); },
+           "quiet MODE1 pipeline effect interlock");
+  require(delayed.state() == before && guarded.state() == in_flight);
   prime(fetch, cpu);
   static_cast<void>(tick(fetch, cpu, base + 3)); // Owner omitted the actual PM request.
   static_cast<void>(fetch.advance(cpu, base + 4));

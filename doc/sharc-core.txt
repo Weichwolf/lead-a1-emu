@@ -66,6 +66,8 @@ and IMASK writes have one following internal instruction of effect latency
 in the straight functional reference (A-32..35). A-32 defines processor clocks,
 not retired instructions: accepted internal P1I entry settles pending effects
 before the first ISR instruction, as detailed in sharc-interrupts.txt.
+The bound fetch clock also matures supported effects without Execute, with
+explicit mode/width/flush limits and device snapshots (sharc-quiet-clocks.txt).
 Repeated writes retain their ordered effects. USTAT1..4 updates
 are immediate. IMASK/IRPTL bits 0/1 are read-only; bit 7 is reserved. In the
 documented reset reference IMASK=3, so writing IMASK=0 preserves 3. Reserved

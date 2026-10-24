@@ -220,7 +220,7 @@
     "phases": "Miss accepts F1, then one partial stall holds F1/F2/Decode while Address progresses to Execute; tag reserved before F2 data; Decode stores the F2 input; early same-address hit forwards input load bus per Table4-33",
     "controls": "CADIS bypasses lookup/fill; CAFRZ permits hits and suppresses replacement on miss; disabled/frozen misses still stall; pending mode changes and overlapping unfinished replacement remain guarded",
     "snapshots": "Retain early tag/old data, F1 lookup, F2 pending fill and Address/Execute PM metadata; failures preserve cache and transport; bound actual PM operations retain already modeled cache effects",
-    "limits": "Explicit input reference, not complete sequencer/DAG/bank arbitration/control interlocks or physical timing; pending-effect bubbles and block conflicts guarded; original prefixes remain separate functional runs"
+    "limits": "Explicit-input reference, not complete DAG/bank/control interlocks or physical timing; bounded quiet effects are in quiet_clock_reference, mode/width/flush and block boundaries remain guarded; full streams retain separate functional runs"
   },
   "fetch_reference": {
     "primary": "PGRrev2.4 Table4-1,4-5/6 and Table4-2,4-8; MODE2.CADIS=bit4",
@@ -280,7 +280,7 @@
     "cache_stall": "Partial conflict-miss stall holds F1 cursor and Decode suppression while Address progresses to Execute; unaccepted target is retried automatically",
     "snapshots": "Cursor, suppression, all retained words and cache phases restore with paired actual CPU/cache state; clock failures preserve all, failed retirement retains its already clocked Execute word",
     "owned_evidence": "Literal seven-column five-stage branch tables for absolute/relative JUMP/CALL with/without DB, actual CALL frames, backward relative refetch, branch-phase checkpoint continuation and real guest PM(PX) self-modifying delayed-branch targets with miss/hit outcomes",
-    "limits": "Indirect/RTI/loop/ISR/IDLE sequencing and pending-fill branch arbitration guarded; no complete MODE1/DAG/control interlocks, pending-effect bubble maturation, global/physical timing or complete original-stream finalizer/boot/audio acceptance"
+    "limits": "Indirect/RTI/loop/ISR/IDLE sequencing, pending-fill branch arbitration, complete MODE1/DAG/control interlocks and mode/width/flush quiet ordering remain guarded; no global/physical timing or complete original-stream finalizer/boot/audio acceptance"
   },
   "branch_pipeline_reference": {
     "primary": "PGRrev2.4 4-5/8,4-19/23,4-106,4-115/118/Table4-55,9-32/34,9-44/46,A-17/20,A-31/35",
@@ -290,7 +290,18 @@
     "dependencies": "Structural ALU/shifter/BTF masks for supported compute-only, immediate shift, parallel register/Type1 compute and system bit tests; no unrelated flag-class or unconditional stall; unsupported multiplier and mixed cache/control cases guarded",
     "snapshots": "Branch decision/target are retained; early/missing/impossible/unsupported decisions and mismatching direct targets reject; failed retirement retains Execute and clock state",
     "owned_evidence": "432 condition/PE/polarity/mode JUMP/CALL/RTS cases, later-unknown ASTAT, eight literal Table4-55 stage columns/checkpoint continuations, real decrement/NE loop and nested native CALL/RTS/DB slots, related/unrelated producers, false DB/unknown-stack returns, failure/repair and malformed-state boundaries",
-    "original_prefix": "Each serially loaded original kernel independently executes its first8 actual instructions through the bound sequencer in12 granted fetch clocks, reaching8c091/frame108c008 with target instruction retained in Decode; no IOP read/global-clock inference; full-stream functional CPU starts fresh and retains8c08e",
+    "original_prefix": "Each serially loaded original kernel independently executes its first9 actual instructions through the bound sequencer in14 granted fetch clocks; clock13 matures pending IRPTL with no Execute word, clock14 reads actual PMCTL at8c091 into USTAT3=8, reaching8c092/frame108c008 without changing the bound clock device; full-stream CPU starts fresh and retains8c08e",
     "limits": "MODE1 Decode capture, explicit ASTAT/FLAGS effect latency, PCSTK-write/return arbitration, multiplier/multifunction, simultaneous cache/control stalls and complete loop/IRQ/IDLE/indirect/physical timing remain unqualified; no full loader/boot/audio acceptance"
+  },
+  "quiet_clock_reference": {
+    "primary": "PGRrev2.4 4-5/8,4-20/21,4-86,A-31/35,A-45/47",
+    "core_effects": "An absent Execute phase matures supported IRPTL/IMASK/FLAGS pending effects after one granted extra processor clock; read views, PC/data/stack/loop/branch-slot state do not execute a guest instruction",
+    "mode_width": "MODE1 requires a completely empty resulting transport; SYSCTL requires absent Decode/Address operands; F1/F2 instruction data is independent of IMDW; full mode/data interlocks remain guarded",
+    "sysctl": "Supported internal IIVT/IMDW effects mature after a positive quiet interval, including one clock per A-45; zero does nothing; active transactions reject; external-access latency is not inferred",
+    "atomicity": "Transport/cache/core are staged and validated before controller clock; ownership failures precede device mutation; final CPU/transport copies are statically nothrow; failed clocks preserve all pending effects and external ownership",
+    "snapshots": "Idle typed SYSCTL snapshots preserve current/effective values and knowledge plus pending effect; active captures, unsupported fields, unknown one bits, mismatched pending values and inconsistent no-effect views reject; restored devices bind independently",
+    "owned_evidence": "Actual last-DB-slot IRPTL/IMASK/FLAGS writes, no-retirement maturation and target compute/checkpoint continuation; drained guest MODE1 bank and SYSCTL width changes, paired device/RAM continuation, partial knowledge/branch preservation, routed latches/new eligibility, fetch/ownership failures and repair",
+    "original_prefix": "Each serially loaded original kernel independently executes its first9 actual instructions through the bound sequencer in14 granted fetch clocks; clock13 matures pending IRPTL with no Execute word, clock14 reads actual PMCTL at8c091 into USTAT3=8, reaching8c092/frame108c008 without changing the bound clock device; full-stream CPU starts fresh and retains8c08e",
+    "limits": "Pending cache flush effect/follower and lookup/fill ordering, live MODE1/width operands, complete DAG/control/IRQ/loop/IDLE sequencing, global/physical timing, full uploader/boot/audio/hardware remain unqualified"
   }
 }

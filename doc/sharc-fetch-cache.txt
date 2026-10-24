@@ -49,8 +49,9 @@ This remains an explicitly driven cache/data transport. The optional native
 cursor and bounded branch sequencing have the sharc-fetch-flow.txt
 contract. Neither clock infers bus requests, advances global time or qualifies DAG
 operand capture, bank arbitration, complete control interlocks or physical Nord
-timing. A transport bubble with pending core/SYSCTL/flush effects is guarded
-until its processor-clock maturation is qualified. The real PM instruction
+timing. Quiet-clock core/SYSCTL effects have the sharc-quiet-clocks.txt contract;
+MODE1 with any fetch/operand stage, SYSCTL with Decode/Address operands and
+pending cache flushes stay guarded. The real PM instruction
 and input bus provide data; no guest NOP, fixed loop summary or host vector
 copy substitutes for an instruction or DMA.
 
@@ -69,6 +70,6 @@ wrong-request/ownership/bubble boundaries have explicit rejection tests.
 
 Primary evidence: PGRrev2.4,4-5/8,4-79..90,Table4-31/33,A-8; provenance is in
 reference/sharc.json. Full-stream original tests retain the separate functional
-path and8c08e frontier; a first8-instruction sequenced prefix is qualified
-separately in sharc-branch-pipeline.txt. Original finalizer, delayed-branch/loop IDLE, complete
+path and8c08e frontier; the separate nine-instruction sequenced prefix through
+the first PMCTL read is in sharc-quiet-clocks.txt. Original finalizer, delayed-branch/loop IDLE, complete
 uploader/boot, application and audio remain open (sharc-finalizer.txt).

@@ -36,8 +36,9 @@ supported producer interlocks are described in sharc-branch-pipeline.txt.
 RTI/indirect branches, DO/loop sequencing, IDLE and ISR contexts are
 guarded before they enter Address. Branches with outstanding cache fills or
 overlapping active suppression remain guarded; their abort/fill arbitration
-is not guessed. Existing pending-effect bubble and block-conflict guards
-remain. MODE1/DAG Decode operand capture, complete control/data hazards,
+is not guessed. Quiet-clock effects have the sharc-quiet-clocks.txt contract;
+mode/width/flush interlocks and block conflicts retain explicit guards.
+MODE1/DAG Decode operand capture, complete control/data hazards,
 interrupt redirects, original delayed-IDLE/loop finalizer and physical timing
 are still open. This optional clock does not change default functional step.
 
@@ -55,6 +56,6 @@ The sequencer generates the target and retries an actual miss stall itself.
 Primary evidence is PGRrev2.4,4-5/8,4-19/23,4-79/85,4-115/117,9-32/34;
 provenance is in reference/sharc.json. No manufacturer/private source input
 is added. Full-stream original regressions still use the functional path
-and stop at8c08e; the separate first8-instruction sequenced prefix has the
-sharc-branch-pipeline.txt contract. Neither establishes original finalizer,
+and stop at8c08e; the separate nine-instruction sequenced prefix through the
+first PMCTL read has the sharc-quiet-clocks.txt contract. Neither establishes original finalizer,
 whole upload, coldboot or audio.
