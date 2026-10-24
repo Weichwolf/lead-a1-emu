@@ -253,7 +253,8 @@ void atomic_delayed_branches() {
       if (arrival == 1) { static_cast<void>(cpu.step()); }
       cpu.latch_interrupt(p1i);
       for (unsigned int slot = arrival; slot < 2; ++slot) {
-        require(cpu.state().branch && cpu.state().branch->slots == 2 - slot);
+        const auto branch_state = cpu.state().branch;
+        require(branch_state && branch_state->slots == 2 - slot);
         const auto before = cpu.state();
         require(!cpu.service_interrupt({.vector_base = base}) && cpu.state() == before);
         static_cast<void>(cpu.step());
@@ -265,7 +266,8 @@ void atomic_delayed_branches() {
       const auto completed = cpu.state();
       const auto event = cpu.service_interrupt({.vector_base = base});
       require(event && event->return_pc == branch_target);
-      require(cpu.state().interrupt->saved_depth == completed.depth);
+      const auto service = cpu.state().interrupt;
+      require(service && service->saved_depth == completed.depth);
       for (unsigned int instruction = 0; instruction < 3; ++instruction) {
         static_cast<void>(cpu.step());
       }

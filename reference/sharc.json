@@ -213,13 +213,22 @@
     },
     "limits": "General/circular/reversed/broadcast/SIMD DAG, non-data RAM UREGs, forced LW/SW/external/indexed-IOP transfers, arithmetic/float/other computations, VISA, runtime peripherals and physical timing remain open"
   },
+  "conflict_cache_reference": {
+    "primary": "PGRrev2.4 4-79/90, Table4-31/33, A-8",
+    "owner": "Bound CPU cache and effective MODE2; explicit Address-stage PM request, F1 address and transport clock; request checked against actual retirement",
+    "selection": "Internal no-conflict fetch uses RAM; PM conflict checks16 two-way sets and logical request-order LRU; possible unknown membership/tag/data or replacement is guarded",
+    "phases": "Miss accepts F1, then one partial stall holds F1/F2/Decode while Address progresses to Execute; tag reserved before F2 data; Decode stores the F2 input; early same-address hit forwards input load bus per Table4-33",
+    "controls": "CADIS bypasses lookup/fill; CAFRZ permits hits and suppresses replacement on miss; disabled/frozen misses still stall; pending mode changes and overlapping unfinished replacement remain guarded",
+    "snapshots": "Retain early tag/old data, F1 lookup, F2 pending fill and Address/Execute PM metadata; failures preserve cache and transport; bound actual PM operations retain already modeled cache effects",
+    "limits": "Explicit input reference, not complete sequencer/DAG/bank arbitration/control interlocks or physical timing; pending-effect bubbles and block conflicts guarded; original prefixes remain separate functional runs"
+  },
   "fetch_reference": {
     "primary": "PGRrev2.4 Table4-1,4-5/6 and Table4-2,4-8; MODE2.CADIS=bit4",
-    "profile": "Explicit native internal instruction-bus transport with known effective CADIS=1 and owner-supplied F1 addresses/advancing clock grants",
+    "profile": "Standalone native internal CADIS=1 transport, plus the separate CPU-bound conflict-cache clock; owner supplies F1 addresses/advancing clock grants",
     "phases": "F1 selects an address, F2 reads real executable wide48 RAM, Decode/Address/Execute retain the actual fetched data; bubbles are absent words rather than retired guest NOPs",
     "retirement": "Bound memory and matching Execute PC required; actual native decoder consumes the latch only after successful transactional CPU/memory/device commit; no retirement-time instruction-RAM reread",
     "dma": "Owned actual LSB-first SPI reception and three normal32 DMA writes replace two native48 instructions; before-F2 writes are observed, later writes preserve captured data through actual CPU retirement and checkpoint continuation",
-    "limits": "Cache lookup/fills, data arbitration/DAG operand capture, control interlocks, sequencer redirects/flushes, IDLE/IRQ sequencing and global/physical timing remain unqualified; original prefixes use the separate functional instruction-order path"
+    "limits": "Complete cache/pipeline integration, data arbitration/DAG operand capture, control interlocks, sequencer redirects/flushes, IDLE/IRQ sequencing and global/physical timing remain unqualified; original prefixes use the separate functional instruction-order path"
   },
   "interrupt_reference": {
     "primary": "PGRrev2.4 4-22/23,4-26/43,9-44/46,10-17,A-10,A-31/34,A-37/42",

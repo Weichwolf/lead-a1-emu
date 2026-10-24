@@ -322,7 +322,7 @@ SharcStep Sharc::step() {
   return step_opcode({});
 }
 
-SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured) {
+SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured, bool preserve_cache) {
   auto opcode = captured;
   bool transaction{};
   bool control_transaction{};
@@ -358,6 +358,9 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured) {
       const auto target = execute(memory_, next, *opcode, control_);
       next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
     }
+    // A bound fetch clock already accounted for the actual PM cache request.
+    // The instruction-only helper must not erase that staged fetch knowledge.
+    if (preserve_cache) { next.cache = state_.cache; }
     finish_control(state_, next);
     minimum_cycles += detail::sharc_arithmetic_loop_finish(state_, next);
     detail::sharc_cache_finish(state_, next);

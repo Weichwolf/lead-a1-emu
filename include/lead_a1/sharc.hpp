@@ -179,7 +179,9 @@ public:
   [[nodiscard]] SharcStep step(SharcFetch &fetch);
 
 private:
-  [[nodiscard]] SharcStep step_opcode(std::optional<std::uint64_t> captured);
+  friend class SharcFetch;
+  [[nodiscard]] SharcStep step_opcode(std::optional<std::uint64_t> captured,
+                                      bool preserve_cache = false);
   SharcMemory &memory_;
   SharcState state_;
   SharcControl *control_;

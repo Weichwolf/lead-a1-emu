@@ -51,9 +51,10 @@ Explicit P1I recognition, immediate RTI and ordinary native IDLE are described
 in sharc-interrupts.txt/sharc-idle.txt. Recognition is a separate owner event,
 not a retired NOP. IVT/routing and physical synchronization remain explicit
 reference inputs or unknown; finalizer loop/delayed-IDLE entry stays guarded.
-The explicit uncached instruction-bus transport in sharc-fetch.txt can supply
-retirement with an actual previously fetched word. It retains F2 data across
-later DMA writes; the default functional step still reads at retirement.
+The explicit instruction-bus transport in sharc-fetch.txt can supply retirement
+with an actual previously fetched word, including the bound internal cache
+clock in sharc-fetch-cache.txt. It retains F2 data across later DMA writes;
+the default functional step still reads at retirement.
 Sequencer/control interlocks and full pipeline timing remain unqualified.
 
 System register read views and effective controls are separate. MODE1, IRPTL

@@ -33,6 +33,22 @@ bool program_data(std::uint64_t opcode) {
 
 }
 
+bool sharc_cache_pm_encoding(std::uint64_t opcode) {
+  return program_data(opcode);
+}
+
+bool sharc_cache_pm_request(const SharcState &state, std::uint64_t opcode) {
+  if (!program_data(opcode)) { return false; }
+  constexpr std::uint64_t type4_mask = 0xf00000000000;
+  constexpr std::uint64_t type4 = 0x600000000000;
+  constexpr std::uint64_t type3_mask = 0xe00000000000;
+  constexpr std::uint64_t type3 = 0x400000000000;
+  if ((opcode & type4_mask) == type4 || (opcode & type3_mask) == type3) {
+    return sharc_data_move_condition(state, opcode);
+  }
+  return true;
+}
+
 void sharc_validate_cache(const SharcCacheState &cache) {
   if ((cache.valid.value & ~cache.valid.known) != 0 || (cache.lru.value & ~cache.lru.known) != 0 ||
       ((cache.lru.value | cache.lru.known) & ~lru_bits) != 0) {

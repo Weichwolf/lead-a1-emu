@@ -4,6 +4,8 @@
 #include "lead_a1/memory.hpp"
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_memory.hpp"
+#include "sharc_fetch_internal.hpp"
+#include "sharc_internal.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -20,35 +22,74 @@ constexpr std::uint32_t native_end = 0x100000;
 constexpr std::uint64_t native_bits = 0xffffffffffff;
 constexpr std::uint32_t cache_disabled = 0x10;
 
-void validate_address(std::uint32_t address) {
-  if (address < native_begin || address >= native_end) {
-    throw std::invalid_argument("SHARC fetch requires an internal native address");
+void cache_metadata(const SharcFetchState &state) {
+  constexpr unsigned int entries = 32;
+  constexpr unsigned int sets = 15;
+  if ((state.fetch2 && state.fetch2->pm_data) || (state.decode && state.decode->pm_data)) {
+    throw std::invalid_argument("Invalid SHARC PM request before Address");
   }
-}
-
-void validate(const SharcFetchState &state) {
-  if (state.fetch1) { validate_address(*state.fetch1); }
-  for (const auto &word : {state.fetch2, state.decode, state.address, state.execute}) {
-    if (word) {
-      validate_address(word->address);
-      if ((word->opcode & ~native_bits) != 0) {
-        throw std::invalid_argument("Invalid SHARC native fetched word");
-      }
+  if (state.lookup) {
+    const auto lookup = *state.lookup;
+    if (!state.fetch1 || lookup.mode.known != detail::sharc_fetch_controls ||
+        (lookup.mode.value & ~lookup.mode.known) != 0 ||
+        (lookup.hit && (!lookup.entry || lookup.wait)) ||
+        (lookup.wait && (lookup.entry || lookup.hit)) ||
+        (lookup.hit && (lookup.mode.value & cache_disabled) != 0) ||
+        (!lookup.hit && lookup.entry && lookup.mode.value != 0) ||
+        (!lookup.hit && !lookup.wait && !lookup.entry && lookup.mode.value == 0)) {
+      throw std::invalid_argument("Invalid SHARC inherited cache lookup");
+    }
+    if (lookup.entry && (*lookup.entry >= entries || *lookup.entry / 2 != (*state.fetch1 & sets))) {
+      throw std::invalid_argument("Invalid SHARC inherited cache lookup entry");
+    }
+  }
+  if (state.fill) {
+    const auto fill = *state.fill;
+    if (!state.fetch2 || fill.entry >= entries ||
+        fill.entry / 2 != (state.fetch2->address & sets) ||
+        fill.mode.known != detail::sharc_fetch_controls || fill.mode.value != 0) {
+      throw std::invalid_argument("Invalid SHARC inherited cache fill");
     }
   }
 }
 
 }
 
+namespace detail {
+
+void sharc_fetch_address(std::uint32_t address) {
+  if (address < native_begin || address >= native_end) {
+    throw std::invalid_argument("SHARC fetch requires an internal native address");
+  }
+}
+
+void sharc_fetch_validate(const SharcFetchState &state) {
+  if (state.fetch1) { sharc_fetch_address(*state.fetch1); }
+  for (const auto &word : {state.fetch2, state.decode, state.address, state.execute}) {
+    if (word) {
+      sharc_fetch_address(word->address);
+      if ((word->opcode & ~native_bits) != 0) {
+        throw std::invalid_argument("Invalid SHARC native fetched word");
+      }
+    }
+  }
+  cache_metadata(state);
+}
+
+}
+
 SharcFetch::SharcFetch(SharcMemory &memory, SharcFetchState initial)
     : memory_(memory), state_(initial) {
-  validate(state_);
+  detail::sharc_fetch_validate(state_);
 }
 
 void SharcFetch::advance(SharcKnown32 effective_mode2,
                          std::optional<std::uint32_t> next_address) try {
   if (memory_.active()) {
     throw std::logic_error("SHARC fetch advance during a memory transaction");
+  }
+  if (state_.lookup || state_.fill) {
+    throw std::runtime_error("SHARC pending cache fetch requires its bound owner");
   }
   if ((effective_mode2.value & ~effective_mode2.known) != 0) {
     throw std::invalid_argument("Invalid SHARC fetch MODE2 knowledge");
@@ -57,7 +98,7 @@ void SharcFetch::advance(SharcKnown32 effective_mode2,
     throw std::runtime_error("SHARC fetch cache lookup/unknown CADIS not qualified");
   }
   if (state_.execute) { throw std::runtime_error("SHARC fetch Execute word has not retired"); }
-  if (next_address) { validate_address(*next_address); }
+  if (next_address) { detail::sharc_fetch_address(*next_address); }
   auto next = state_;
   next.execute = state_.address;
   next.address = state_.decode;
@@ -106,11 +147,27 @@ std::uint64_t SharcFetch::for_execution(const SharcMemory &memory, std::uint32_t
   throw std::runtime_error(message.str());
 }
 
-SharcStep Sharc::step(SharcFetch &fetch) {
+SharcStep Sharc::step(SharcFetch &fetch) try {
   const auto opcode = fetch.for_execution(memory_, state_.pc);
-  const auto result = step_opcode(opcode);
+  bool preserve_cache{};
+  const auto word = fetch.state_.execute;
+  if (word && word->pm_data) {
+    const bool actual = detail::sharc_cache_pm_request(state_, opcode);
+    if (actual != *word->pm_data) {
+      throw std::runtime_error("SHARC Address-stage PM request disagrees with retirement");
+    }
+    preserve_cache = actual;
+  }
+  const auto result = step_opcode(opcode, preserve_cache);
   fetch.state_.execute.reset();
   return result;
+} catch (const std::exception &error) {
+
+  std::ostringstream message;
+  message << "SHARC captured execution pc=0x" << std::hex << state_.pc;
+  if (fetch.state_.execute) { message << " opcode=0x" << fetch.state_.execute->opcode; }
+  message << ": " << error.what();
+  throw std::runtime_error(message.str());
 }
 
 }

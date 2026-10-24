@@ -118,6 +118,8 @@ void sharc_validate_cache(const SharcCacheState &cache);
 void sharc_cache_flush(SharcState &state, std::uint64_t opcode);
 void sharc_cache_guard(const SharcState &state, std::uint64_t opcode);
 void sharc_cache_program_access(SharcState &state);
+[[nodiscard]] bool sharc_cache_pm_request(const SharcState &state, std::uint64_t opcode);
+[[nodiscard]] bool sharc_cache_pm_encoding(std::uint64_t opcode);
 void sharc_cache_finish(const SharcState &previous, SharcState &next);
 
 void sharc_interrupt_environment_guard(const SharcState &state);

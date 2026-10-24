@@ -12,7 +12,23 @@ namespace lead_a1 {
 struct SharcFetchWord {
   std::uint32_t address{};
   std::uint64_t opcode{};
+  // Explicit PM request observed in Address; absent on the standalone path.
+  std::optional<bool> pm_data{std::nullopt};
   bool operator==(const SharcFetchWord &) const = default;
+};
+
+struct SharcFetchLookup {
+  SharcKnown32 mode;
+  std::optional<unsigned int> entry{std::nullopt};
+  bool hit{};
+  bool wait{};
+  bool operator==(const SharcFetchLookup &) const = default;
+};
+
+struct SharcFetchFill {
+  SharcKnown32 mode;
+  unsigned int entry{};
+  bool operator==(const SharcFetchFill &) const = default;
 };
 
 struct SharcFetchState {
@@ -21,12 +37,25 @@ struct SharcFetchState {
   std::optional<SharcFetchWord> decode;
   std::optional<SharcFetchWord> address;
   std::optional<SharcFetchWord> execute;
+  std::optional<SharcFetchLookup> lookup;
+  std::optional<SharcFetchFill> fill;
   bool operator==(const SharcFetchState &) const = default;
 };
 
+enum class SharcFetchBus : std::uint8_t { available, pm_data, block_conflict };
+
+struct SharcFetchEvent {
+  bool address_accepted{};
+  bool stalled{};
+  bool cache_hit{};
+  bool forwarded{};
+  bool operator==(const SharcFetchEvent &) const = default;
+};
+
 // Native internal instruction-bus transport, PGR4-5/8. The sequencer supplies
-// F1 addresses and grants advancing clocks. Cache must explicitly be disabled.
-// DAG/data arbitration, control interlocks and branch/IRQ redirects are separate.
+// F1 addresses and grants advancing clocks. Standalone CADIS=1 and bound cache
+// clocks have separate inputs; DAG arbitration and sequencer interlocks remain
+// explicit owner work, including branch/IRQ redirects.
 class SharcFetch {
 public:
   explicit SharcFetch(SharcMemory &memory, SharcFetchState initial = {});
@@ -37,6 +66,13 @@ public:
   // Captures the previous F1 word in F2; later phases retain its actual data.
   // An occupied Execute phase must retire before another advancing clock.
   void advance(SharcKnown32 effective_mode2, std::optional<std::uint32_t> next_address);
+  // Bound cache clock, with the actual Address-stage PM bus request supplied
+  // explicitly. A miss accepts its F1 address, then one partial stall clock
+  // holds F1/F2/Decode while Address progresses to Execute. Retry an unaccepted
+  // next_address; no guest NOP is inserted. Block arbitration stays guarded.
+  [[nodiscard]] SharcFetchEvent advance(Sharc &cpu,
+                                        std::optional<std::uint32_t> next_address,
+                                        SharcFetchBus bus = SharcFetchBus::available);
 
 private:
   friend class Sharc;

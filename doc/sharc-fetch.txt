@@ -9,12 +9,14 @@ later phase retains that fetched address/opcode. A later memory write cannot
 replace the captured data. A bubble is an absent word; an actual opcode0 NOP
 is a present instruction and retires normally.
 
-The bounded path requires explicitly known effective MODE2.CADIS=1. Cache
-lookup/enabled or unknown CADIS, external/VISA addresses and active memory
-transactions fail with F1/next/MODE2 and memory access context. It does not
-create cache entries or infer grants from PM/DMA traffic. Fetch stalls retain
-the transport state until the owner grants another advancing clock. This
-component does not advance CPU control effects, peripherals or global time.
+The standalone path requires explicitly known effective MODE2.CADIS=1.
+The further CPU-bound cache clock in sharc-fetch-cache.txt supplies actual
+cache lookup/tag/data phases from explicit Address-stage PM requests. Ordinary
+internal fetches bypass the cache; conflicts select cached data or an actual
+partial stall and RAM fill. Pending operations require their bound owner.
+External/VISA addresses, unresolved controls and active memory transactions
+fail with phase/PC/MODE2/access context. Neither path infers grants from DMA
+traffic or advances CPU control effects, peripherals or global time.
 DAG operand capture, address/data arbitration, control interlocks, sequencer
 address generation, redirects/flushes and IDLE/IRQ control remain separate
 unqualified pipeline work. Its five phases do not establish complete core
@@ -54,4 +56,5 @@ The existing direct original loader regressions still use the functional
 instruction-order path and stop at8c08e. They do not exercise this transport
 or establish finalizer, vector restoration, complete boot or audio. The native
 fetch-data contract is a prerequisite for self-modification qualification;
-cache and the original delayed-branch/loop IDLE remain open (sharc-finalizer.txt).
+Complete cache/pipeline integration and the original delayed-branch/loop IDLE
+remain open (sharc-finalizer.txt).

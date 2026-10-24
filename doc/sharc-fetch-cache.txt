@@ -1,0 +1,72 @@
+Internal native conflict-cache fetch reference
+
+The bound SharcFetch clock uses the CPU's actual cache state and effective
+MODE2, with an explicit Address-stage PM bus request from the owner. Ordinary
+internal fetches use instruction RAM without checking the cache. A PM data
+conflict checks the16 two-way sets selected by the low four F1 address bits.
+Known valid matching tags choose a cached instruction; ambiguous membership,
+unknown possible tags/data and duplicate matching tags fail visibly. A known
+tag mismatch can exclude an entry even when its validity is unknown.
+
+PGRrev2.4,4-79..85 distinguishes three phases:
+- F1 matches tags. A miss defers the RAM fetch by one partial stall clock.
+  During that clock Address progresses to Execute, Address becomes a bubble
+  and F1/F2/Decode hold. The real PM instruction still executes. The next F1
+  address is not accepted; the owner retries it using the returned event.
+- The miss loads its new tag into the selected LRU entry before instruction
+  data arrives. Logical reservation sets membership and request recency;
+  tag/data/LRU retain separate knowledge. Unknown replacement is guarded.
+- F2 captures actual RAM data, and Decode stores that input in the reserved
+  entry. The data array retains its previous contents until Decode. A hit
+  reads the selected cache word during F2, including the explicit input-load
+  bus bypass when the same address hits before the earlier miss reaches
+  Decode (Table4-33). A RAM write does not change a cached or fetched word.
+
+The replacement reference uses request-order LRU and preserves the other way.
+It does not establish the physical cycle of an architectural cache/LRU read;
+that register interface is not implemented. A pending replacement that would
+overwrite an unfinished reservation is explicitly guarded. Cache-control
+changes during an outstanding operation remain unqualified. CADIS suppresses
+lookup/fill; CAFRZ allows hits and retains instruction/tag contents on misses.
+Disabled or frozen misses still require the actual PM bus conflict stall.
+Block conflicts are not cached and their arbitration remains explicitly guarded.
+
+The native Execute word carries the owner's observed PM request. Retirement
+checks that request against the actual instruction/condition before effects.
+A matched request preserves the cache effects already performed by the fetch
+clock; the older instruction-only fill-knowledge fallback does not erase them.
+The same CPU/memory/device transaction executes the actual PM data operation.
+Unbound functional retirement retains its conservative cache-knowledge rules.
+
+The clock stages copies of both transport and cache. Fetch, tag, replacement,
+data, ownership and control failures preserve both resources. Snapshots retain
+the F1 lookup, early tag reservation, F2 input/fill and Address/Execute request
+metadata. Pair CPU/cache and transport snapshots when restoring an operation.
+Decode data completion does not resurrect validity cleared independently by
+FLUSH. Complete FLUSH/redirect/interrupt ordering is not inferred from this rule.
+
+This remains an explicitly driven cache/data transport. It does not generate
+sequencer addresses, infer bus requests, advance global time or qualify DAG
+operand capture, bank arbitration, complete control interlocks or physical Nord
+timing. A transport bubble with pending core/SYSCTL/flush effects is guarded
+until its processor-clock maturation is qualified. The real PM instruction
+and input bus provide data; no guest NOP, fixed loop summary or host vector
+copy substitutes for an instruction or DMA.
+
+Owned tests exercise the phase sequence with actual PM(PX) stores, all16 sets
+and both LRU ways, disabled/frozen controls, cache hits after actual SPI/DMA RAM
+replacement, checkpoint continuation and the early-hit input-bus bypass.
+A real guest PM(PX) store also overwrites a later instruction: a miss reads and
+executes the replacement after the PM store; a hit executes its earlier cached
+word. Independent register and RAM/cache oracles distinguish both outcomes.
+No-conflict and disabled paths preserve irrelevant cache knowledge; late RAM
+failure retains the already committed tag reservation and earlier PM write.
+The bypass test deliberately supplies Table4-33's repeated F1 address; it
+checks actual captured data and a qualified native prefix, not an invented
+architectural loop or duplicate instruction retirement. Unknown-state and
+wrong-request/ownership/bubble boundaries have explicit rejection tests.
+
+Primary evidence: PGRrev2.4,4-5/8,4-79..90,Table4-31/33,A-8; provenance is in
+reference/sharc.json. Original stream tests still use the separate functional
+path and stop at8c08e. Original finalizer, delayed-branch/loop IDLE, complete
+uploader/boot, application and audio remain open (sharc-finalizer.txt).
