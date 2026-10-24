@@ -1,0 +1,58 @@
+DAG register-load stalls before native Decode
+
+PGRrev2.4 4-5/6 and4-111..114, Tables4-51..53, distinguish DAG address
+reads in Decode from explicit UREG writes in Execute. A dependent indirect
+access immediately after a DAG load requires two stall clocks; with one
+unrelated intervening instruction it requires one; with two it requires none.
+This contract applies to the optional bound advance_sequenced clock. Raw
+explicit-address and standalone fetch transports retain their owner contract.
+
+The native Type3a register-modifier and Type4a immediate-modifier forms identify
+which DAG1/2 index is used. I/B/L writes with that index number cause a hazard,
+including a B write's implicit I update and L writes with circular mode off.
+An M write matters only when its exact modifier register is used. Immediate
+modifiers do not consume an M register. Qualified producers are immediate,
+direct DM IOP-read and unconditional register-transfer UREG writes. Qualified
+consumers are unconditional compute-free, non-LW indirect transfers.
+
+When the consumer is retained in Fetch2, each stall holds F1/F2 and the F1
+cursor/suppression state. Older Decode advances to Address and Address advances
+to Execute; the new Decode is absent. This differs from the later conditional
+branch stall, which holds Decode and leaves Address absent. The owner still
+retires each actual occupied Execute word. Bubbles never execute guest NOPs.
+The stages themselves retain dependency duration; there is no hidden timer.
+An input already marked for Decode suppression does not acquire a DAG stall.
+
+Producer failures retain the actual Execute word and held consumer for retry.
+A repaired IOP mapping executes that captured producer, even if current
+instruction RAM differs. Foreign SYSCTL transaction ownership rejects a quiet
+stall clock without consuming it or another owner's transaction. Shape and
+CPU/cache/transport validation still precede the fixed-value clock commit.
+Unsupported combinations report consumer word/PC/opcode and producer phases,
+inside the existing CPU-PC/F1/bus diagnostic context.
+
+This is a load-dependency timing reference, not full DAG operand capture,
+Address/Execute operand forwarding, bus arbitration or physical Nord timing.
+Combined loop/branch/PM/cache stalls, pending or in-flight MODE1 changes,
+conditional producer/consumer cases, parallel/LW/dual consumers with a load
+hazard and other explicit/implicit DAG producers remain guarded or open.
+A DAG episode followed later by an ordinary PM conflict-cache miss is separately
+qualified; simultaneous DAG/cache conditions remain guarded. Conditional
+post-modify control hazards have the separate PGR4-117/118 requirements and
+remain open. No original short-loop/DAG-stall merging is inferred from these
+linear tables. RAM loop-body capture and original memory initialization through
+the pipeline therefore remain unfinished, as do full cold boot and audio.
+
+Owned tests compare literal five-stage Tables4-51/52, actual memory contents
+and index changes. The144-case I/B/L/M, producer, distance and register-bank
+matrix includes independent register cases. Type4 immediate-modifier cases,
+DAG2 PM transfers followed by genuine cache misses, retained words after
+external code changes, independent RAM/CPU/transport phase snapshots, failed
+IOP producer/repair, foreign clock ownership and guarded control/conditional/
+parallel/LW/dual/cache cases supplement those oracles. The primary table test
+failed against c610208 before the implementation. No manufacturer/private
+program bytes, assembler or decoder are build inputs. Original regressions
+keep their separate existing sequenced-prefix/functional-stream boundaries.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^sharc_dag_load_stalls$' --output-on-failure

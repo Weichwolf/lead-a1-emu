@@ -21,7 +21,9 @@ constexpr unsigned int move_destination_shift = 23;
 constexpr unsigned int system_operation_shift = 37;
 constexpr std::uint32_t shift_flags = 0x3800;
 
-std::optional<unsigned int> destination(std::uint64_t opcode) {
+}
+
+std::optional<unsigned int> sharc_fetch_destination(std::uint64_t opcode) {
   const auto type = opcode >> class_shift;
   constexpr unsigned int immediate = 15;
   constexpr unsigned int dm_read = 16;
@@ -41,6 +43,8 @@ std::optional<unsigned int> destination(std::uint64_t opcode) {
   }
   return {};
 }
+
+namespace {
 
 std::uint32_t compute_flags(std::uint64_t opcode) {
   constexpr std::uint64_t unit_mask = 0x700000;
@@ -81,7 +85,7 @@ bool sharc_fetch_interlock(const SharcState &cpu, const SharcFetchState &previou
   const auto condition = static_cast<unsigned int>((branch->opcode >> 33) & 31);
   const auto consumed = sharc_fetch_condition_mask(condition);
   const auto producer = previous.address;
-  const auto reg = producer ? destination(producer->opcode) : std::nullopt;
+  const auto reg = producer ? sharc_fetch_destination(producer->opcode) : std::nullopt;
   constexpr unsigned int mode1 = 0x72;
   constexpr unsigned int pc_stack = 0x64;
   if (consumed != 0 && (cpu.pending[sharc_mode1] || reg == mode1)) {

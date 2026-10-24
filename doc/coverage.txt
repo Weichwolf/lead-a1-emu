@@ -136,6 +136,12 @@ ID  State    Evidence / remaining work
              fixture executes8291 instructions/8302 granted fetch clocks to
              8c0b2 through all six PLL waits, preserving the native CALL frame
              and final clock ratios. Full record streams remain functional.
+             Bounded DAG load dependencies now stall the Decode input for
+             two/one clocks while older D/A words advance. Literal tables,
+             I/B/L/M and primary/secondary-bank cases, actual transfers,
+             snapshots, IOP repair and clock ownership have independent oracles
+             (sharc-dag-stalls.txt). Full operand capture and mixed short-loop/
+             DAG arbitration remain open.
              Four-instruction loops execute real delayed CALLs, both delay
              slots, nested callees/polling and indexed stores; final steady
              bit25 frames, startup bubbles and rollback have owned tests

@@ -102,6 +102,38 @@ SharcFetchEvent loop_startup_clock(const SharcFetchState &previous,
   return {.stalled = true, .loop_stall = true};
 }
 
+SharcFetchEvent dag_stalled_clock(const SharcFetchState &previous, SharcFetchState &next) {
+  // Tables4-51/52 hold F1/F2; older Decode/Address instructions still advance.
+  next.execute = previous.address;
+  next.address = previous.decode;
+  if (next.address) { next.address->pm_data = false; }
+  next.decode.reset();
+  return {.stalled = true, .dag_stall = true};
+}
+
+SharcFetchEvent clock_transport(SharcMemory &memory,
+                                const SharcState &cpu,
+                                SharcCacheState &cache,
+                                const SharcFetchState &previous,
+                                SharcFetchState &next,
+                                std::optional<std::uint32_t> next_address,
+                                SharcFetchBus bus,
+                                bool sequenced) {
+  if (sequenced && detail::sharc_fetch_dag_stall(cpu, previous, bus)) {
+    return dag_stalled_clock(previous, next);
+  }
+  const bool interlock = sequenced && detail::sharc_fetch_interlock(cpu, previous);
+  const bool cache_stall = previous.lookup && previous.lookup->wait;
+  if (sequenced && detail::sharc_fetch_loop_stall(previous)) {
+    return loop_startup_clock(previous, next, bus, interlock, cache_stall);
+  }
+  if (cache_stall || interlock) { return stalled_clock(previous, next, cache, bus, interlock); }
+  const auto event =
+      normal_clock(memory, cache, previous, next, cpu.effective[4], next_address, bus);
+  if (sequenced) { detail::sharc_fetch_flow(cpu, previous, next); }
+  return event;
+}
+
 }
 
 SharcFetchEvent
@@ -129,21 +161,11 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
   detail::sharc_fetch_mode(state_, mode);
   auto next = state_;
   auto cache = cpu.state_.cache;
-  SharcFetchEvent event;
-  const bool interlock = sequenced && detail::sharc_fetch_interlock(cpu.state_, state_);
-  const bool cache_stall = state_.lookup && state_.lookup->wait;
-  const bool loop_stall = sequenced && detail::sharc_fetch_loop_stall(state_);
-  if (loop_stall) {
-    event = loop_startup_clock(state_, next, bus, interlock, cache_stall);
-  } else if (cache_stall || interlock) {
-    event = stalled_clock(state_, next, cache, bus, interlock);
-  } else {
-    event = normal_clock(memory_, cache, state_, next, mode, next_address, bus);
-    if (sequenced) { detail::sharc_fetch_flow(cpu.state_, state_, next); }
-  }
+  const auto event =
+      clock_transport(memory_, cpu.state_, cache, state_, next, next_address, bus, sequenced);
   auto core = cpu.state_;
   core.cache = cache;
-  if (sequenced) { detail::sharc_fetch_loop_clock(core, state_, next, loop_stall); }
+  if (sequenced) { detail::sharc_fetch_loop_clock(core, state_, next, event.loop_stall); }
   if (!next.execute) { detail::sharc_fetch_quiet_effects(core, next, cpu.control_); }
   detail::sharc_fetch_validate(next);
   detail::sharc_validate_cache(core.cache);

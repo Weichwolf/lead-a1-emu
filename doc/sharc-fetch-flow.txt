@@ -39,6 +39,7 @@ remain guarded. Branches with outstanding cache fills or
 overlapping active suppression remain guarded; their abort/fill arbitration
 is not guessed. Quiet-clock effects have the sharc-quiet-clocks.txt contract;
 mode/width/flush interlocks and block conflicts retain explicit guards.
+DAG load stalls have the separate sharc-dag-stalls.txt contract.
 MODE1/DAG Decode operand capture, complete control/data hazards,
 interrupt redirects, original delayed-IDLE/loop finalizer and physical timing
 are still open. This optional clock does not change default functional step.

@@ -35,12 +35,16 @@ target_link_libraries(lead_a1_arm PUBLIC lead_a1_quality PRIVATE lead_a1_sleigh)
 add_library(lead_a1_sharc STATIC src/sharc_memory.cpp src/sharc_boot.cpp src/sharc_spi.cpp src/sharc.cpp src/sharc_system.cpp src/sharc_clock.cpp src/sharc_loop.cpp src/sharc_long_loop.cpp src/sharc_four_loop.cpp src/sharc_calls.cpp src/sharc_flags.cpp src/sharc_control.cpp src/sharc_registers.cpp src/sharc_move.cpp src/sharc_compute.cpp src/sharc_shift.cpp src/sharc_short.cpp src/sharc_indexed.cpp src/sharc_px.cpp src/sharc_bit_shift.cpp src/sharc_arithmetic_loop.cpp src/sharc_cache.cpp src/sharc_dual_move.cpp src/sharc_interrupt.cpp src/sharc_idle.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch.cpp src/sharc_fetch_cache.cpp src/sharc_fetch_clock.cpp src/sharc_fetch_flow.cpp src/sharc_fetch_branch.cpp src/sharc_fetch_hazard.cpp src/sharc_fetch_effect.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_loop.cpp src/sharc_fetch_loop_state.cpp src/sharc_fetch_loop_retirement.cpp)
+target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_dag.cpp)
 target_include_directories(lead_a1_sharc PUBLIC include)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
 add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-dag-stall-test test/sharc_dag_stall_test.cpp)
+  target_link_libraries(lead-a1-sharc-dag-stall-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_dag_load_stalls COMMAND lead-a1-sharc-dag-stall-test)
   add_executable(lead-a1-sharc-fetch-loop-test test/sharc_fetch_loop_test.cpp)
   target_link_libraries(lead-a1-sharc-fetch-loop-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_fetch_single_loops COMMAND lead-a1-sharc-fetch-loop-test)
@@ -370,6 +374,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-branch-pipeline-test
       lead-a1-sharc-quiet-clock-test
       lead-a1-sharc-fetch-loop-test
+      lead-a1-sharc-dag-stall-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
       lead-a1-memory-test lead-a1-original-arm-test lead-a1-mmu-walk-test
       lead-a1-mmu-cpu-test lead-a1-arm-data-test lead-a1-original-cache-test
