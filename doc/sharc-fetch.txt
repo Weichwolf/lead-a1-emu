@@ -19,7 +19,8 @@ fail with phase/PC/MODE2/access context. Neither path infers grants from DMA
 traffic or advances CPU control effects, peripherals or global time.
 DAG operand capture, address/data arbitration, control interlocks and IDLE/IRQ
 control remain separate unqualified pipeline work. The optional cursor and
-unconditional JUMP/CALL redirects have the bounded sharc-fetch-flow.txt contract.
+JUMP/CALL/RTS redirects have the bounded sharc-fetch-flow.txt contract; retained
+Address-stage conditions/interlocks are in sharc-branch-pipeline.txt.
 Its five phases do not establish complete core
 pipeline timing or a physical Nord clock profile.
 
@@ -53,9 +54,10 @@ Further tests cover unknown/non-executable/unmapped fetches, malformed inputs,
 failed IOP instruction retry and preservation of a fetched opcode after RAM
 repair. Manufacturer/private program bytes are not test/build inputs.
 
-The existing direct original loader regressions still use the functional
-instruction-order path and stop at8c08e. They do not exercise this transport
-or establish finalizer, vector restoration, complete boot or audio. The native
-fetch-data contract is a prerequisite for self-modification qualification;
+The full-stream original loader regressions still use the functional
+instruction-order path and stop at8c08e. A separate first8-instruction prefix
+now exercises the bound sequencer/transport (sharc-branch-pipeline.txt).
+Neither establishes finalizer, vector restoration, complete boot or audio.
+The native fetch-data contract is a prerequisite for self-modification qualification;
 Complete cache/pipeline integration and the original delayed-branch/loop IDLE
 remain open (sharc-finalizer.txt).

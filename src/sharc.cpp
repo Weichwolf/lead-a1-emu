@@ -74,19 +74,21 @@ std::optional<std::uint32_t> schedule(SharcState &state, std::uint32_t target, b
   return {};
 }
 
-bool taken(const SharcState &state, std::uint64_t opcode) {
+bool taken(const SharcState &state, std::uint64_t opcode, std::optional<bool> captured) {
+  if (captured) { return *captured; }
   const auto condition = static_cast<unsigned int>((opcode >> 33) & 31);
   return detail::sharc_condition(state, condition);
 }
 
-std::optional<std::uint32_t> direct_branch(SharcState &state, std::uint64_t opcode) {
+std::optional<std::uint32_t>
+direct_branch(SharcState &state, std::uint64_t opcode, std::optional<bool> captured) {
   constexpr auto allowed = opcode_byte | condition_field | delayed | call_flag | loop_abort |
                            clear_interrupt | detail::sharc_pc_mask;
   if ((opcode & ~allowed) != 0) { throw std::runtime_error("Reserved SHARC direct-branch fields"); }
   if ((opcode & (loop_abort | clear_interrupt)) != 0) {
     throw std::runtime_error("SHARC loop-abort/clear-interrupt branch not implemented");
   }
-  if (!taken(state, opcode)) { return {}; }
+  if (!taken(state, opcode, captured)) { return {}; }
   if (state.branch) {
     throw std::runtime_error("SHARC taken branch in delay slot not implemented");
   }
@@ -100,12 +102,13 @@ std::optional<std::uint32_t> direct_branch(SharcState &state, std::uint64_t opco
   return schedule(state, target, db);
 }
 
-std::optional<std::uint32_t> return_branch(SharcState &state, std::uint64_t opcode) {
+std::optional<std::uint32_t>
+return_branch(SharcState &state, std::uint64_t opcode, std::optional<bool> captured) {
   constexpr auto allowed = opcode_byte | condition_field | delayed;
   if ((opcode & ~allowed) != 0) {
     throw std::runtime_error("SHARC RTS compute/loop-return/reserved fields not implemented");
   }
-  if (!taken(state, opcode)) { return {}; }
+  if (!taken(state, opcode, captured)) { return {}; }
   if (state.branch) {
     throw std::runtime_error("SHARC taken return in delay slot not implemented");
   }
@@ -158,8 +161,11 @@ void direct_move(SharcMemory &memory,
   throw std::runtime_error(message.str());
 }
 
-std::optional<std::uint32_t>
-execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const SharcControl *control) {
+std::optional<std::uint32_t> execute(SharcMemory &memory,
+                                     SharcState &state,
+                                     std::uint64_t opcode,
+                                     const SharcControl *control,
+                                     std::optional<bool> branch_taken = std::nullopt) {
   constexpr std::uint64_t dual_mask = 0xe00000000000;
   constexpr std::uint64_t dual_class = 0x200000000000;
   if ((opcode & dual_mask) == dual_class) {
@@ -198,8 +204,8 @@ execute(SharcMemory &memory, SharcState &state, std::uint64_t opcode, const Shar
     case 1: detail::sharc_compute(state, opcode); return {};
     case 2: detail::sharc_shift(state, opcode, true); return {};
     case 6:
-    case 7: return direct_branch(state, opcode);
-    case 10: return return_branch(state, opcode);
+    case 7: return direct_branch(state, opcode, branch_taken);
+    case 10: return return_branch(state, opcode, branch_taken);
     case 11: return detail::sharc_return_interrupt(state, opcode);
     case 12:
     case 13: detail::sharc_begin_count_loop(state, opcode); return {};
@@ -322,7 +328,9 @@ SharcStep Sharc::step() {
   return step_opcode({});
 }
 
-SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured, bool preserve_cache) {
+SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
+                             bool preserve_cache,
+                             std::optional<bool> branch_taken) {
   auto opcode = captured;
   bool transaction{};
   bool control_transaction{};
@@ -355,7 +363,7 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured, bool preserv
       } else {
         detail::sharc_long_loop_prepare(next, *opcode);
       }
-      const auto target = execute(memory_, next, *opcode, control_);
+      const auto target = execute(memory_, next, *opcode, control_, branch_taken);
       next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
     }
     // A bound fetch clock already accounted for the actual PM cache request.

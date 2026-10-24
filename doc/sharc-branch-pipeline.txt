@@ -1,0 +1,66 @@
+Native Address-stage branch decisions and condition interlocks
+
+The optional fetch sequencer now resolves the nineteen supported conditions
+for direct absolute/relative JUMP/CALL and plain immediate/delayed RTS. The
+condition and selected internal native target are retained on the Address
+word through Execute. The native decoder executes the original captured
+opcode and uses that saved decision; it does not resample later ASTAT or
+rewrite the instruction's condition bits. SISD uses PEx; SIMD ANDs the two
+element conditions. A false branch neither redirects nor reads a return frame.
+Relational, external FLAG and loop conditions remain explicitly unsupported.
+
+RTS selects its known ordinary CALL frame in Address. Actual stack pop, PC
+effects and DB slots still use the shared native core at Execute. No private
+shadow stack or synthetic return is substituted. The live frame must still
+match the captured target at retirement; an altered or unknown frame fails
+before commit and retains the Execute word. Loop/interrupt frames remain
+guarded, as do a taken RTS immediately after an unqualified PCSTK write.
+
+PGRrev2.4,4-115/117/Table4-55 requires an interlock when a conditional branch
+in Decode depends on the immediately preceding Address instruction's flags.
+That clock holds F1/F2/Decode, moves the actual producer to Execute and leaves
+Address empty. The F1 cursor and Decode suppression mask hold, and no next
+address is accepted. After actual producer retirement, the following clock
+resolves the branch from its updated flags. An absent phase is not a guest NOP.
+
+Dependency masks distinguish ALU flags, shifter SZ/SV/SS and system-bit-test
+BTF. Compute-only, immediate shifts, register moves with parallel compute and
+Type1 compute fields are classified; an unrelated flag class does not stall.
+Unconditional branches do not consume flags. Multiplier/multifunction hazards
+are unqualified. Simultaneous cache/control stalls and pending cache phases
+at a control interlock remain guarded rather than assuming merged stalls;
+4-118 explicitly warns that different causes need not merge. MODE1 Decode
+capture/interlocks, explicit ASTAT/FLAGS effect latencies, indirect branches,
+RTI, loop/ISR/IDLE sequencing and full physical/global timing remain open.
+
+Snapshots include the branch decision/target and the existing flow/cache
+phases. Invalid early/missing decisions, impossible taken/target pairs, false
+unconditional decisions, unsupported conditions and wrong direct targets
+reject. Failed clocks preserve CPU/cache/transport; failed native retirement
+retains its already clocked Execute word. See sharc-fetch-flow.txt for the
+underlying immediate/DB suppression and cache-miss cursor retry contract.
+
+Owned tests cover432 direct JUMP/CALL/RTS condition/PE/polarity/mode cases,
+later-unknown ASTAT after capture, all eight five-stage columns of Table4-55,
+full checkpoint continuations from those phases, an actual decrement/NE
+countdown loop, nested native CALL/RTS with real DB
+slots, related/unrelated flag classes and parallel compute, false mutually
+exclusive DB branches, false RTS with unknown stack, changed-frame retry,
+malformed snapshots and unsupported interlock boundaries. An actual Type1
+PM request creates the cache miss used by the guarded mixed-stall test.
+A failed actual producer retains its waiting Decode branch until repaired
+and retried. These are finite
+deterministic inputs, not random fuzzing or physical measurements.
+
+The optional original-stream test also executes each actual serially loaded
+kernel's first eight instructions through the sequencer: five NOPs, CALL(DB)
+and both real mask/latch writes. Twelve granted fetch clocks reach8c091 with
+the actual CALL frame108c008 and retained first target instruction in Decode.
+No IOP read, peripheral clock or automatic IRQ is performed by that prefix.
+The full original stream then starts with a separate fresh functional CPU and
+retains its existing8c08e frontier. This is not a pipeline-qualified complete
+loader, terminal-vector acceptance, ARM writer return, coldboot or audio.
+
+Primary references: PGRrev2.4,4-5/8,4-19/23,4-106,4-115/118,9-32/34,
+9-44/46,A-17/20,A-31/35. Provenance is in reference/sharc.json; no private
+reconstruction source or manufacturer program words are public build inputs.

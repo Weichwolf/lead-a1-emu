@@ -5,6 +5,7 @@
 #include "lead_a1/sharc_fetch.hpp"
 
 #include <cstdint>
+#include <optional>
 
 namespace lead_a1::detail {
 
@@ -21,6 +22,14 @@ void sharc_fetch_reserve(SharcCacheState &cache, SharcFetchState &state);
                                               bool &forwarded);
 void sharc_fetch_fill(SharcCacheState &cache, const SharcFetchState &state);
 void sharc_fetch_flow_guard(const SharcState &cpu);
-void sharc_fetch_flow(const SharcFetchState &previous, SharcFetchState &next);
+[[nodiscard]] bool sharc_fetch_branch_encoding(std::uint64_t opcode);
+[[nodiscard]] std::uint32_t sharc_fetch_condition_mask(unsigned int code);
+[[nodiscard]] bool sharc_fetch_interlock(const SharcState &cpu, const SharcFetchState &previous);
+void sharc_fetch_branch_validate(const SharcFetchState &state);
+[[nodiscard]] std::optional<bool> sharc_fetch_branch_retirement(const SharcState &cpu,
+                                                                const SharcFetchWord &word);
+void sharc_fetch_flow(const SharcState &cpu,
+                      const SharcFetchState &previous,
+                      SharcFetchState &next);
 
 }

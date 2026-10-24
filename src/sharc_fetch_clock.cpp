@@ -16,6 +16,43 @@
 namespace lead_a1 {
 namespace {
 
+void validate_clock(const SharcFetchState &state,
+                    std::optional<std::uint32_t> next_address,
+                    SharcFetchBus bus,
+                    bool sequenced) {
+  if (state.execute) { throw std::runtime_error("SHARC fetch Execute word has not retired"); }
+  if (sequenced != state.flow.has_value()) {
+    throw std::runtime_error("SHARC sequenced fetch requires its sequenced clock");
+  }
+  if (next_address) { detail::sharc_fetch_address(*next_address); }
+  if (bus == SharcFetchBus::block_conflict) {
+    throw std::runtime_error("SHARC block-conflict arbitration not qualified; not cached");
+  }
+  if (bus != SharcFetchBus::available && bus != SharcFetchBus::pm_data) {
+    throw std::invalid_argument("Invalid SHARC fetch bus event");
+  }
+}
+
+SharcFetchEvent stalled_clock(const SharcFetchState &previous,
+                              SharcFetchState &next,
+                              SharcCacheState &cache,
+                              SharcFetchBus bus,
+                              bool control) {
+  if (control && previous.lookup && previous.lookup->wait) {
+    throw std::runtime_error("SHARC simultaneous cache/control stalls not qualified");
+  }
+  if (control && (bus != SharcFetchBus::available || previous.lookup || previous.fill)) {
+    throw std::runtime_error("SHARC control stall with PM/cache phases not qualified");
+  }
+  if (bus != SharcFetchBus::available) {
+    throw std::runtime_error("SHARC pending fetch stall requires an empty Address phase");
+  }
+  next.execute = previous.address;
+  next.address.reset();
+  if (!control) { detail::sharc_fetch_reserve(cache, next); }
+  return {.stalled = true, .control_stall = control};
+}
+
 SharcFetchEvent normal_clock(SharcMemory &memory,
                              SharcCacheState &cache,
                              const SharcFetchState &previous,
@@ -82,35 +119,21 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
   if (&cpu.memory_ != &memory_ || memory_.active()) {
     throw std::logic_error("SHARC cache fetch requires its idle bound memory");
   }
-  if (state_.execute) { throw std::runtime_error("SHARC fetch Execute word has not retired"); }
-  if (sequenced != state_.flow.has_value()) {
-    throw std::runtime_error("SHARC sequenced fetch requires its sequenced clock");
-  }
+  validate_clock(state_, next_address, bus, sequenced);
   if (sequenced) { detail::sharc_fetch_flow_guard(cpu.state_); }
-  if (next_address) { detail::sharc_fetch_address(*next_address); }
-  if (bus == SharcFetchBus::block_conflict) {
-    throw std::runtime_error("SHARC block-conflict arbitration not qualified; not cached");
-  }
-  if (bus != SharcFetchBus::available && bus != SharcFetchBus::pm_data) {
-    throw std::invalid_argument("Invalid SHARC fetch bus event");
-  }
   const auto mode = cpu.state_.effective[4];
   detail::sharc_validate_cache(cpu.state_.cache);
   detail::sharc_fetch_mode(state_, mode);
   auto next = state_;
   auto cache = cpu.state_.cache;
   SharcFetchEvent event;
-  if (state_.lookup && state_.lookup->wait) {
-    if (bus != SharcFetchBus::available) {
-      throw std::runtime_error("SHARC pending fetch stall requires an empty Address phase");
-    }
-    next.execute = state_.address;
-    next.address.reset();
-    detail::sharc_fetch_reserve(cache, next);
-    event.stalled = true;
+  const bool interlock = sequenced && detail::sharc_fetch_interlock(cpu.state_, state_);
+  const bool cache_stall = state_.lookup && state_.lookup->wait;
+  if (cache_stall || interlock) {
+    event = stalled_clock(state_, next, cache, bus, interlock);
   } else {
     event = normal_clock(memory_, cache, state_, next, mode, next_address, bus);
-    if (sequenced) { detail::sharc_fetch_flow(state_, next); }
+    if (sequenced) { detail::sharc_fetch_flow(cpu.state_, state_, next); }
   }
   if (!next.execute) { bubble_guard(cpu.state_, cpu.control_); }
   detail::sharc_fetch_validate(next);

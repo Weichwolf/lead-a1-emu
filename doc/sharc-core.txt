@@ -55,8 +55,10 @@ The explicit instruction-bus transport in sharc-fetch.txt can supply retirement
 with an actual previously fetched word, including the bound internal cache
 clock in sharc-fetch-cache.txt. It retains F2 data across later DMA writes;
 the default functional step still reads at retirement.
-The optional native cursor/unconditional JUMP/CALL transport suppresses real
+The optional native cursor/JUMP/CALL/RTS transport suppresses real
 speculative Decode inputs and retains DB slots (sharc-fetch-flow.txt).
+Supported Address-stage conditions and producer stalls have the further
+sharc-branch-pipeline.txt contract, including retained decisions at Execute.
 Complete sequencer/control interlocks and full pipeline timing remain unqualified.
 
 System register read views and effective controls are separate. MODE1, IRPTL

@@ -113,8 +113,15 @@ ID  State    Evidence / remaining work
              words and preserves DB slots, native CALL frames and cache-miss
              retry. Literal five-stage tables, backward refetch, phase snapshots
              and real guest self-modifying branch targets have independent
-             tests (sharc-fetch-flow.txt). Conditional/return/loop/IRQ/IDLE
-             redirects and complete interlocks remain guarded or open, as do
+             tests (sharc-fetch-flow.txt). Direct/RTS Address-stage decisions
+             retain19 supported conditions through Execute; actual CALL-frame
+             pops and ALU/shifter/BTF producer stalls have literal phase,
+             condition-matrix, real countdown/nested-call and snapshot oracles
+             (sharc-branch-pipeline.txt). Each original kernel's first8 actual
+             instructions also runs through that sequencer in12 granted clocks;
+             its separate fresh functional full-stream run is not reclassified.
+             Loop/IRQ/IDLE/indirect redirects and complete interlocks remain
+             guarded or open, as do
              block arbitration, pending-effect bubbles and global timing; original
              prefixes still use the functional path.
              Four-instruction loops execute real delayed CALLs, both delay

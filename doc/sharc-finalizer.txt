@@ -10,7 +10,8 @@ interrupt loop reentry or cache/prefetch. No vector load/application boot is imp
 The separate instruction-bus transport in sharc-fetch.txt captures actual F2
 data and retires retained words through the native core. Its bound cache clock
 has the explicit-input contract in sharc-fetch-cache.txt. Its optional cursor
-and unconditional JUMP/CALL redirects are in sharc-fetch-flow.txt. These do not yet
+and JUMP/CALL/RTS redirects are in sharc-fetch-flow.txt, with Address-stage
+decisions/interlocks in sharc-branch-pipeline.txt. These do not yet
 supply the original finalizer's complete cache/redirect/loop/IDLE pipeline.
 
 Primary-reference provenance is recorded in reference/sharc.json:

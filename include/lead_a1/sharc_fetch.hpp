@@ -9,11 +9,19 @@
 
 namespace lead_a1 {
 
+struct SharcFetchBranch {
+  bool taken{};
+  std::optional<std::uint32_t> target{std::nullopt};
+  bool operator==(const SharcFetchBranch &) const = default;
+};
+
 struct SharcFetchWord {
   std::uint32_t address{};
   std::uint64_t opcode{};
   // Explicit PM request observed in Address; absent on the standalone path.
   std::optional<bool> pm_data{std::nullopt};
+  // Branch condition/target selected in Address, before native Execute effects.
+  std::optional<SharcFetchBranch> branch{std::nullopt};
   bool operator==(const SharcFetchWord &) const = default;
 };
 
@@ -57,6 +65,7 @@ struct SharcFetchEvent {
   bool stalled{};
   bool cache_hit{};
   bool forwarded{};
+  bool control_stall{};
   bool operator==(const SharcFetchEvent &) const = default;
 };
 
@@ -82,7 +91,7 @@ public:
                                         std::optional<std::uint32_t> next_address,
                                         SharcFetchBus bus = SharcFetchBus::available);
   // Optional native sequencer: initialize state.flow.next to the entry address.
-  // Generates sequential F1 and unconditional direct JUMP/CALL targets, with
+  // Generates sequential F1 and native direct JUMP/CALL/RTS targets, with
   // real delayed slots and suppressed speculative Decode inputs (PGR4-20/21).
   // The owner still grants clocks, supplies PM requests and retires Execute.
   [[nodiscard]] SharcFetchEvent advance_sequenced(Sharc &cpu,

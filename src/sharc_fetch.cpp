@@ -74,6 +74,7 @@ void sharc_fetch_validate(const SharcFetchState &state) {
     }
   }
   cache_metadata(state);
+  sharc_fetch_branch_validate(state);
   if (state.flow) {
     sharc_fetch_address(state.flow->next);
     if (state.flow->discard_decode > 3) {
@@ -157,6 +158,7 @@ std::uint64_t SharcFetch::for_execution(const SharcMemory &memory, std::uint32_t
 }
 
 SharcStep Sharc::step(SharcFetch &fetch) try {
+  if (fetch.state_.flow) { detail::sharc_fetch_flow_guard(state_); }
   const auto opcode = fetch.for_execution(memory_, state_.pc);
   bool preserve_cache{};
   const auto word = fetch.state_.execute;
@@ -167,7 +169,9 @@ SharcStep Sharc::step(SharcFetch &fetch) try {
     }
     preserve_cache = actual;
   }
-  const auto result = step_opcode(opcode, preserve_cache);
+  const auto branch_taken =
+      word ? detail::sharc_fetch_branch_retirement(state_, *word) : std::nullopt;
+  const auto result = step_opcode(opcode, preserve_cache, branch_taken);
   fetch.state_.execute.reset();
   return result;
 } catch (const std::exception &error) {

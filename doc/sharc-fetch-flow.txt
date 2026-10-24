@@ -2,7 +2,9 @@ Native internal fetch address sequencing and branch suppression
 
 An optional SharcFetchState.flow supplies the next F1 cursor. The bound
 advance_sequenced clock generates linear addresses and unconditional native
-Type8a absolute/relative JUMP/CALL targets. The owner still grants clocks,
+Type8a absolute/relative JUMP/CALL targets and plain RTS. Conditions and their
+producer interlocks have the further sharc-branch-pipeline.txt contract.
+The owner still grants clocks,
 supplies actual Address-stage PM requests and retires the occupied Execute
 latch through Sharc::step(fetch). No peripheral/global clock or IRQ routing
 is inferred. Explicit-address and standalone clocks reject a sequenced state.
@@ -29,9 +31,9 @@ Clock failures preserve cursor, cache and all transport phases. Retirement
 remains a separate transaction: an instruction failure retains the committed
 clock's Execute latch and cursor for retry, as in sharc-fetch.txt.
 
-This is a bounded native sequencing reference. Conditional branches need
-Address-stage condition sampling and producer interlocks (PGR4-115/117).
-RTS/RTI/indirect branches, DO/loop sequencing, IDLE and ISR contexts are
+This is a bounded native sequencing reference. Direct/RTS decisions and
+supported producer interlocks are described in sharc-branch-pipeline.txt.
+RTI/indirect branches, DO/loop sequencing, IDLE and ISR contexts are
 guarded before they enter Address. Branches with outstanding cache fills or
 overlapping active suppression remain guarded; their abort/fill arbitration
 is not guessed. Existing pending-effect bubble and block-conflict guards
@@ -52,5 +54,7 @@ The sequencer generates the target and retries an actual miss stall itself.
 
 Primary evidence is PGRrev2.4,4-5/8,4-19/23,4-79/85,4-115/117,9-32/34;
 provenance is in reference/sharc.json. No manufacturer/private source input
-is added. Direct original stream regressions still use the functional path
-and stop at8c08e. This is not new original finalizer/upload/boot/audio evidence.
+is added. Full-stream original regressions still use the functional path
+and stop at8c08e; the separate first8-instruction sequenced prefix has the
+sharc-branch-pipeline.txt contract. Neither establishes original finalizer,
+whole upload, coldboot or audio.

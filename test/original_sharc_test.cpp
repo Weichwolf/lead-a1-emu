@@ -4,6 +4,7 @@
 #include "lead_a1/sharc_boot.hpp"
 #include "lead_a1/sharc_clock.hpp"
 #include "lead_a1/sharc_control.hpp"
+#include "lead_a1/sharc_fetch.hpp"
 #include "lead_a1/sharc_memory.hpp"
 #include "lead_a1/sharc_spi.hpp"
 
@@ -116,6 +117,37 @@ void bootstrap(lead_a1::SharcMemory &memory,
                          .width = lead_a1::SharcWidth::wide48},
                         lead_a1::AccessKind::fetch) == expected);
   }
+}
+
+void sequenced_kernel_prefix(lead_a1::SharcMemory &memory) {
+  lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(reset));
+  lead_a1::SharcFetchState transport;
+  transport.flow = lead_a1::SharcFetchFlow{.next = reset};
+  lead_a1::SharcFetch fetch(memory, transport);
+  constexpr unsigned int instructions = 8;
+  constexpr unsigned int clock_limit = 12;
+  unsigned int retired{};
+  unsigned int clocks{};
+  while (retired < instructions && clocks < clock_limit) {
+    const auto event = fetch.advance_sequenced(cpu);
+    require(event.address_accepted && !event.stalled);
+    ++clocks;
+    if (fetch.state().execute) {
+      const auto step = cpu.step(fetch);
+      require(step.pc == reset + retired);
+      ++retired;
+    }
+  }
+  constexpr std::uint32_t clock_setup = 0x8c091;
+  constexpr std::uint32_t return_frame = 0x108c008;
+  require(retired == instructions && clocks == clock_limit);
+  require(cpu.state().pc == clock_setup && cpu.state().depth == 1);
+  require(cpu.state().pc_stack[0] == return_frame && !cpu.state().branch);
+  require(cpu.state().system[11].value == 3 && cpu.state().effective[11].value == 3);
+  require(cpu.state().system[10].value == 0 && cpu.state().pending[10] == cpu.state().system[10]);
+  const auto decoded = fetch.state().decode;
+  require(decoded && decoded->address == clock_setup);
+  require(!cpu.state().interrupt && !cpu.state().idle_pc && cpu.state().cache.valid.value == 0);
 }
 
 struct SerialInput {
@@ -254,6 +286,7 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
   memory.map_2148x_5mbit_ram();
   auto boot = lead_a1::SharcSpiBoot::slave_reference_214xx();
   bootstrap(memory, boot, stream);
+  sequenced_kernel_prefix(memory); // Separate read-only prefix; the full stream starts fresh below.
   ObservedClock clock;
   lead_a1::SharcControl control(true);
   lead_a1::SharcSpi spi(boot.state());
@@ -310,6 +343,8 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
   std::cout << expected.records << " records, " << expected.cells.size() << " final payload cells, "
             << instructions << " DSP instructions, " << interval
             << " instructions/serial edge; vector DMA armed, deferred branch frontier\n"
+            << "  Sequenced kernel prefix:8 instructions/12 granted fetch clocks; "
+               "next PC0x8c091, no IOP read\n"
             << std::flush;
 }
 
