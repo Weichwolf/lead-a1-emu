@@ -18,8 +18,9 @@ External/VISA addresses, unresolved controls and active memory transactions
 fail with phase/PC/MODE2/access context. Neither path infers grants from DMA
 traffic or advances peripherals or global time. The bound clock's supported
 quiet core/SYSCTL maturation has the separate sharc-quiet-clocks.txt contract.
-DAG operand capture, address/data arbitration, control interlocks and IDLE/IRQ
-control remain separate unqualified pipeline work. The optional cursor and
+Address/data arbitration and complete control composition remain separate
+pipeline work. Bound unlooped IDLE/P1I/RTI has the sharc-delayed-idle.txt
+contract. The optional cursor and
 JUMP/CALL/RTS redirects have the bounded sharc-fetch-flow.txt contract; retained
 Address-stage conditions/interlocks are in sharc-branch-pipeline.txt.
 Its five phases do not establish complete core

@@ -1,0 +1,53 @@
+{
+  "purpose": "Optional independent ADSP-21489 development reference; never a public build or firmware runtime dependency",
+  "author": "Analog Devices",
+  "version": "VisualDSP++5.1.2",
+  "official_page": "https://www.analog.com/en/resources/evaluation-hardware-and-software/embedded-development-software/vdsp-bf-sh-ts.html",
+  "installer_url": "https://download.analog.com/tools/VisualDSP%2B%2B5.1.2/VisualDSP%2B%2B%205.1.2.exe",
+  "installer_bytes": 1045108464,
+  "installer_sha256": "f761fd9d5fda4f68280ef1ac6d7ed78f24cb7d2f2d152272fe44be92d55e5e19",
+  "provenance": "Direct official CDN download and static archive extraction; files remain ignored. Hash pins received bytes, not a separately verified publisher signature. No source/binary distribution or original Nord toolchain attribution.",
+  "artifacts": [
+    {
+      "path": "easm21k.exe",
+      "bytes": 14336,
+      "sha256": "a2af45188af2cfa11db87b1c532d07590fe4a9034bd8d3d270a6af2acd1ffeea"
+    },
+    {
+      "path": "System/elfasmhh.dll",
+      "bytes": 3787264,
+      "sha256": "634c0e28a80194da0efde7c2caed4c0d8728941652129b61cdfb2b75d15f404a"
+    },
+    {
+      "path": "System/DanubeSimTarget.dll",
+      "bytes": 634880,
+      "sha256": "868aeb387d54aa28ddd98c2222ffbf964ab292182a1e936ca4aaf9b447a2e232"
+    },
+    {
+      "path": "System/cyclesim10x2.dll",
+      "bytes": 1384448,
+      "sha256": "9cee276e0a6efb459e845eaba4fd6c5085d897a7035687c80ecb4228922b9f29"
+    },
+    {
+      "path": "214xx/include/def21489.h",
+      "bytes": 206164,
+      "sha256": "4c574aee815ec6186067df253d3a499fc6f0cdd474bd63e071157ad1e5402ca5"
+    },
+    {
+      "path": "214xx/ldr/489_spi/489_spi.asm",
+      "bytes": 23249,
+      "sha256": "283b966e6f1f5238a2d019bf3517c0b3b9987be64163ac66db33f3d5d816927f"
+    }
+  ],
+  "limits": "Presence of target headers/simulator DLLs is not simulator, peripheral or silicon qualification. Actual assembler/simulator use and independent case results must be recorded separately.",
+  "local_qualification": {
+    "wine_version": "10.0 (Debian 10.0~repack-6)",
+    "prefix": "$HOME/.local/share/wineprefixes/lead-a1-emu",
+    "architecture": "win32",
+    "install_root": "C:\\Analog Devices\\VisualDSP 5.1.2",
+    "installation": "Official Install_CL new completed successfully; no-setup-inf; bundled VC++2005SP1 runtime installed in dedicated prefix",
+    "assembler": "Installed easm21k -proc ADSP-21489 -version reaches ea1156 missing license; no local license installed; no assembled object qualified",
+    "simulator": "Not qualified or used for execution; target DLL presence is inventory only",
+    "runtime_dependency": false
+  }
+}

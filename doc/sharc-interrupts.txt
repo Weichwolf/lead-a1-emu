@@ -31,9 +31,11 @@ delay-slot IMASK write still has its old effective mask at this boundary;
 accepted entry clocks then settle it before the handler. Checkpoint continuation
 and arrivals before either slot have owned tests. IDLE in a slot still fails
 with an enabled pending request; the exact branch/latch state survives failure
-and both repaired fixture slots execute on retry. This functional placement does
+and both repaired fixture slots execute on retry. The further bound fetched
+first-slot IDLE wake and retained final slot are in sharc-delayed-idle.txt.
+This functional placement does
 not model an earlier physical recognition/pipeline latch or establish pin timing.
-Delayed-branch IDLE, loop reentry and non-native boundaries remain guarded.
+Loop reentry and non-native boundaries remain guarded.
 
 P1I does not automatically push/pop ASTATx/y or MODE1, nor apply MMASK. Those
 status actions belong to IRQ2-0/timer or explicit status-stack instructions.
@@ -63,5 +65,7 @@ before recognition check the very first handler operation; a failed clock owner
 preserves CPU/controller state. A pending MODE1 write enabling unqualified nesting
 also rejects atomically after the entry-clock check. Stack depth must be known for service
 checkpoint restoration; unknown short-loop startup contexts remain guarded.
-Delayed-branch/loop IDLE wake, interrupted loop reentry, vector DMA restoration,
+The bound transport's explicit P1I redirect and captured RTI decision/frame
+checks are in sharc-delayed-idle.txt. Arithmetic-loop IDLE wake,
+interrupted loop reentry, original vector DMA restoration,
 VISA/application boot, audio and hardware comparison remain open.

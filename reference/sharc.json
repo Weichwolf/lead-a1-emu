@@ -54,6 +54,24 @@
       "official_url": "https://www.analog.com/media/en/dsp-documentation/integrated-circuit-anomalies/adsp-21483_21486_21487_21488_21489_sharc-anomaly.pdf",
       "provenance": "Official PDF consulted online; local byte identity not established. No implementation reused. Physical Nord silicon revision remains unknown.",
       "sections": "Pages3-4:15000002 delayed IRQx/timer return status-stack anomaly,15000004 external-data system-register effect latency and15000005 DMA-conflicted loop-register loads. Pages11-13:15000021 debugger/core-timer IDLE case and15000023/24 VISA delayed access/internal-write FIFO visibility. These revision-specific cases do not establish a target FINAL_INIT IDLE/wake exception or physical chip profile."
+    },
+    {
+      "author": "KRZ (signed Klaus), Analog Devices EngineerZone contributor",
+      "title": "Program crashing if loaded by bootloader, reply 24 April 2015",
+      "official_url": "https://ez.analog.com/dsp/sharc-processors/f/q-a/61249/program-crashing-if-loaded-by-bootloader",
+      "provenance": "Manufacturer-hosted primary ADSP-21489/CCES1.1.0 kernel discussion; posted source/explanation, not measured silicon or verified employee attribution. Generated page summary excluded. No listing/source reused or local-byte identity claimed.",
+      "sections": "FINAL_INIT wake before deferred service, retained final mask slot, completed DB target pushed as IRQ return PC, temporary SPI-vector RTI; original loop/drain/self-modification still requires separate qualification."
+    },
+    {
+      "author": "Analog Devices",
+      "title": "VisualDSP++5.1.2 ADSP-21489 SPI boot kernel",
+      "official_url": "https://download.analog.com/tools/VisualDSP%2B%2B5.1.2/VisualDSP%2B%2B%205.1.2.exe",
+      "package_reference": "reference/visualdsp.json",
+      "local_artifact": "214xx/ldr/489_spi/489_spi.asm",
+      "local_copy_bytes": 23249,
+      "local_copy_sha256": "283b966e6f1f5238a2d019bf3517c0b3b9987be64163ac66db33f3d5d816927f",
+      "provenance": "Direct official package/static extraction; manufacturer-shipped kernel explanation independently corroborates discussion. Source/listing stays ignored, no implementation reuse or original Nord toolchain attribution.",
+      "sections": "FINAL_INIT first-slot IDLE wake, final mask slot, completed DB target as IRQ return PC, temporary RTI and later self-modifying arithmetic-loop patch. Source-level ordering, not measured hardware/pipeline latency."
     }
   ],
   "spi_slave_reference": {
@@ -228,7 +246,7 @@
     "phases": "F1 selects an address, F2 reads real executable wide48 RAM, Decode/Address/Execute retain the actual fetched data; bubbles are absent words rather than retired guest NOPs",
     "retirement": "Bound memory and matching Execute PC required; actual native decoder consumes the latch only after successful transactional CPU/memory/device commit; no retirement-time instruction-RAM reread",
     "dma": "Owned actual LSB-first SPI reception and three normal32 DMA writes replace two native48 instructions; before-F2 writes are observed, later writes preserve captured data through actual CPU retirement and checkpoint continuation",
-    "limits": "Complete cache/pipeline integration, data arbitration/DAG operand capture, full control interlocks, general indirect/RTI/loop/IDLE/IRQ sequencing and global/physical timing remain unqualified; bounded direct/RTS decisions are in fetch_flow_reference/branch_pipeline_reference; bounded immediate single loops are in single_loop_fetch_reference; full original record streams use the separate functional instruction-order path"
+    "limits": "Complete cache/pipeline integration, data arbitration/DAG operand capture, full control interlocks, complete indirect/loop/IDLE/IRQ composition and global/physical timing remain unqualified; bounded direct/RTS decisions are in fetch_flow_reference/branch_pipeline_reference; bounded immediate single loops are in single_loop_fetch_reference; full original record streams use the separate functional instruction-order path"
   },
   "interrupt_reference": {
     "primary": "PGRrev2.4 4-22/23,4-26/43,9-44/46,10-17,A-10,A-31/34,A-37/42",
@@ -238,7 +256,7 @@
     "delayed_branch": "Ordinary unlooped internal JUMP/CALL/RTS defers explicit delivery until both real delay slots finish; target-boundary effective controls decide entry; physical earlier recognition/pipeline latch remains unqualified",
     "return": "Actual immediate conditional RTI through matched interrupt frame; ISR results retained; SIMD AND condition",
     "idle": "Ordinary Type22a IDLE holds core while actual owned SPI reception/DMA proceeds; explicitly routed completion, actual ISR/RTI and dependent foreground continuation",
-    "limits": "Delayed-branch/loop IDLE, interrupted loop reentry, other/nested sources, automatic board routing, synchronization, cache/fetch visibility, complete boot and physical timing remain unqualified"
+    "limits": "Arithmetic-loop IDLE/interrupted loop reentry, other/nested sources, automatic board routing, synchronization, full cache/fetch composition, complete boot and physical timing remain unqualified; bounded unlooped fetched wake/redirect/RTI is in delayed_idle_fetch_reference"
   },
   "compute_reference": {
     "primary": "PGRrev2.4 9-10/11,10-6,11-15/19,12-2/3,A-17/20",
@@ -280,7 +298,7 @@
     "cache_stall": "Partial conflict-miss stall holds F1 cursor and Decode suppression while Address progresses to Execute; unaccepted target is retried automatically",
     "snapshots": "Cursor, suppression, all retained words and cache phases restore with paired actual CPU/cache state; clock failures preserve all, failed retirement retains its already clocked Execute word",
     "owned_evidence": "Literal seven-column five-stage branch tables for absolute/relative JUMP/CALL with/without DB, actual CALL frames, backward relative refetch, branch-phase checkpoint continuation and real guest PM(PX) self-modifying delayed-branch targets with miss/hit outcomes",
-    "limits": "Indirect/RTI/general loop/ISR/IDLE sequencing, pending-fill branch arbitration, complete MODE1/DAG/control interlocks and mode/width/flush quiet ordering remain guarded; bounded immediate single loops have single_loop_fetch_reference; no global/physical timing or complete original-stream finalizer/boot/audio acceptance"
+    "limits": "Indirect/general loop and complete ISR/IDLE composition, pending-fill branch arbitration, complete MODE1/DAG/control interlocks and mode/width/flush quiet ordering remain guarded; bounded immediate single loops have single_loop_fetch_reference; no global/physical timing or complete original-stream finalizer/boot/audio acceptance"
   },
   "branch_pipeline_reference": {
     "primary": "PGRrev2.4 4-5/8,4-19/23,4-92/93,4-106,4-115/118/Table4-55,9-32/34,9-44/46,A-17/20,A-31/35",
@@ -392,5 +410,14 @@
     "atomicity": "Native predicates/banks/old parallel values retained; failed producer/consumer keeps actual Execute for repair; committed earlier MUL survives a later consumer fault; failed release clock retains CPU/cache/fetch and foreign SYSCTL ownership",
     "owned_evidence": "Initial phase oracle failed against5d6bdfa; literal four-column stages and independent RAM/CPU/fetch continuation before/after Execute with captured RAM replacement;516 finite cases across23 fixed forms, signs/gaps/SISD/SIMD/parallel copies,8 predicate/bank combinations with inactive unknown inputs and distinct PE results,all16 source registers,23 positive-zero products, no false floating/move/payload/other-producer hazards; actual sequential compute and branch holds, Type1 old-input ADD/dual DM-PM loads/DAG updates followed by separate later PM cache miss/fill, repaired producer/consumer and SYSCTL/cache/mode/unknown-format/live-loop failure boundaries",
     "limits": "Pending/in-flight MODE1, live loops/DB control, PM/cache and other simultaneous dependencies remain guarded; complete forwarding/global/physical timing, remaining arithmetic/exception/VISA and original boot/application/audio/hardware/performance remain unfinished"
+  },
+  "delayed_idle_fetch_reference": {
+    "primary": "PGRrev2.4 4-22/23,4-27..38,4-115..118,9-44/46,A-32; HWRrev1.1 24-25..27; CCES2.9rev2.3 10-16..19; KRZ ADSP-21489 kernel discussion 2015-04-24 corroboration; official VisualDSP++5.1.2 ADSP-21489 SPI kernel, reference/visualdsp.json",
+    "wake": "Explicit enabled known nonnested P1I clears only idle hold; no frame/latch/clock/branch completion; masked stays held and unknown/other sources reject atomically",
+    "retained_slot": "Unlooped pure first native internal DB-slot IDLE requires actual captured following Address word; CPU snapshot retains it through hold/wake, native Execute consumes it after DMA changed RAM; raw functional reread rejects",
+    "recognition": "Bound ordinary P1I service discards speculative fetch stages and redirects flow to explicit internal vector after validation; no occupied Execute/cache/loop transport; preserves CPU cache and atomic controller ownership",
+    "return": "Immediate RTI captures Address condition/real P1I return target, verifies same live frame at Execute, performs actual native pop/source effects; false condition avoids frame read and late unknown ASTAT cannot replace captured decision",
+    "owned_evidence": "Relocated 64-instruction program,96 actual normal32 LSB-first receive/DMA writes while CPU held, real completion routing, overwritten final slot/stale target/invalid old vector, native IRQ/RTI/refetched arithmetic target, independent RAM rebound CPU/transport continuation, masks/unknown wake/IVT/binding/SYSCTL/frame/restore failures",
+    "limits": "Deferred arithmetic loops/interrupted loop reentry/cache/drain/self-modification remain guarded; original8c08e and separate8c0b9 frontiers unchanged. Four-clock minimum entry bookkeeping plus subsequent pipeline are not qualified as disjoint physical intervals/global CCLK. No vector acceptance/original coldboot/application/audio/hardware/performance claim."
   }
 }

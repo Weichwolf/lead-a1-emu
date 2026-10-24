@@ -15,6 +15,7 @@ namespace {
 constexpr unsigned int class_shift = 40;
 constexpr unsigned int relative = 7;
 constexpr unsigned int rts = 10;
+constexpr unsigned int rti = 11;
 constexpr unsigned int always = 31;
 
 void word_branch(const SharcFetchWord &word, bool sequenced) {
@@ -38,7 +39,7 @@ void word_branch(const SharcFetchWord &word, bool sequenced) {
   const auto target = *branch->target;
   sharc_fetch_address(target);
   const auto type = word.opcode >> class_shift;
-  if (type != rts) {
+  if (type != rts && type != rti) {
     auto direct = static_cast<std::uint32_t>(word.opcode) & sharc_pc_mask;
     if (type == relative) { direct = (word.address + direct) & sharc_pc_mask; }
     if (target != direct) { throw std::invalid_argument("Invalid SHARC inherited direct target"); }
@@ -65,7 +66,7 @@ void multiplier_wait(const SharcFetchState &state) {
 bool sharc_fetch_branch_encoding(std::uint64_t opcode) {
   constexpr unsigned int absolute = 6;
   const auto type = opcode >> class_shift;
-  return type == absolute || type == relative || type == rts;
+  return type == absolute || type == relative || type == rts || type == rti;
 }
 
 std::uint32_t sharc_fetch_condition_mask(unsigned int code) {
@@ -99,6 +100,12 @@ std::optional<bool> sharc_fetch_branch_retirement(const SharcState &cpu,
     auto stack = cpu;
     if (sharc_pop_call(stack) != branch->target) {
       throw std::runtime_error("SHARC Address-stage return frame changed before Execute");
+    }
+  }
+  if (branch->taken && (word.opcode >> class_shift) == rti) {
+    auto stack = cpu;
+    if (sharc_return_interrupt(stack, word.opcode, true) != branch->target) {
+      throw std::runtime_error("SHARC Address-stage interrupt frame changed before Execute");
     }
   }
   return branch->taken;

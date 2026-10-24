@@ -24,10 +24,11 @@ Peripheral acknowledgement remains separate from core latch handling. Further
 tests cover no-retirement, checkpoint continuation, masked source, guest-written
 MODE1 effect latency, cache follower, reserved/EMUIDLE and invalid restore.
 
-The reference supports unlooped, non-delayed IDLE only. Delayed-branch/loop IDLE,
-NMI/timer/other wake sources, fetched-slot visibility and physical pipeline/
-clock latency remain unqualified. It does not resolve PGR4-23 versus the boot
-procedure or permit the original8c08e branch/8c08f IDLE sequence to execute.
+The functional reference supports unlooped, non-delayed IDLE. The further
+bound first-DB-slot wake/retained-slot/IRQ-fetch contract and its hardware-
+specific evidence are in sharc-delayed-idle.txt. Arithmetic-loop IDLE,
+NMI/timer/other wake sources and physical pipeline/clock latency remain
+unqualified. The original8c08e branch/8c08f IDLE sequence remains guarded.
 No original finalizer, vector restoration, cold boot or audio result follows.
 Primary evidence: PGRrev2.4,4-27/28,4-37/38,9-72,10-27; HWR SPI ownership
 remains under the existing explicit reference in sharc-spi.txt. The direct original prefix regressions retain8c08e and its previous counts;

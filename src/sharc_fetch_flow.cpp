@@ -23,11 +23,12 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
   constexpr unsigned int class_shift = 40;
   constexpr unsigned int relative = 7;
   constexpr unsigned int rts = 10;
+  constexpr unsigned int rti = 11;
   const auto type = word.opcode >> class_shift;
   if (sharc_fetch_branch_encoding(word.opcode)) {
     constexpr auto direct_fields = class_mask | condition_mask | delayed | call | sharc_pc_mask;
     constexpr auto return_fields = class_mask | condition_mask | delayed;
-    if ((word.opcode & ~(type == rts ? return_fields : direct_fields)) != 0) {
+    if ((word.opcode & ~(type == rts || type == rti ? return_fields : direct_fields)) != 0) {
       throw std::runtime_error("SHARC sequenced parallel/LA/CI/reserved branch not qualified");
     }
     const auto condition = static_cast<unsigned int>((word.opcode >> 33) & 31);
@@ -40,6 +41,12 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
       auto stack = cpu;
       address = sharc_pop_call(stack);
     }
+    if (type == rti) {
+      auto stack = cpu;
+      const auto returned = sharc_return_interrupt(stack, word.opcode, true);
+      if (!returned) { throw std::logic_error("Missing SHARC interrupt return target"); }
+      address = *returned;
+    }
     sharc_fetch_address(address);
     decision.target = address;
     return decision;
@@ -48,6 +55,8 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
   constexpr unsigned int last_other_control = 14;
   constexpr unsigned int immediate_loop = 12;
   if (type == immediate_loop) { return {}; }
+  constexpr std::uint64_t idle = 0x008000000000;
+  if (word.opcode == idle) { return {}; }
   if ((type >= first_other_control && type <= last_other_control) ||
       (type == 0 && word.opcode != 0)) {
     throw std::runtime_error("SHARC sequenced RTI/loop/indirect/IDLE control not qualified");
@@ -58,7 +67,7 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
 }
 
 void sharc_fetch_flow_guard(const SharcState &cpu, const SharcFetchState &transport) {
-  if (cpu.arithmetic_loop || cpu.interrupt || cpu.idle_pc) {
+  if (cpu.arithmetic_loop || cpu.idle_pc) {
     throw std::runtime_error("SHARC sequenced loop/ISR/IDLE context not qualified");
   }
   sharc_fetch_loop_guard(cpu, transport);

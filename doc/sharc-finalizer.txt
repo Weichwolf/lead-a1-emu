@@ -4,8 +4,10 @@ The qualified PX/bit/parallel prefix is documented separately. Arithmetic DO
 and deferred PC-stack setup have a bounded reference in sharc-arithmetic-loops.txt.
 The pure cache invalidation and Type1 dual-memory instruction references are
 in sharc-cache.txt/sharc-dual-moves.txt. Unlooped P1I/RTI and ordinary IDLE
-have separate contracts in sharc-interrupts.txt/sharc-idle.txt. They do not
-qualify the original reentered/short/self-modifying loop, delayed-branch IDLE,
+have separate contracts in sharc-interrupts.txt/sharc-idle.txt. The further
+unlooped fetched DB/IDLE, retained slot and P1I/RTI redirect component is in
+sharc-delayed-idle.txt. These do not
+qualify the original reentered/short/self-modifying loop, loop IDLE,
 interrupt loop reentry or cache/prefetch. No vector load/application boot is implied.
 The separate instruction-bus transport in sharc-fetch.txt captures actual F2
 data and retires retained words through the native core. Its bound cache clock
@@ -38,6 +40,14 @@ Primary-reference provenance is recorded in reference/sharc.json:
   vector restoration. Its finalization explanation separates IDLE completion,
   branch completion/mask clear, interrupt entry and RTI. The illustrated
   ADSP-2126x listing does not qualify ADSP-21489 pipeline details or counts.
+- KRZ/Klaus's24 April2015 manufacturer-hosted ADSP-21489 discussion posts
+  a boot-kernel explanation corroborating wake before delayed service,
+  the retained mask slot and RTI to the completed branch target. This is
+  source-level corroboration, not a measured physical pipeline trace.
+- The official VisualDSP++5.1.2 package's ADSP-21489 SPI kernel independently
+  supplies the same ordering and self-modifying-loop explanation. The source
+  file stays local; reference/visualdsp.json pins its size/hash. Presence or
+  inspection of this file does not qualify simulator or physical execution.
 - The official2148x anomaly list NR004008L distinguishes IRQx/timer status
   returns (15000002), external-data control latency (15000004) and VISA
   internal-write visibility (15000024). Its IDLE case15000021 concerns a
@@ -45,8 +55,9 @@ Primary-reference provenance is recorded in reference/sharc.json:
   Physical silicon revision and applicability remain unknown. The document
   was reviewed online; reference/sharc.json does not claim a local byte hash.
 
-These sources constrain the required behavior but leave the generic PGR
-IDLE statement and boot procedure to reconcile. Do not replace IDLE by NOP,
+The hardware-specific boot evidence now constrains the bounded unlooped
+component in sharc-delayed-idle.txt. Original loop/cache/drain composition
+and physical timing remain to qualify. Do not replace IDLE by NOP,
 copy vectors through the host, patch a branch or summarize the self-modifying
 loop. Wake, interrupt acceptance/service, pending control latency, fetched
 instruction visibility and loop-stack effects require independent tests.

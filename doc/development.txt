@@ -37,6 +37,9 @@ The quality target runs format, CTest and Python bootstrap regressions. Optional
 reference identity checks skip explicitly if local originals are absent.
 GTK integration runs separately and requires GTK4 plus an isolated display.
 release retains strict checks; thread is for future separate concurrency testing.
+Optional VisualDSP++5.1.2 target references and the isolated Wine installation
+are described in visualdsp.txt; they are not normal build dependencies. The
+current missing vendor license prevents assembler/simulator qualification.
 miniLZO is built from pinned upstream source for safe container decoding, with
 native sanitizers/hardening. Native SLEIGH executes an ARM-state reference
 fixture with an owned status/bank adapter; system/interrupt/board qualification

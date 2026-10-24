@@ -103,8 +103,9 @@ SharcFetchInterlock sharc_fetch_interlock(const SharcState &cpu,
                                                            : SharcFetchInterlock::condition;
   }
   constexpr unsigned int rts = 10;
-  if ((branch->opcode >> class_shift) == rts && reg == pc_stack &&
-      sharc_condition(cpu, condition)) {
+  constexpr unsigned int rti = 11;
+  if (((branch->opcode >> class_shift) == rts || (branch->opcode >> class_shift) == rti) &&
+      reg == pc_stack && sharc_condition(cpu, condition)) {
     throw std::runtime_error("SHARC return after PCSTK write interlock not qualified");
   }
   return SharcFetchInterlock::none;

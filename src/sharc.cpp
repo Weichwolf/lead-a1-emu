@@ -167,7 +167,8 @@ std::optional<std::uint32_t> execute(SharcMemory &memory,
                                      std::uint64_t opcode,
                                      const SharcControl *control,
                                      std::optional<bool> branch_taken = std::nullopt,
-                                     const SharcDagAddress *dag = nullptr) {
+                                     const SharcDagAddress *dag = nullptr,
+                                     bool fetched = false) {
   if (dag != nullptr) {
     detail::sharc_execute_dag(memory, state, opcode, control, *dag);
     return {};
@@ -201,7 +202,7 @@ std::optional<std::uint32_t> execute(SharcMemory &memory,
     case 0: {
       constexpr std::uint64_t idle = 0x008000000000;
       if (opcode == idle) {
-        detail::sharc_begin_idle(state);
+        detail::sharc_begin_idle(state, fetched);
       } else if (opcode != 0) {
         throw std::runtime_error("SHARC emuidle/VISA/reserved instruction not implemented");
       }
@@ -212,7 +213,7 @@ std::optional<std::uint32_t> execute(SharcMemory &memory,
     case 6:
     case 7: return direct_branch(state, opcode, branch_taken);
     case 10: return return_branch(state, opcode, branch_taken);
-    case 11: return detail::sharc_return_interrupt(state, opcode);
+    case 11: return detail::sharc_return_interrupt(state, opcode, branch_taken);
     case 12:
     case 13: detail::sharc_begin_count_loop(state, opcode); return {};
     case 14: detail::sharc_begin_arithmetic_loop(state, opcode); return {};
@@ -349,6 +350,9 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
       throw std::logic_error("SHARC core step during another memory transaction");
     }
     execution_guard(state_);
+    if (state_.idle_delay_word && captured != state_.idle_delay_word) {
+      throw std::runtime_error("SHARC retained IDLE delay word required at resumed retirement");
+    }
     memory_.set_pc(state_.pc);
     memory_.begin_instruction();
     transaction = true;
@@ -361,6 +365,7 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     }
     detail::sharc_cache_guard(state_, *opcode);
     auto next = state_;
+    next.idle_delay_word.reset();
     next.pending.fill({});
     next.cache.pending_flush = false;
     if (loop_clock == SharcLoopClock::clocked_pop) { detail::sharc_clocked_loop_pop(next); }
@@ -375,7 +380,8 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
       } else {
         detail::sharc_long_loop_prepare(next, *opcode);
       }
-      const auto target = execute(memory_, next, *opcode, control_, branch_taken, dag);
+      const auto target =
+          execute(memory_, next, *opcode, control_, branch_taken, dag, captured.has_value());
       next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
     }
     // A bound fetch clock already accounted for the actual PM cache request.

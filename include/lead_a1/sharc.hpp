@@ -136,8 +136,10 @@ struct SharcState {
   std::optional<SharcArithmeticLoop> arithmetic_loop;
   SharcCacheState cache;
   std::optional<SharcInterruptFrame> interrupt;
-  // Retired ordinary IDLE address; pc holds its queued resume address.
+  // Retired IDLE address; pc holds its queued resume address.
   std::optional<std::uint32_t> idle_pc;
+  // Actual captured final DB-slot word, retained while idle and after wake.
+  std::optional<std::uint64_t> idle_delay_word;
   bool operator==(const SharcState &) const = default;
 };
 
@@ -171,11 +173,19 @@ public:
   // Enabled requests require explicit qualified recognition by the owner.
   void latch_interrupt(std::uint32_t mask);
 
+  // Qualified enabled P1I wakes IDLE without servicing it or consuming its latch.
+  // A first-delay-slot IDLE keeps its captured final slot and pending branch.
+  [[nodiscard]] bool wake_idle();
+
   // Explicit recognition of an already latched P1I at a qualified boundary.
   // Ordinary internal delayed branches defer delivery until both slots finish.
-  // Physical synchronization, delayed IDLE and loop entry remain unqualified.
+  // Physical synchronization and loop entry remain unqualified.
   [[nodiscard]] std::optional<SharcInterruptStep>
   service_interrupt(SharcInterruptReference reference);
+  // Atomic core recognition and flush of the bound speculative fetch words.
+  // Pending cache/loop phases and occupied Execute remain guarded.
+  [[nodiscard]] std::optional<SharcInterruptStep>
+  service_interrupt(SharcFetch &fetch, SharcInterruptReference reference);
 
   [[nodiscard]] SharcStep step();
   // Retire the matching Execute word captured by the explicit fetch transport.

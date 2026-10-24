@@ -14,8 +14,9 @@ RTS selects its known ordinary CALL frame in Address. Actual stack pop, PC
 effects and DB slots still use the shared native core at Execute. No private
 shadow stack or synthetic return is substituted. The live frame must still
 match the captured target at retirement; an altered or unknown frame fails
-before commit and retains the Execute word. Loop/interrupt frames remain
-guarded, as do a taken RTS immediately after an unqualified PCSTK write.
+before commit and retains the Execute word. RTS cannot use interrupt frames;
+plain RTI's ordinary P1I frame has the sharc-delayed-idle.txt contract. Loop
+frames and a taken return after an unqualified PCSTK write remain guarded.
 
 PGRrev2.4,4-115/117/Table4-55 requires an interlock when a conditional branch
 in Decode depends on the immediately preceding Address instruction's flags.
@@ -37,7 +38,7 @@ Simultaneous cache/control stalls and pending cache phases
 at a control interlock remain guarded rather than assuming merged stalls;
 4-118 explicitly warns that different causes need not merge. MODE1 Decode
 capture/interlocks, explicit ASTAT/FLAGS effect latencies, indirect branches,
-RTI, loop/ISR/IDLE sequencing and full physical/global timing remain open.
+complete loop/ISR/IDLE composition and physical/global timing remain open.
 
 Snapshots include the branch decision/target, pending additional multiplier
 hold and existing flow/cache phases. Invalid early/missing decisions,

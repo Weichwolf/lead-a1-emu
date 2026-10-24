@@ -1,0 +1,39 @@
+Optional ADSP-21489 development reference
+
+The normal LLVM19/C++23 build and synthetic/original regressions do not need
+VisualDSP++, Windows or Wine. VisualDSP++ is an optional independent assembler/
+simulator reference for disputed SHARC encodings, arithmetic and ordering.
+It does not replace the unchanged original Nord firmware as runtime reference.
+
+reference/visualdsp.json pins the directly downloaded official5.1.2 installer
+and selected extracted files. All manufacturer binaries, source and installer
+outputs remain ignored under doc/local/; they are not public dependencies.
+The available original5.0 base installer predates the target2148x support.
+The official5.1.2 archive includes21489 headers, LDFs and SPI kernel source.
+The kernel's FINAL_INIT explanation corroborates sharc-delayed-idle.txt;
+inspecting source is distinct from executing a simulator or measuring silicon.
+
+Local Linux setup uses the dedicated32-bit Wine prefix
+  $HOME/.local/share/wineprefixes/lead-a1-emu
+following the existing sibling project's prefix naming. No existing prefix
+is used. Wine10.0 prefix creation and cmd version smoke check passed under
+xvfb-run. The bundled Microsoft VC++2005 SP1 runtime is installed there.
+
+The official installer was statically unpacked with7z, then its Install_CL.exe
+ran from the unpacked directory with these documented switches:
+  -action new
+  -dir "C:\Analog Devices\VisualDSP 5.1.2"
+  -hklm "Software\Analog Devices\VisualDSP++ 5.1.2"
+  -manifest manifest.xml -stage stage.zip -no-setup-inf
+Installation completed successfully. The installed root contains the generated
+VisualDSP.ini and registry configuration; bare extraction alone lacks these.
+No physical debug connection or device-driver installation is needed.
+
+Installed assembler invocation, with that explicit WINEPREFIX:
+  wine 'C:\Analog Devices\VisualDSP 5.1.2\easm21k.exe' -proc ADSP-21489 -version
+now reaches the licensing check and reports ea1156, missing assembler license.
+No local vendor license is installed. No instruction object or simulator result is qualified.
+Use a valid vendor license/evaluation before dependent assembler/simulator
+experiments. Public/local emulator checks continue independently. Simulator
+DLL presence and successful installation do not establish target/peripheral
+coverage, compatibility, full IRQ pipeline timing or Nord board behavior.

@@ -1,0 +1,69 @@
+Delayed IDLE wake and bound interrupt fetch
+
+An enabled, latched P1I can wake native IDLE independently of interrupt service.
+The explicit owner operation wake_idle clears only the idle hold. It does not
+clear IRPTL, advance a clock, push a frame or complete a delayed branch. Masked
+requests remain held; unknown, other and nested wake sources fail atomically.
+The owner must route an actual device event, not infer completion from a read.
+
+The bound fetch path supports pure IDLE as the first of two native internal
+DB slots in an unlooped context. At its actual retirement, the following slot
+must already be captured in Address. Its original word is retained in CPU and
+transport state through IDLE and after wake. The next real advancing clock
+and native retirement consume this captured word, even if DMA replaced RAM.
+Raw functional step cannot reread RAM as a substitute. Failed retirement
+preserves the retained slot, pending branch and captured Execute word.
+
+While the branch still has a slot, service remains deferred. After its last
+slot retires, the target is the interrupted PC. An IMASK write there still
+has its previous effective value at recognition; the accepted entry interval
+then settles the pending mask before the handler, as in sharc-interrupts.txt.
+
+service_interrupt(fetch, reference) couples ordinary P1I recognition to its
+bound fetch transport. Accepted recognition discards speculative F1/F2/Decode/
+Address words and redirects the sequencer to the explicit vector. CPU cache
+contents remain intact. Occupied Execute, pending cache lookup/fill, loop
+transport, wrong memory binding and foreign clock ownership are guarded.
+Core, transport and controller commit only after validation/clock acceptance.
+
+Immediate native RTI resolves its ordinary P1I frame in Address, retains the
+condition/target, and performs the actual pop/controller effects in Execute.
+A changed live frame fails atomically. A false decision does not read a frame;
+late unknown ASTAT does not replace an already captured decision. Existing
+native branch suppression prevents speculative post-RTI words from executing.
+The resumed target is fetched again, so DMA's replacement can execute instead
+of a stale target word fetched before the interrupt.
+
+Primary constraints: PGRrev2.4,4-22/23,4-27..38,4-115..118,9-44/46,A-32;
+HWRrev1.1,24-25..27; CCES2.9rev2.3,10-16..19. PGR4-23's generic delayed-IDLE
+deadlock statement conflicts with the hardware-specific boot description.
+The manufacturer-hosted ADSP-21489 boot-kernel discussion by KRZ/Klaus,
+24 April2015, independently corroborates wake, mask clear, branch completion,
+interrupt entry and RTI in that order. It is a posted kernel explanation,
+not a measured silicon trace or established ADI-employee statement. Ignore
+the web page's generated summary. URL/provenance are in reference/sharc.json.
+No manufacturer listing, raw firmware or private implementation is published.
+The directly downloaded VisualDSP++5.1.2 ADSP-21489 SPI kernel independently
+contains the same explanation and ordering. Its original local file is pinned
+in reference/visualdsp.json. This is manufacturer-shipped source evidence,
+still separate from simulator execution or physical timing measurement.
+
+The owned test uses a relocated 64-instruction program with a real DB/IDLE/
+mask slot, stale target and invalid old vector. Actual 32-bit LSB-first SPI
+reception/DMA replaces all 96 words while the CPU remains held, then routes
+the real completion. The retained mask slot executes despite invalid new RAM;
+the real interrupt frame/RTI lead to the new target's arithmetic result.
+Independent CPU/transport restoration binds to separate RAM and repeats the
+actual transfer. Further tests cover masks/unknown wake, raw-step/clock holds,
+binding/IVT/SYSCTL ownership, changed frames, captured true/false RTI and invalid
+retained-slot snapshots. These are finite owned cases, not physical timing.
+
+This bounded unlooped component does not extend deferred arithmetic loops,
+interrupted loop reentry or finalizer self-modification/draining. Original
+functional streams still stop at8c08e; the separate granted-clock RAM-clear
+prefix still stops at8c0b9. No terminal vector acceptance or original cold boot
+follows. Minimum four-clock entry bookkeeping and the subsequent fetched
+handler pipeline are not qualified as nonoverlapping physical IRQ intervals;
+their sum is not a measured CCLK latency or global schedule. Remaining source
+types, complete cache/loop/control composition, VISA, application/audio and
+stock-hardware comparison remain mandatory unfinished work.

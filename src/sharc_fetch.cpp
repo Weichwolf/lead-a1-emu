@@ -162,6 +162,16 @@ std::uint64_t SharcFetch::for_execution(const SharcMemory &memory, std::uint32_t
 SharcStep Sharc::step(SharcFetch &fetch) try {
   if (fetch.state_.flow) { detail::sharc_fetch_flow_guard(state_, fetch.state_); }
   const auto opcode = fetch.for_execution(memory_, state_.pc);
+  std::optional<std::uint64_t> idle_delay;
+  constexpr std::uint64_t idle = 0x008000000000;
+  if (opcode == idle && state_.branch) {
+    const auto following = fetch.state_.address;
+    if (!following || following->address != state_.pc + 1 || following->branch ||
+        following->loop_body || following->loop_pop || following->dag) {
+      throw std::runtime_error("SHARC delayed IDLE requires its captured following slot");
+    }
+    idle_delay = following->opcode;
+  }
   bool preserve_cache{};
   const auto word = fetch.state_.execute;
   if (word && word->pm_data) {
@@ -177,6 +187,7 @@ SharcStep Sharc::step(SharcFetch &fetch) try {
   const auto loop_clock = detail::sharc_fetch_loop_retirement(state_, transport);
   const auto *dag = word && word->dag ? &*word->dag : nullptr;
   const auto result = step_opcode(opcode, preserve_cache, branch_taken, loop_clock, dag);
+  if (idle_delay) { state_.idle_delay_word = idle_delay; }
   transport.execute.reset();
   detail::sharc_fetch_loop_finish(transport);
   fetch.state_ = transport;

@@ -6,6 +6,13 @@ receives MIDI and produces the original instrument's audio. This is a firmware
 development and regression target as well as a playable host application.
 A host synthesizer or silently successful hardware stub does not qualify.
 
+The target is the complete hardware emulator. The original firmware is known
+to function on the instrument and remains the binding execution reference.
+Failure to boot or operate in the emulator is evidence of an emulator/model/
+input gap to resolve, not permission to alter firmware, replace its behavior
+or redefine completion around isolated passing tests. All requirements below
+remain mandatory; this clarification does not narrow the objective.
+
 1. Keep official firmware, user manual, update instructions and required factory
    data as hash-pinned local references. Establish code/data encodings, both
    bundle-part roles, CPU/DSP identities, memory maps, board connections and

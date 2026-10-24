@@ -166,6 +166,9 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
   if (&cpu.memory_ != &memory_ || memory_.active()) {
     throw std::logic_error("SHARC cache fetch requires its idle bound memory");
   }
+  if (cpu.state_.idle_pc) {
+    throw std::runtime_error("SHARC IDLE fetch requires an owner wake event");
+  }
   validate_clock(state_, next_address, bus, sequenced);
   if (sequenced) {
     detail::sharc_fetch_flow_guard(cpu.state_, state_);

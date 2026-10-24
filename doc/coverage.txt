@@ -96,8 +96,15 @@ ID  State    Evidence / remaining work
              Ordinary unlooped IDLE holds the core while actual owned SPI DMA
              progresses, then its completion routes through P1I/RTI to a real
              continuation. Checkpoints, masks, pending effects and rollback have
-             independent tests (sharc-idle.txt). The original delayed-branch/
-             loop IDLE, interrupt loop reentry and full pipeline stay guarded.
+             independent tests (sharc-idle.txt). Bound first-DB-slot IDLE now
+             retains its captured final slot across actual SPI/DMA replacement.
+             Explicit enabled P1I wake precedes deferred service; coupled fetch
+             recognition discards stale speculative words, then actual RTI
+             returns through its real frame to the freshly fetched target.
+             Independent restored RAM/CPU/transport, masks, ownership, retained
+             RTI decisions and changed-frame failures have owned checks
+             (sharc-delayed-idle.txt). Original arithmetic-loop IDLE, interrupted
+             loop reentry, complete IRQ latency and global pipeline stay guarded.
              A separate native instruction-bus transport captures data in F2
              and retains it through Decode/Address/Execute, under explicit
              CADIS=1 and owner clock/address grants (sharc-fetch.txt).
@@ -130,7 +137,7 @@ ID  State    Evidence / remaining work
              insert the actual startup/drain bubbles and pre-pop the native
              frame at its specified clock. Literal stage tables, arithmetic,
              external code writes and paired snapshots check the bounded model
-             (sharc-fetch-loops.txt). Other loop/IRQ/IDLE/indirect redirects,
+             (sharc-fetch-loops.txt). Other loop/IRQ/IDLE composition and indirect redirects,
              block arbitration, mode/width/flush interlocks and global timing
              remain guarded or open. A separate fresh RAM/PMCTL original
              fixture executes8291 instructions/8302 granted fetch clocks to
@@ -436,6 +443,11 @@ ID  State    Evidence / remaining work
              RAM-changed live-loop guards preserve their committed boundary.
              A real Type1 fixed ADD retains old inputs across DM/PM loads and
              both DAG updates, followed by a distinct later PM cache miss/fill.
+             Delayed-IDLE tests add actual receive/DMA replacement of the held
+             kernel, retained final slot, real P1I/RTI/new-target continuation,
+             independent restored memories, captured return decisions and
+             atomic mask/ownership/frame/snapshot failures. This unlooped
+             component leaves original8c08e/8c0b9 frontiers unchanged.
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

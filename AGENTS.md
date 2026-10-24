@@ -5,6 +5,10 @@
   doc/coverage.txt requirement by requirement. Bootstrap is not a working synth.
 - Execute unmodified Nord Lead A1 OS 1.36 firmware. Do not substitute a host
   synthesizer, scripted MIDI replies or silently successful peripheral stubs.
+- The target is a complete hardware emulator. The original firmware is known
+  to work on the instrument and is the execution reference. Failed original
+  startup or operation requires correcting emulator behavior, hardware/input
+  assumptions or missing inputs, not patching firmware or narrowing acceptance.
 - Determine processors, part roles, clocks, memory maps and board wiring through
   evidence. Do not import Blofeld hardware assumptions. Two bundle parts do not
   establish MCU/DSP roles or Lead A1/A1R variants.

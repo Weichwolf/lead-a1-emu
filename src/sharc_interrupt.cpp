@@ -163,13 +163,14 @@ std::optional<SharcInterruptStep> sharc_service_interrupt(SharcState &state,
       .source = p1i, .return_pc = return_pc, .vector = vector, .minimum_core_cycles = 4};
 }
 
-std::optional<std::uint32_t> sharc_return_interrupt(SharcState &state, std::uint64_t opcode) {
+std::optional<std::uint32_t>
+sharc_return_interrupt(SharcState &state, std::uint64_t opcode, std::optional<bool> captured) {
   constexpr std::uint64_t allowed = 0x0b3e00000000;
   if ((opcode & ~allowed) != 0) {
     throw std::runtime_error("SHARC delayed/parallel/reserved RTI not implemented");
   }
   const auto condition = static_cast<unsigned int>((opcode >> 33) & 31);
-  if (!sharc_condition(state, condition)) { return {}; }
+  if (!(captured ? *captured : sharc_condition(state, condition))) { return {}; }
   if (!state.interrupt || state.branch || state.count_loop || state.arithmetic_loop) {
     throw std::runtime_error("SHARC RTI requires a qualified non-loop P1I frame");
   }

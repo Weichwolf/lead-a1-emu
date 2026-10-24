@@ -34,14 +34,16 @@ clock's Execute latch and cursor for retry, as in sharc-fetch.txt.
 This is a bounded native sequencing reference. Direct/RTS decisions and
 supported producer interlocks are described in sharc-branch-pipeline.txt.
 Single-instruction immediate DO loops have the separate sharc-fetch-loops.txt
-contract. RTI/indirect branches, other DO/loop sequencing, IDLE and ISR contexts
-remain guarded. Branches with outstanding cache fills or
+contract. Bound unlooped first-slot IDLE, ordinary P1I fetch redirection and
+immediate RTI have the further sharc-delayed-idle.txt contract. Indirect
+branches, other DO/loop sequencing and interrupted loop contexts remain
+guarded. Branches with outstanding cache fills or
 overlapping active suppression remain guarded; their abort/fill arbitration
 is not guessed. Quiet-clock effects have the sharc-quiet-clocks.txt contract;
 mode/width/flush interlocks and block conflicts retain explicit guards.
 DAG load stalls have the separate sharc-dag-stalls.txt contract.
 MODE1/DAG Decode operand capture, complete control/data hazards,
-interrupt redirects, original delayed-IDLE/loop finalizer and physical timing
+complete interrupt composition, original delayed-IDLE/loop finalizer and physical timing
 are still open. This optional clock does not change default functional step.
 
 Owned tests compare all five stages of seven literal Table4-5/7 columns for
