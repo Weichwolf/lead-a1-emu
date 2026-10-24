@@ -49,6 +49,9 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-fetch-deferred-test test/sharc_fetch_deferred_test.cpp)
+  target_link_libraries(lead-a1-sharc-fetch-deferred-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_fetched_deferred_arithmetic_setup COMMAND lead-a1-sharc-fetch-deferred-test)
   add_executable(lead-a1-sharc-fetch-count1-test test/sharc_fetch_count1_test.cpp)
   target_link_libraries(lead-a1-sharc-fetch-count1-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_fetched_four_single_iteration COMMAND lead-a1-sharc-fetch-count1-test)
@@ -425,6 +428,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-dag-loop-test
       lead-a1-sharc-fetch-long-test
       lead-a1-sharc-fetch-count1-test
+      lead-a1-sharc-fetch-deferred-test
       lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test lead-a1-sharc-float-test lead-a1-sharc-float-multiply-test lead-a1-sharc-compare-test lead-a1-sharc-multiplier-branch-test lead-a1-sharc-float-fixed-stall-test lead-a1-sharc-idle-branch-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
       lead-a1-memory-test lead-a1-original-arm-test lead-a1-mmu-walk-test

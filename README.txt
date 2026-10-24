@@ -19,9 +19,11 @@ Native SHARC references execute original loader streams through the finalizer
 prefix. A separate fetched initialization fixture executes all four original
 RAM-clear loops and loads all ordinary short-/normal-word records through
 actual counter-loop CALLs and serial/DMA transfers. It parses the terminal
-header; count1 CALL architectural-stack arbitration remains explicitly unknown
+header and prepares the finalizer through CPU8c08e, before branch/loop entry;
+count1 CALL architectural-stack arbitration remains explicitly unknown
 (doc/sharc-dag-loop.txt, doc/sharc-fetch-long-loops.txt,
-doc/sharc-fetch-four-loops.txt, doc/sharc-fetch-count1.txt).
+doc/sharc-fetch-four-loops.txt, doc/sharc-fetch-count1.txt,
+doc/sharc-fetch-finalizer.txt).
 P1I/RTI, ordinary delayed branches and unlooped fetched DB/IDLE wake
 have bounded references; self-modifying loop/fetch visibility, loop IDLE and VISA
 still block DSP application boot. See doc/sharc-stream-reference.txt and

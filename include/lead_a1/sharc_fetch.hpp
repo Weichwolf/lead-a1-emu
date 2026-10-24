@@ -131,6 +131,11 @@ public:
 
   [[nodiscard]] const SharcFetchState &state() const { return state_; }
 
+  // Read-only eligible Decode-to-Address PM request, before the owner supplies
+  // its bus event. Qualified interlocks report no new request; this grants no
+  // RAM port and does not resolve general conditional-transfer hazards.
+  [[nodiscard]] bool address_pm_request(const Sharc &cpu) const;
+
   // One granted transport clock. nullopt injects a bubble, never a guest NOP.
   // Captures the previous F1 word in F2; later phases retain its actual data.
   // An occupied Execute phase must retire before another advancing clock.

@@ -272,7 +272,7 @@ void guarded_control_and_clock_failures() {
       {.opcode = jump | 0x100000, .reason = "internal native address"},
       {.opcode = 0x083e00000000, .reason = "RTI/loop/indirect/IDLE control"},
       {.opcode = 0x0b3e00000000, .reason = "RTI requires a qualified non-loop P1I frame"},
-      {.opcode = 0x0e0000000001, .reason = "RTI/loop/indirect/IDLE control"},
+      {.opcode = 0x0e0000000001, .reason = "arithmetic DO setup"},
       {.opcode = 0x004000000000, .reason = "RTI/loop/indirect/IDLE control"},
   }};
   for (const auto &[opcode, reason] : unsupported) {

@@ -19,6 +19,43 @@ constexpr std::uint64_t condition_mask = 0x3e00000000;
 constexpr std::uint64_t delayed = 0x4000000;
 constexpr std::uint64_t call = 0x8000000000;
 
+void deferred_arithmetic_setup(const SharcState &cpu, const SharcFetchWord &word) {
+  constexpr std::uint64_t fields = 0x0e3e00ffffff;
+  constexpr unsigned int counter_condition = 15;
+  const auto condition = (word.opcode >> 33) & 31;
+  const auto end = static_cast<std::uint32_t>(
+      (std::uint64_t{word.address} + (word.opcode & sharc_pc_mask)) & sharc_pc_mask);
+  if ((word.opcode & ~fields) != 0 || condition == counter_condition || end > word.address ||
+      cpu.branch || cpu.count_loop || cpu.arithmetic_loop || cpu.loops_empty != true) {
+    throw std::runtime_error("SHARC fetched arithmetic DO setup not qualified");
+  }
+  sharc_fetch_address(end);
+  sharc_fetch_address(word.address + 1);
+}
+
+void other_control(const SharcState &cpu, const SharcFetchWord &word) {
+  constexpr unsigned int class_shift = 40;
+  const auto type = word.opcode >> class_shift;
+  constexpr unsigned int first_other_control = 8;
+  constexpr unsigned int last_other_control = 14;
+  constexpr unsigned int immediate_loop = 12;
+  constexpr unsigned int register_loop = 13;
+  constexpr unsigned int arithmetic_loop = 14;
+  if (type == arithmetic_loop) {
+    deferred_arithmetic_setup(cpu, word);
+    return;
+  }
+  if (type == immediate_loop || (type == register_loop && (word.opcode & sharc_pc_mask) >= 4)) {
+    return;
+  }
+  constexpr std::uint64_t idle = 0x008000000000;
+  if (word.opcode == idle) { return; }
+  if ((type >= first_other_control && type <= last_other_control) ||
+      (type == 0 && word.opcode != 0)) {
+    throw std::runtime_error("SHARC sequenced RTI/loop/indirect/IDLE control not qualified");
+  }
+}
+
 std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWord &word) {
   constexpr unsigned int class_shift = 40;
   constexpr unsigned int relative = 7;
@@ -51,26 +88,14 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
     decision.target = address;
     return decision;
   }
-  constexpr unsigned int first_other_control = 8;
-  constexpr unsigned int last_other_control = 14;
-  constexpr unsigned int immediate_loop = 12;
-  constexpr unsigned int register_loop = 13;
-  if (type == immediate_loop || (type == register_loop && (word.opcode & sharc_pc_mask) >= 4)) {
-    return {};
-  }
-  constexpr std::uint64_t idle = 0x008000000000;
-  if (word.opcode == idle) { return {}; }
-  if ((type >= first_other_control && type <= last_other_control) ||
-      (type == 0 && word.opcode != 0)) {
-    throw std::runtime_error("SHARC sequenced RTI/loop/indirect/IDLE control not qualified");
-  }
+  other_control(cpu, word);
   return {};
 }
 
 }
 
 void sharc_fetch_flow_guard(const SharcState &cpu, const SharcFetchState &transport) {
-  if (cpu.arithmetic_loop || cpu.idle_pc) {
+  if (cpu.idle_pc) {
     throw std::runtime_error("SHARC sequenced loop/ISR/IDLE context not qualified");
   }
   sharc_fetch_loop_guard(cpu, transport);

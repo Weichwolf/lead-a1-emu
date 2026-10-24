@@ -151,6 +151,46 @@ SharcFetchEvent clock_transport(SharcMemory &memory,
 
 }
 
+bool SharcFetch::address_pm_request(const Sharc &cpu) const try {
+  if (&cpu.memory_ != &memory_ || memory_.active() || state_.execute) {
+    throw std::logic_error("SHARC PM request requires its idle bound core and retired Execute");
+  }
+  if (state_.flow) {
+    detail::sharc_fetch_flow_guard(cpu.state_, state_);
+    if (detail::sharc_fetch_dag_stall(cpu.state_, state_, SharcFetchBus::available) ||
+        detail::sharc_fetch_interlock(cpu.state_, state_) != detail::SharcFetchInterlock::none ||
+        detail::sharc_fetch_loop_stall(state_)) {
+      return false;
+    }
+  }
+  if (state_.lookup && state_.lookup->wait) { return false; }
+  const auto word = state_.decode;
+  if (!word || !detail::sharc_cache_pm_encoding(word->opcode)) { return false; }
+  constexpr std::uint64_t type3_mask = 0xe00000000000;
+  constexpr std::uint64_t type3 = 0x400000000000;
+  constexpr std::uint64_t type4_mask = 0xf00000000000;
+  constexpr std::uint64_t type4 = 0x600000000000;
+  const bool conditional_form =
+      (word->opcode & type3_mask) == type3 || (word->opcode & type4_mask) == type4;
+  constexpr unsigned int condition_shift = 33;
+  constexpr unsigned int unconditional = 31;
+  if (conditional_form && ((word->opcode >> condition_shift) & unconditional) != unconditional) {
+    throw std::runtime_error("SHARC conditional PM request timing not qualified");
+  }
+  return detail::sharc_cache_pm_request(cpu.state_, word->opcode);
+} catch (const std::exception &error) {
+
+  std::ostringstream message;
+  message << "SHARC Address PM request pc=0x" << std::hex << cpu.state_.pc << " Decode=";
+  if (state_.decode) {
+    message << "0x" << state_.decode->address << " opcode=0x" << state_.decode->opcode;
+  } else {
+    message << "bubble";
+  }
+  message << ": " << error.what();
+  throw std::runtime_error(message.str());
+}
+
 SharcFetchEvent
 SharcFetch::advance(Sharc &cpu, std::optional<std::uint32_t> next_address, SharcFetchBus bus) {
   return advance_clock(cpu, next_address, bus, false);

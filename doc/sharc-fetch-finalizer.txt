@@ -1,0 +1,55 @@
+Bound finalizer setup and Address-stage PM requests
+
+SharcFetch::address_pm_request reports the eligible Decode-to-Address PM
+request from the retained instruction and bound CPU. It is read-only and
+does not grant a RAM port, move data, fill cache or advance time. Qualified
+interlocks/cache-miss holds report no new request. Direct PM, dual transfers
+and unconditional Type3/Type4 forms use the existing decoder; conditional
+transfer timing remains explicitly unsupported. Wrong ownership, an active
+memory transaction and unretired Execute fail with PC/Decode context.
+The owner supplies the resulting bus event to the existing clock. Actual
+retirement must still agree with the captured Address request; this check
+is not bypassed. General block/DMA arbitration remains a separate model.
+
+The bound sequencer accepts the backward native arithmetic DO setup with
+valid fields and internal end/start addresses. The actual DO executes and
+pushes its frame; no transport shadow substitutes for the native resource.
+The bound guard checks the real deferred phase, stack/type and exclusive
+loop ownership while CPU/F1 stay outside the unqualified end window.
+The real PCSTK instruction may change the start without changing LADDR's
+multiple-instruction arithmetic type. This does not infer a short-loop type
+from the new apparent body length or evaluate termination flags early.
+
+Only the straight deferred setup is qualified here. A direct branch can
+select its actual Address target before retirement; accepting the first
+body fetch/reentry or retiring deferred control flow remains guarded.
+Active/short arithmetic loop transport, mixed cache/loop contexts, IDLE,
+interrupt loop reentry and self-modifying-loop execution still need work.
+Primary references: PGRrev2.4 4-5/8,4-45/54,4-79/89,9-49/50,A-10/11;
+reference/sharc.json pins the manual and separate native/cache contracts.
+
+Owned checks drive two real PM stores with read-only repeated requests,
+cache-miss suppression/release and actual RAM payloads; foreign/active/
+unretired/conditional requests preserve their state. Deferred setup tests
+check native Execute-time frame creation, PCSTK rewrite, unchanged type0,
+LADDR/PCSTK/depth readback, unknown unsampled flags, independent RAM/core/
+controller/fetch continuations, owner failure/repair, reserved/forward/LCE
+setup rejection, active-body rejection and atomic end-window failure.
+
+All8 optional hash-verified original fixtures continue their ordinary records
+and terminal header through25 further AVAILABLE-BUS grants to CPU8c08e.
+The real PM read at8c07e receives its PM event/cache miss, DO8c083 pushes
+type0 and PCSTK8c084 selects body8c003/end8c004. Independent expectations
+check PX from the original header, R9/R12 and the template, SYSCTL204 with
+no delayed effect, IMASK1003/IRPTL0, invalid cache/no pending flush, and real
+SPI DMA index92000/stride1/count384. Address8c08e has selected its actual
+delayed target8c003; that instruction has not retired and no target word
+has been accepted. All109318 final payload cells per cadence still match.
+
+These are explicit owner-input/reference-composition results, not physical
+CCLK/board timing or vendor-simulator observations. Vector transfer/entry,
+complete uploader/application boot, MIDI/audio/USB/update/recovery/hardware
+and performance remain unqualified under the unchanged complete objective.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_fetched_deferred_arithmetic_setup|sharc_fetch_cache|sharc_fetch_flow|original_sharc_images)$' --output-on-failure

@@ -199,6 +199,19 @@ ID  State    Evidence / remaining work
              All109318 final payload cells per cadence also match the independent
              last-write oracle. Final vectors/application
              boot remain open; separate functional streams retain8c08e.
+             A read-only eligible Address-PM request query now derives the
+             owner's bus input from the retained instruction, preserving the
+             actual retirement cross-check. Cache-miss holds, actual PM stores
+             and request/binding guards have owned checks. Backward arithmetic
+             DO setup now executes in the bound sequencer with the native
+             deferred frame; actual PCSTK changes preserve type0. Readback,
+             unknown unsampled flags, rebind/owner repair and unsupported
+             active/forward/end-window paths have independent tests. All8
+             original fixtures continue25 grants from terminal header to
+             CPU8c08e, with the DB Address target selected, original saved PX,
+             masks/SYSCTL/cache and armed384-word vector DMA checked. Actual
+             branch retirement/body fetch/vector entry remain open
+             (sharc-fetch-finalizer.txt).
              A separate internal RAM-port reference grants IO0>IO1>DM>PM per block,
              retains losing IO1 into the following clock and alternates new
              I/O launch eligibility from an explicit owner phase. Actual reads,

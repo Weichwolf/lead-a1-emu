@@ -440,6 +440,72 @@ void pending_modes_and_invalid_restore() {
   rejected([&] { const lead_a1::SharcFetch bad(memory, invalid); }, "PM request before Address");
 }
 
+void request_planning_and_real_transfers() {
+  lead_a1::SharcMemory memory;
+  program(memory);
+  code(memory, base + 1, store_px | (data + 4));
+  lead_a1::Sharc cpu(memory, initial());
+  lead_a1::SharcFetch fetch(memory);
+  prime(fetch, cpu);
+  const auto native = cpu.state();
+  const auto before = fetch.state();
+  require(fetch.address_pm_request(cpu) && fetch.address_pm_request(cpu));
+  require(cpu.state() == native && fetch.state() == before && !memory.active());
+  const auto request = fetch.address_pm_request(cpu) ? Bus::pm_data : Bus::available;
+  require(tick(fetch, cpu, base + 3, request).address_accepted);
+  require(!fetch.address_pm_request(cpu)); // The second actual PM word is held by the cache miss.
+  const auto held = fetch.state();
+  require(tick(fetch, cpu, base + 4).stalled);
+  require(memory.read({.address = data, .width = lead_a1::SharcWidth::wide48}) == payload);
+  require(fetch.address_pm_request(cpu));
+  const auto released = cpu.state();
+  const auto transport = fetch.state();
+  require(fetch.address_pm_request(cpu));
+  require(cpu.state() == released && fetch.state() == transport && transport.decode == held.decode);
+  static_cast<void>(tick(fetch, cpu, base + 4, Bus::pm_data));
+  constexpr unsigned int tail = 8;
+  for (unsigned int step = 0; step < tail && cpu.state().pc != base + 2; ++step) {
+    const auto bus = fetch.address_pm_request(cpu) ? Bus::pm_data : Bus::available;
+    static_cast<void>(tick(fetch, cpu, base + 5 + step, bus));
+  }
+  require(cpu.state().pc == base + 2);
+  require(memory.read({.address = data + 4, .width = lead_a1::SharcWidth::wide48}) == payload);
+}
+
+void request_context_guards() {
+  lead_a1::SharcMemory memory;
+  program(memory);
+  lead_a1::Sharc cpu(memory, initial());
+  lead_a1::SharcFetch fetch(memory);
+  prime(fetch, cpu);
+  lead_a1::SharcMemory foreign_memory;
+  program(foreign_memory);
+  lead_a1::Sharc foreign(foreign_memory, initial());
+  const auto before = fetch.state();
+  const auto native = cpu.state();
+  rejected([&] { static_cast<void>(fetch.address_pm_request(foreign)); }, "idle bound core");
+  memory.begin_instruction();
+  rejected([&] { static_cast<void>(fetch.address_pm_request(cpu)); }, "idle bound core");
+  memory.abort_instruction();
+  require(fetch.state() == before && cpu.state() == native && !memory.active());
+  static_cast<void>(fetch.advance(cpu, base + 3, Bus::pm_data));
+  static_cast<void>(fetch.advance(cpu, base + 4));
+  rejected([&] { static_cast<void>(fetch.address_pm_request(cpu)); }, "retired Execute");
+  require(cpu.step(fetch).minimum_core_cycles == 1);
+  lead_a1::SharcMemory conditional_memory;
+  program(conditional_memory);
+  constexpr std::uint64_t conditional_pm = 0x65c008800000;
+  code(conditional_memory, base, conditional_pm);
+  lead_a1::Sharc conditional(conditional_memory, initial());
+  lead_a1::SharcFetch condition_fetch(conditional_memory);
+  prime(condition_fetch, conditional);
+  const auto condition_before = condition_fetch.state();
+  const auto condition_cpu = conditional.state();
+  rejected([&] { static_cast<void>(condition_fetch.address_pm_request(conditional)); },
+           "conditional PM request timing");
+  require(condition_fetch.state() == condition_before && conditional.state() == condition_cpu);
+}
+
 }
 
 int main() {
@@ -454,6 +520,8 @@ int main() {
     nonconflicting_and_disabled_bypass();
     late_ram_failure_preserves_early_tag();
     pending_modes_and_invalid_restore();
+    request_planning_and_real_transfers();
+    request_context_guards();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

@@ -1,5 +1,9 @@
 SHARC finalizer evidence and remaining execution boundary
 
+The bound original setup now reaches CPU8c08e with its actual Address-stage
+DB target selected, PM request/cache handling and deferred type0 frame
+intact (sharc-fetch-finalizer.txt). The branch/loop entry has not retired.
+
 The qualified PX/bit/parallel prefix is documented separately. Arithmetic DO
 and deferred PC-stack setup have a bounded reference in sharc-arithmetic-loops.txt.
 The pure cache invalidation and Type1 dual-memory instruction references are
@@ -32,7 +36,8 @@ Primary-reference provenance is recorded in reference/sharc.json:
   the old instruction-only pending-effect interpretation.
 - sharc-quiet-clocks.txt separately qualifies selected core/SYSCTL effects with
   no Execute instruction. Mode/width/flush interlocks remain guarded; the
-  separate original prefix reaches its first PMCTL read, not the finalizer.
+  separate setup qualification is in sharc-fetch-finalizer.txt; neither
+  component qualifies final vector/reentry execution or complete boot.
 - PGR4-22/23 delays interrupt service across a delayed branch and describes
   an IDLE-in-delay-slot deadlock. HWRrev1.1,24-25..27 explicitly describes
   the final vector DMA with delayed branch and IDLE instead.

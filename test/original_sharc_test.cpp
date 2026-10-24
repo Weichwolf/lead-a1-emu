@@ -343,8 +343,15 @@ struct SerialInput {
 struct HeaderDevices {
   ObservedClock &clock;
   lead_a1::SharcSpi &spi;
+  lead_a1::SharcControl &control;
   unsigned int interval;
 };
+
+void check_frontier(const lead_a1::Sharc &cpu,
+                    const lead_a1::SharcControl &control,
+                    const lead_a1::SharcSpi &spi,
+                    SerialInput serial,
+                    std::size_t terminal);
 
 void advance_devices(lead_a1::SharcMemory &memory,
                      lead_a1::Sharc &cpu,
@@ -367,6 +374,34 @@ struct StreamRecord {
   std::uint32_t count;
   std::uint32_t destination;
 };
+
+void sequenced_finalizer(lead_a1::SharcMemory &memory,
+                         lead_a1::Sharc &cpu,
+                         lead_a1::SharcFetch &fetch,
+                         SerialInput &serial,
+                         HeaderDevices devices,
+                         std::size_t terminal) {
+  constexpr unsigned int limit = 4096;
+  unsigned int clocks{};
+  while (cpu.state().pc != frontier && clocks < limit) {
+    devices.clock.accessed = false;
+    const auto bus = fetch.address_pm_request(cpu) ? lead_a1::SharcFetchBus::pm_data
+                                                   : lead_a1::SharcFetchBus::available;
+    static_cast<void>(fetch.advance_sequenced(cpu, bus));
+    ++clocks;
+    if (fetch.state().execute) { require(cpu.step(fetch).minimum_core_cycles == 1); }
+    advance_devices(memory, cpu, serial, devices);
+  }
+  require(cpu.state().pc == frontier && cpu.state().depth == 1 && cpu.state().loops_empty == false);
+  require(!cpu.state().count_loop && !cpu.state().branch && !memory.active());
+  check_frontier(cpu, devices.control, devices.spi, serial, terminal);
+  const auto address = fetch.state().address;
+  const auto flow = fetch.state().flow;
+  constexpr std::uint32_t loop_start = 0x8c003;
+  require(address && address->address == frontier && address->branch && address->branch->taken &&
+          address->branch->target == loop_start && flow && flow->next == loop_start);
+  std::cout << "  Sequenced finalizer setup: " << clocks << " grants, next PC0x8c08e\n";
+}
 
 std::size_t check_record_payload(lead_a1::SharcMemory &memory,
                                  std::span<const std::byte> stream,
@@ -419,6 +454,7 @@ void sequenced_next_records(lead_a1::SharcMemory &memory,
           require(!cpu.state().count_loop && cpu.state().depth == 0 && !memory.active());
           std::cout << "  Sequenced remaining ordinary records: " << records
                     << ", terminal header parsed, next PC0x8c019\n";
+          sequenced_finalizer(memory, cpu, fetch, serial, devices, cursor);
           return;
         }
       }
@@ -610,8 +646,11 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
           (lead_a1::SharcClockRatio{.numerator = external_numerator, .denominator = 5}));
   require(!memory.active());
   sequenced_first_clear(memory, cpu, fetch, clock, stream);
-  sequenced_first_header(
-      memory, cpu, fetch, stream, {.clock = clock, .spi = spi, .interval = interval});
+  sequenced_first_header(memory,
+                         cpu,
+                         fetch,
+                         stream,
+                         {.clock = clock, .spi = spi, .control = control, .interval = interval});
   check_cells(memory, expected);
   std::cout << "  Sequenced final payload cells: " << expected.size() << " matched\n";
 }
@@ -678,7 +717,7 @@ void check_frontier(const lead_a1::Sharc &cpu,
                     const lead_a1::SharcControl &control,
                     const lead_a1::SharcSpi &spi,
                     SerialInput serial,
-                    const Inventory &expected) {
+                    std::size_t terminal) {
   const auto &state = cpu.state();
   require(!state.interrupt && !state.idle_pc);
   require(state.pc == frontier && state.depth == 1 && state.loops_empty == false &&
@@ -701,8 +740,8 @@ void check_frontier(const lead_a1::Sharc &cpu,
           spi.state().serial.remaining == vector_words && spi.state().modifier == 1);
   require(state.data[0][1].value == std::uint64_t{vector_destination} * 256 &&
           state.data[0][2].value == std::uint64_t{vector_words} * 256);
-  const auto saved = (std::uint64_t{word(serial.stream, expected.terminal + 8)} << 32) |
-                     (word(serial.stream, expected.terminal + 4) & 0xffff0000);
+  const auto saved = (std::uint64_t{word(serial.stream, terminal + 8)} << 32) |
+                     (word(serial.stream, terminal + 4) & 0xffff0000);
   constexpr std::uint64_t full64 = 0xffffffffffffffff;
   require(state.px.value == saved && state.px.known == full64);
   constexpr std::uint64_t template_value = 0xb16b000000;
@@ -714,8 +753,7 @@ void check_frontier(const lead_a1::Sharc &cpu,
   require(control.state().effective == widened && control.state().control == widened &&
           !control.state().delayed);
   require(!spi.state().overflow);
-  require(serial.bit >= (expected.terminal + header_bytes) * 8 &&
-          serial.bit < serial.stream.size() * 8);
+  require(serial.bit >= (terminal + header_bytes) * 8 && serial.bit < serial.stream.size() * 8);
 }
 
 void run_stream(std::span<const std::byte> stream, Placement placement, unsigned int interval) {
@@ -776,7 +814,7 @@ void run_stream(std::span<const std::byte> stream, Placement placement, unsigned
     require(!spi.state().overflow);
   }
   require(stopped);
-  check_frontier(cpu, control, spi, serial, expected);
+  check_frontier(cpu, control, spi, serial, expected.terminal);
   for (const auto &[address, value] : expected.cells) {
     require(memory.read({.address = address, .width = lead_a1::SharcWidth::short16}) == value);
   }

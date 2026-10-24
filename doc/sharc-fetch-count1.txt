@@ -34,8 +34,8 @@ records,1251 per cadence, including the earlier first tag3 record. Every
 data record is compared against the local original immediately after its
 real return. The independent last-write oracle additionally checks all109318
 final16-bit payload cells per cadence (51869/51755/4042/1652 by stream).
-The original terminal header is received and parsed at8c019
-with no active loop/frame; its dispatch/finalizer has not run in this path.
+The original terminal header checkpoint is8c019 with no active loop/frame.
+The later bound finalizer setup is separate in sharc-fetch-finalizer.txt.
 The independent full functional stream fixture still reaches8c08e.
 
 This is reference composition with explicit unknowns, not a vendor-simulator
