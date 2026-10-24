@@ -369,7 +369,7 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     next.pending.fill({});
     next.cache.pending_flush = false;
     if (loop_clock == SharcLoopClock::clocked_pop) { detail::sharc_clocked_loop_pop(next); }
-    detail::sharc_arithmetic_loop_prepare(next, *opcode);
+    detail::sharc_arithmetic_loop_prepare(next, *opcode, loop_clock);
     unsigned int minimum_cycles = 1;
     if (state_.count_loop && state_.count_loop->body == state_.count_loop->end) {
       minimum_cycles = execute_loop(
@@ -390,7 +390,7 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     // The instruction-only helper must not erase that staged fetch knowledge.
     if (preserve_cache) { next.cache = state_.cache; }
     finish_control(state_, next, loop_clock != SharcLoopClock::functional);
-    minimum_cycles += detail::sharc_arithmetic_loop_finish(state_, next);
+    minimum_cycles += detail::sharc_arithmetic_loop_finish(state_, next, loop_clock);
     detail::sharc_cache_finish(state_, next);
     detail::sharc_interrupt_finish(state_, next);
     memory_.commit_instruction();

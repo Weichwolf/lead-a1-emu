@@ -2,7 +2,10 @@ SHARC finalizer evidence and remaining execution boundary
 
 The bound original setup now reaches CPU8c08e with its actual Address-stage
 DB target selected, PM request/cache handling and deferred type0 frame
-intact (sharc-fetch-finalizer.txt). The branch/loop entry has not retired.
+intact (sharc-fetch-finalizer.txt). The later arithmetic continuation retires
+the entry DB and captures the actual next IDLE at CPU8c08f, where execution
+still fails explicitly (sharc-fetch-arithmetic.txt). No loop-IDLE/vector
+acceptance is qualified.
 
 The qualified PX/bit/parallel prefix is documented separately. Arithmetic DO
 and deferred PC-stack setup have a bounded reference in sharc-arithmetic-loops.txt.

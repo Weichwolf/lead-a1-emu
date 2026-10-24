@@ -60,7 +60,13 @@ struct SharcCountLoop {
   bool operator==(const SharcCountLoop &) const = default;
 };
 
-enum class SharcArithmeticPhase : std::uint8_t { deferred, active, draining };
+enum class SharcArithmeticPhase : std::uint8_t {
+  deferred,
+  active,
+  draining,
+  fetched,
+  fetched_draining
+};
 enum class SharcArithmeticKind : std::uint8_t { multiple, single };
 
 struct SharcArithmeticLoop {
@@ -154,7 +160,13 @@ struct SharcStep {
 };
 
 // Private retirement selection shared with the bound fetch transport.
-enum class SharcLoopClock : std::uint8_t { functional, clocked, clocked_pop };
+enum class SharcLoopClock : std::uint8_t {
+  functional,
+  clocked,
+  clocked_pop,
+  arithmetic,
+  arithmetic_exit
+};
 
 // Functional native-48 instruction reference; unsupported execution fails.
 // No autonomous peripheral clocks or complete physical pipeline timing.

@@ -46,6 +46,13 @@ void sharc_fetch_quiet_effects(SharcState &cpu,
                                const SharcFetchState &transport,
                                const SharcControl *control);
 void sharc_fetch_loop_validate(const SharcFetchState &transport);
+void sharc_fetch_arithmetic_validate(const SharcFetchState &transport);
+void sharc_fetch_arithmetic_guard(const SharcState &cpu, const SharcFetchState &transport);
+void sharc_fetch_arithmetic_clock(SharcState &cpu,
+                                  SharcFetchState &transport,
+                                  const SharcFetchEvent &event);
+[[nodiscard]] SharcLoopClock sharc_fetch_arithmetic_retirement(const SharcState &cpu,
+                                                               const SharcFetchState &transport);
 void sharc_fetch_loop_guard(const SharcState &cpu, const SharcFetchState &transport);
 [[nodiscard]] bool sharc_fetch_loop_stall(const SharcFetchState &transport);
 void sharc_fetch_loop_flow(const SharcState &cpu,

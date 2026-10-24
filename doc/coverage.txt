@@ -210,8 +210,18 @@ ID  State    Evidence / remaining work
              original fixtures continue25 grants from terminal header to
              CPU8c08e, with the DB Address target selected, original saved PX,
              masks/SYSCTL/cache and armed384-word vector DMA checked. Actual
-             branch retirement/body fetch/vector entry remain open
+             vector entry and body execution remain open
              (sharc-fetch-finalizer.txt).
+             Fetched arithmetic loops now use the actual F1 end/start+1,
+             native frame pop and retained Decode-end marker for real drain;
+             two speculative words become empty phases. Owned literal45-entry
+             Table4-15 checks, first-/second-producer short drains,120 independent
+             occupied/retired-Execute continuations, actual popped operands,
+             unknown flags and malformed/mixed-context guards cover this path.
+             Original entry DB retires and first two body F1 addresses are
+             accepted; the actual captured loop-IDLE at CPU8c08f still fails
+             without changing its state. No vector/application or physical
+             timing qualification follows (sharc-fetch-arithmetic.txt).
              A separate internal RAM-port reference grants IO0>IO1>DM>PM per block,
              retains losing IO1 into the following clock and alternates new
              I/O launch eligibility from an explicit owner phase. Actual reads,
@@ -515,6 +525,16 @@ ID  State    Evidence / remaining work
              and actual failed final stores with repair. Original prefixes now
              check the first short- and normal-word records and real skip paths
              (sharc-fetch-long-loops.txt,sharc-fetch-four-loops.txt).
+             Fetched arithmetic tests check all45 literal Table4-15 stage
+             entries, actual early pop/operand visibility, SIMD AND/FOREVER,
+             first-/second-producer short drains and120 independently rebound
+             occupied/retired-Execute continuations with literal native outputs.
+             Unknown sampling, missing/orphan end markers, corrupted drain
+             columns and real PM/multiplier guards preserve failure state.
+             All8 original prefixes additionally retire entry DB, then preserve
+             the actual captured8c08f loop-IDLE failure and armed vector DMA;
+             this is an explicit gap check, not successful startup
+             (sharc-fetch-arithmetic.txt).
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

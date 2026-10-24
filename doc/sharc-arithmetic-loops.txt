@@ -1,5 +1,9 @@
 Native arithmetic-loop reference and deferred setup
 
+The separate bound fetched phases and actual F1 termination/flush contract
+are in sharc-fetch-arithmetic.txt. The instruction-only behavior below keeps
+its existing minimum-clock summary; raw retirement rejects fetched phases.
+
 Type13a native DO decodes a24-bit PC-relative end and a5-bit termination
 code, pushes the following address on the PC stack and records the LADDR
 termination/type fields. Only one active loop is supported; nested/delayed

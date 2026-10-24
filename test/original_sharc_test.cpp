@@ -375,6 +375,49 @@ struct StreamRecord {
   std::uint32_t destination;
 };
 
+void sequenced_arithmetic_entry(lead_a1::SharcMemory &memory,
+                                lead_a1::Sharc &cpu,
+                                lead_a1::SharcFetch &fetch,
+                                SerialInput &serial,
+                                HeaderDevices devices) {
+  devices.clock.accessed = false;
+  static_cast<void>(fetch.advance_sequenced(cpu));
+  require(cpu.step(fetch).minimum_core_cycles == 1);
+  advance_devices(memory, cpu, serial, devices);
+  const auto branch = cpu.state().branch;
+  const auto loop = cpu.state().arithmetic_loop;
+  constexpr std::uint32_t loop_start = 0x8c003;
+  require(cpu.state().pc == frontier + 1 && branch && branch->target == loop_start &&
+          branch->slots == 2 && loop && loop->phase == lead_a1::SharcArithmeticPhase::fetched &&
+          cpu.state().depth == 1 && cpu.state().pc_stack[0] == loop_start &&
+          fetch.state().fetch1 == loop_start);
+  static_cast<void>(fetch.advance_sequenced(cpu));
+  const auto word = fetch.state().execute;
+  if (!word) { throw std::runtime_error("Missing original arithmetic-entry Execute word"); }
+  require(word->address == frontier + 1 && fetch.state().fetch1 == self_modify);
+  require(word->opcode ==
+          memory.read({.address = frontier + 1, .width = lead_a1::SharcWidth::wide48}));
+  constexpr unsigned int vector_words = 384;
+  constexpr std::uint32_t vector_destination = 0x92000;
+  require(devices.spi.state().serial.remaining == vector_words &&
+          devices.spi.state().serial.next_word == vector_destination);
+  const auto before = cpu.state();
+  const auto transport = fetch.state();
+  const auto control = devices.control.snapshot();
+  try {
+    static_cast<void>(cpu.step(fetch));
+  } catch (const std::exception &error) {
+    require(std::string(error.what()).find("delayed-branch/loop IDLE not qualified") !=
+            std::string::npos);
+    require(cpu.state() == before && fetch.state() == transport &&
+            devices.control.snapshot() == control && !memory.active());
+    std::cout << "  Sequenced arithmetic entry: actual DB retired; captured IDLE at PC0x8c08f "
+                 "remains unsupported, first two body F1 addresses accepted\n";
+    return;
+  }
+  throw std::runtime_error("Original loop-IDLE boundary changed; qualify its actual continuation");
+}
+
 void sequenced_finalizer(lead_a1::SharcMemory &memory,
                          lead_a1::Sharc &cpu,
                          lead_a1::SharcFetch &fetch,
@@ -401,6 +444,7 @@ void sequenced_finalizer(lead_a1::SharcMemory &memory,
   require(address && address->address == frontier && address->branch && address->branch->taken &&
           address->branch->target == loop_start && flow && flow->next == loop_start);
   std::cout << "  Sequenced finalizer setup: " << clocks << " grants, next PC0x8c08e\n";
+  sequenced_arithmetic_entry(memory, cpu, fetch, serial, devices);
 }
 
 std::size_t check_record_payload(lead_a1::SharcMemory &memory,

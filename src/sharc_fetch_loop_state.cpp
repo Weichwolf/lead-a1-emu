@@ -4,7 +4,6 @@
 #include "sharc_dag_internal.hpp"
 #include "sharc_fetch_internal.hpp"
 #include "sharc_fetch_long.hpp"
-#include "sharc_internal.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -16,25 +15,6 @@ namespace {
 constexpr std::uint64_t full_counter = std::uint64_t{1} << 32;
 constexpr std::uint64_t immediate_max = 0xffff;
 constexpr unsigned int stack_limit = 28;
-
-void deferred_arithmetic(const SharcState &cpu, const SharcFetchState &transport) {
-  if (!cpu.arithmetic_loop || !transport.flow) {
-    throw std::logic_error("Missing SHARC fetched arithmetic-loop setup context");
-  }
-  if (cpu.arithmetic_loop->phase != SharcArithmeticPhase::deferred || cpu.count_loop ||
-      transport.flow->loop || transport.flow->long_loop || transport.lookup || transport.fill) {
-    throw std::runtime_error("SHARC fetched active/mixed arithmetic-loop context not qualified");
-  }
-  sharc_validate_arithmetic_loop(cpu);
-  constexpr std::uint64_t modulus = std::uint64_t{1} << 24;
-  constexpr unsigned int window = 4;
-  const auto end = cpu.arithmetic_loop->end;
-  for (const auto address : {std::optional{cpu.pc}, transport.fetch1}) {
-    if (address && ((modulus + end - *address) & sharc_pc_mask) <= window) {
-      throw std::runtime_error("SHARC fetched deferred arithmetic-loop end window not qualified");
-    }
-  }
-}
 
 void loop_word(const SharcFetchWord &word, const SharcFetchState &transport, bool execute) {
   const auto loop = transport.flow ? transport.flow->loop : std::nullopt;
@@ -174,10 +154,8 @@ void sharc_fetch_loop_validate(const SharcFetchState &transport) {
 }
 
 void sharc_fetch_loop_guard(const SharcState &cpu, const SharcFetchState &transport) {
-  if (cpu.arithmetic_loop) {
-    deferred_arithmetic(cpu, transport);
-    return;
-  }
+  sharc_fetch_arithmetic_guard(cpu, transport);
+  if (cpu.arithmetic_loop) { return; }
   if (transport.flow && transport.flow->long_loop) {
     sharc_fetch_long_guard(cpu, transport);
     return;

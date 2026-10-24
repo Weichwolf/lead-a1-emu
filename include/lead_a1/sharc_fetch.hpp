@@ -25,6 +25,8 @@ struct SharcFetchWord {
   std::optional<SharcFetchBranch> branch{std::nullopt};
   bool loop_body{};
   bool loop_pop{};
+  // Last retained real end instruction after an arithmetic Fetch1 abort.
+  bool arithmetic_exit{};
   std::optional<SharcDagAddress> dag{std::nullopt};
   bool operator==(const SharcFetchWord &) const = default;
 };

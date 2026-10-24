@@ -25,7 +25,8 @@ void deferred_arithmetic_setup(const SharcState &cpu, const SharcFetchWord &word
   const auto condition = (word.opcode >> 33) & 31;
   const auto end = static_cast<std::uint32_t>(
       (std::uint64_t{word.address} + (word.opcode & sharc_pc_mask)) & sharc_pc_mask);
-  if ((word.opcode & ~fields) != 0 || condition == counter_condition || end > word.address ||
+  const bool short_forward = end > word.address && end - word.address < 5;
+  if ((word.opcode & ~fields) != 0 || condition == counter_condition || short_forward ||
       cpu.branch || cpu.count_loop || cpu.arithmetic_loop || cpu.loops_empty != true) {
     throw std::runtime_error("SHARC fetched arithmetic DO setup not qualified");
   }

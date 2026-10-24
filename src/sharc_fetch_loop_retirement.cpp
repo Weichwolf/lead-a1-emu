@@ -3,6 +3,7 @@
 #include "lead_a1/sharc_fetch.hpp"
 #include "sharc_fetch_internal.hpp"
 #include "sharc_fetch_long.hpp"
+#include "sharc_internal.hpp"
 
 #include <cstdint>
 #include <stdexcept>
@@ -10,6 +11,7 @@
 namespace lead_a1::detail {
 
 SharcLoopClock sharc_fetch_loop_retirement(const SharcState &cpu, SharcFetchState &transport) {
+  if (sharc_fetched_arithmetic(cpu)) { return sharc_fetch_arithmetic_retirement(cpu, transport); }
   if (transport.flow && transport.flow->long_loop) {
     sharc_fetch_long_retirement(cpu, transport);
     return transport.flow->long_loop->four == SharcFetchFourPhase::none ? SharcLoopClock::functional

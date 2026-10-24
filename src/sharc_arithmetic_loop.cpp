@@ -16,7 +16,8 @@ constexpr unsigned int forever = 31;
 constexpr unsigned int condition_shift = 24;
 
 bool live(const SharcArithmeticLoop &loop) {
-  return loop.phase != SharcArithmeticPhase::draining;
+  return loop.phase != SharcArithmeticPhase::draining &&
+         loop.phase != SharcArithmeticPhase::fetched_draining;
 }
 
 bool body_address(const SharcArithmeticLoop &loop, std::uint32_t pc) {
@@ -50,8 +51,8 @@ void deferred_guard(const SharcState &state, std::uint64_t opcode) {
 void sharc_validate_arithmetic_loop(const SharcState &state) {
   if (!state.arithmetic_loop) { return; }
   const auto &loop = *state.arithmetic_loop;
-  if (state.count_loop || state.branch || !state.depth || !state.loops_empty ||
-      loop.body > sharc_pc_mask || loop.end > sharc_pc_mask ||
+  if (state.count_loop || (state.branch && !sharc_fetched_arithmetic(state)) || !state.depth ||
+      !state.loops_empty || loop.body > sharc_pc_mask || loop.end > sharc_pc_mask ||
       loop.termination >= condition_count || loop.termination == counter_condition ||
       loop.saved_depth >= before_almost_full || loop.kind != SharcArithmeticKind::multiple ||
       *state.depth != loop.saved_depth + (live(loop) ? 1U : 0U) ||
@@ -63,6 +64,12 @@ void sharc_validate_arithmetic_loop(const SharcState &state) {
   }
   switch (loop.phase) {
     case SharcArithmeticPhase::deferred: return;
+    case SharcArithmeticPhase::fetched:
+    case SharcArithmeticPhase::fetched_draining:
+      if (loop.end <= loop.body) {
+        throw std::invalid_argument("Invalid SHARC fetched arithmetic address span");
+      }
+      return;
     case SharcArithmeticPhase::active:
     case SharcArithmeticPhase::draining:
       if (loop.end < loop.body || loop.end - loop.body < 4 || !body_address(loop, state.pc) ||
@@ -106,8 +113,17 @@ void sharc_begin_arithmetic_loop(SharcState &state, std::uint64_t opcode) {
   state.loops_empty = false;
 }
 
-void sharc_arithmetic_loop_prepare(SharcState &state, std::uint64_t opcode) {
+void sharc_arithmetic_loop_prepare(SharcState &state, std::uint64_t opcode, SharcLoopClock clock) {
+  if (clock == SharcLoopClock::arithmetic || clock == SharcLoopClock::arithmetic_exit) {
+    if (!sharc_fetched_arithmetic(state)) {
+      throw std::logic_error("Missing bound SHARC arithmetic retirement state");
+    }
+    return; // Actual Fetch1 already sampled flags and committed any stack pop.
+  }
   if (!state.arithmetic_loop) { return; }
+  if (sharc_fetched_arithmetic(state)) {
+    throw std::runtime_error("SHARC fetched arithmetic state requires bound retirement");
+  }
   auto &loop = *state.arithmetic_loop;
   if (loop.phase == SharcArithmeticPhase::deferred) {
     deferred_guard(state, opcode);
@@ -127,7 +143,12 @@ void sharc_arithmetic_loop_prepare(SharcState &state, std::uint64_t opcode) {
   }
 }
 
-unsigned int sharc_arithmetic_loop_finish(const SharcState &previous, SharcState &next) {
+unsigned int
+sharc_arithmetic_loop_finish(const SharcState &previous, SharcState &next, SharcLoopClock clock) {
+  if (clock == SharcLoopClock::arithmetic || clock == SharcLoopClock::arithmetic_exit) {
+    sharc_clocked_arithmetic_finish(previous, next, clock == SharcLoopClock::arithmetic_exit);
+    return 0;
+  }
   if (!previous.arithmetic_loop) { return 0; }
   if (!next.arithmetic_loop) { throw std::logic_error("Lost SHARC arithmetic loop"); }
   const auto loop = *next.arithmetic_loop;
@@ -138,6 +159,22 @@ unsigned int sharc_arithmetic_loop_finish(const SharcState &previous, SharcState
   }
   next.arithmetic_loop.reset();
   return 2; // Two flushed instructions, not two retired guest NOPs (4-53/54).
+}
+
+void sharc_clocked_arithmetic_finish(const SharcState &previous, SharcState &next, bool exit) {
+  if (!previous.arithmetic_loop || !next.arithmetic_loop || !sharc_fetched_arithmetic(previous)) {
+    throw std::logic_error("Missing SHARC clocked arithmetic resource");
+  }
+  const auto loop = *next.arithmetic_loop;
+  if (exit) {
+    if (previous.pc != loop.end || loop.phase != SharcArithmeticPhase::fetched_draining) {
+      throw std::runtime_error("SHARC clocked arithmetic end retirement mismatch");
+    }
+    next.pc = loop.end + 1;
+    next.arithmetic_loop.reset();
+  } else if (previous.pc == loop.end) {
+    next.pc = loop.body;
+  }
 }
 
 void sharc_arithmetic_stack_write(SharcState &state, SharcKnown32 value) {

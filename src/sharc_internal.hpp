@@ -116,9 +116,15 @@ void sharc_long_loop_prepare(SharcState &state, std::uint64_t opcode);
 void sharc_long_loop_finish(const SharcState &previous, SharcState &next);
 void sharc_validate_arithmetic_loop(const SharcState &state);
 void sharc_begin_arithmetic_loop(SharcState &state, std::uint64_t opcode);
-void sharc_arithmetic_loop_prepare(SharcState &state, std::uint64_t opcode);
-[[nodiscard]] unsigned int sharc_arithmetic_loop_finish(const SharcState &previous,
-                                                        SharcState &next);
+void sharc_arithmetic_loop_prepare(SharcState &state,
+                                   std::uint64_t opcode,
+                                   SharcLoopClock clock = SharcLoopClock::functional);
+[[nodiscard]] bool sharc_fetched_arithmetic(const SharcState &state);
+void sharc_clocked_arithmetic_finish(const SharcState &previous, SharcState &next, bool exit);
+[[nodiscard]] unsigned int
+sharc_arithmetic_loop_finish(const SharcState &previous,
+                             SharcState &next,
+                             SharcLoopClock clock = SharcLoopClock::functional);
 void sharc_arithmetic_stack_write(SharcState &state, SharcKnown32 value);
 [[nodiscard]] SharcKnown32 sharc_loop_address(const SharcState &state);
 void sharc_validate_cache(const SharcCacheState &cache);

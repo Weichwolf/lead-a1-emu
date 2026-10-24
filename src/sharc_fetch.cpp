@@ -76,6 +76,7 @@ void sharc_fetch_validate(const SharcFetchState &state) {
   cache_metadata(state);
   sharc_fetch_branch_validate(state);
   sharc_fetch_loop_validate(state);
+  sharc_fetch_arithmetic_validate(state);
   sharc_fetch_dag_validate(state);
   if (state.flow) {
     sharc_fetch_address(state.flow->next);

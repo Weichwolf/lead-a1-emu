@@ -131,9 +131,13 @@ void address_and_native_frame() {
   control.abort_instruction();
   require(cpu.step(fetch).minimum_core_cycles == 1);
   prefix(fetch, cpu);
+  tick(fetch, cpu); // The actual entry JUMP retires while the first body address reaches F1.
+  const auto entry = cpu.state().branch;
+  require(entry && entry->target == body && entry->slots == 2 && fetch.state().fetch1 == body);
   const auto completed = cpu.state();
   const auto held = fetch.state();
-  rejected([&] { static_cast<void>(fetch.advance_sequenced(cpu)); }, "end window");
+  rejected([&] { static_cast<void>(fetch.advance_sequenced(cpu)); },
+           "Unknown SHARC control/status bits");
   require(cpu.state() == completed && fetch.state() == held && !memory.active());
 }
 
@@ -158,7 +162,7 @@ void independent_continuations() {
 }
 
 void unsupported_setup_and_active_body() {
-  constexpr std::uint64_t forward = 0x0e0000000006;
+  constexpr std::uint64_t forward = 0x0e0000000003;
   constexpr std::uint64_t reserved = 0x0e0001ffffe0;
   constexpr std::uint64_t counter = 0x0e1e00ffffe0;
   for (const auto opcode : {forward, reserved, counter}) {
@@ -175,14 +179,20 @@ void unsupported_setup_and_active_body() {
   }
   lead_a1::SharcMemory memory;
   program(memory);
-  code(memory, base, forward);
+  constexpr std::uint64_t long_forward = 0x0e0000000006;
+  code(memory, base, long_forward);
   lead_a1::Sharc cpu(memory, initial());
   static_cast<void>(cpu.step());
   auto state = sequenced();
   if (!state.flow) { throw std::logic_error("Missing owned flow"); }
   state.flow->next = base + 1;
   lead_a1::SharcFetch fetch(memory, state);
-  rejected([&] { static_cast<void>(fetch.advance_sequenced(cpu)); }, "active/mixed arithmetic");
+  static_cast<void>(fetch.advance_sequenced(cpu));
+  const auto fetched = cpu.state().arithmetic_loop;
+  require(fetched && fetched->phase == lead_a1::SharcArithmeticPhase::fetched);
+  const auto before = cpu.state();
+  rejected([&] { static_cast<void>(cpu.step()); }, "requires bound retirement");
+  require(cpu.state() == before && !memory.active());
 }
 
 }

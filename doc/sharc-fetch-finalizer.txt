@@ -20,11 +20,12 @@ The real PCSTK instruction may change the start without changing LADDR's
 multiple-instruction arithmetic type. This does not infer a short-loop type
 from the new apparent body length or evaluate termination flags early.
 
-Only the straight deferred setup is qualified here. A direct branch can
-select its actual Address target before retirement; accepting the first
-body fetch/reentry or retiring deferred control flow remains guarded.
-Active/short arithmetic loop transport, mixed cache/loop contexts, IDLE,
-interrupt loop reentry and self-modifying-loop execution still need work.
+The setup checkpoint here precedes the fetched arithmetic continuation in
+sharc-fetch-arithmetic.txt. That continuation retires the original entry DB
+and accepts the first two body F1 addresses, then preserves the actual
+captured IDLE failure at CPU8c08f. No IDLE has retired, no interrupt has
+been accepted and the vector DMA is still armed. Mixed cache/loop contexts,
+loop-IDLE/interrupt reentry and self-modifying PM execution still need work.
 Primary references: PGRrev2.4 4-5/8,4-45/54,4-79/89,9-49/50,A-10/11;
 reference/sharc.json pins the manual and separate native/cache contracts.
 

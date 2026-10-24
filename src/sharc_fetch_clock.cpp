@@ -226,6 +226,7 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
       clock_transport(memory_, cpu.state_, cache, state_, next, next_address, bus, sequenced);
   auto core = cpu.state_;
   core.cache = cache;
+  if (sequenced) { detail::sharc_fetch_arithmetic_clock(core, next, event); }
   if (sequenced) { detail::sharc_fetch_loop_clock(core, state_, next, event.loop_stall); }
   if (sequenced &&
       (event.address_accepted || (event.loop_stall && state_.flow && state_.flow->long_loop &&
