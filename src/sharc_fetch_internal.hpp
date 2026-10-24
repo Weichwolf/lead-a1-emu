@@ -25,7 +25,9 @@ void sharc_fetch_fill(SharcCacheState &cache, const SharcFetchState &state);
 void sharc_fetch_flow_guard(const SharcState &cpu, const SharcFetchState &transport);
 [[nodiscard]] bool sharc_fetch_branch_encoding(std::uint64_t opcode);
 [[nodiscard]] std::uint32_t sharc_fetch_condition_mask(unsigned int code);
-[[nodiscard]] bool sharc_fetch_interlock(const SharcState &cpu, const SharcFetchState &previous);
+enum class SharcFetchInterlock : std::uint8_t { none, condition, multiplier };
+[[nodiscard]] SharcFetchInterlock sharc_fetch_interlock(const SharcState &cpu,
+                                                        const SharcFetchState &previous);
 [[nodiscard]] std::optional<unsigned int> sharc_fetch_destination(std::uint64_t opcode);
 [[nodiscard]] bool
 sharc_fetch_dag_stall(const SharcState &cpu, const SharcFetchState &state, SharcFetchBus bus);

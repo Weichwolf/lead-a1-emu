@@ -66,6 +66,8 @@ struct SharcFetchFlow {
   // Low bit suppresses this clock's Decode input; shifts on an advancing clock.
   unsigned int discard_decode{};
   std::optional<SharcFetchLoop> loop{std::nullopt};
+  // PGR4-116: one further Decode hold after a multiplier flag producer issues.
+  bool multiplier_branch_wait{};
   bool operator==(const SharcFetchFlow &) const = default;
 };
 

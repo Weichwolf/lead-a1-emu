@@ -45,6 +45,21 @@ void word_branch(const SharcFetchWord &word, bool sequenced) {
   }
 }
 
+void multiplier_wait(const SharcFetchState &state) {
+  if (!state.flow || !state.flow->multiplier_branch_wait) { return; }
+  const auto flow = *state.flow;
+  if (state.address || state.lookup || state.fill || flow.loop || flow.discard_decode != 0 ||
+      !state.decode || !sharc_fetch_branch_encoding(state.decode->opcode)) {
+    throw std::invalid_argument("Invalid SHARC multiplier branch wait phases");
+  }
+  const auto condition = static_cast<unsigned int>((state.decode->opcode >> 33) & 31);
+  constexpr std::uint32_t flags = 0x3c0;
+  if ((sharc_fetch_condition_mask(condition) & flags) == 0 ||
+      (state.execute && !sharc_float_multiply_encoding(state.execute->opcode))) {
+    throw std::invalid_argument("Invalid SHARC multiplier branch wait dependency");
+  }
+}
+
 }
 
 bool sharc_fetch_branch_encoding(std::uint64_t opcode) {
@@ -67,6 +82,7 @@ std::uint32_t sharc_fetch_condition_mask(unsigned int code) {
 }
 
 void sharc_fetch_branch_validate(const SharcFetchState &state) {
+  multiplier_wait(state);
   if ((state.fetch2 && state.fetch2->branch) || (state.decode && state.decode->branch)) {
     throw std::invalid_argument("Invalid SHARC branch decision before Address");
   }

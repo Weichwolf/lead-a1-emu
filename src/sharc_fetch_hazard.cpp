@@ -81,9 +81,10 @@ std::uint32_t produced(std::uint64_t opcode) {
 
 }
 
-bool sharc_fetch_interlock(const SharcState &cpu, const SharcFetchState &previous) try {
+SharcFetchInterlock sharc_fetch_interlock(const SharcState &cpu,
+                                          const SharcFetchState &previous) try {
   const auto branch = previous.decode;
-  if (!branch || !sharc_fetch_branch_encoding(branch->opcode)) { return false; }
+  if (!branch || !sharc_fetch_branch_encoding(branch->opcode)) { return SharcFetchInterlock::none; }
   const auto condition = static_cast<unsigned int>((branch->opcode >> 33) & 31);
   const auto consumed = sharc_fetch_condition_mask(condition);
   const auto producer = previous.address;
@@ -93,13 +94,19 @@ bool sharc_fetch_interlock(const SharcState &cpu, const SharcFetchState &previou
   if (consumed != 0 && (cpu.pending[sharc_mode1] || reg == mode1)) {
     throw std::runtime_error("SHARC conditional branch MODE1 Decode interlock not qualified");
   }
-  if (producer && consumed != 0 && (produced(producer->opcode) & consumed) != 0) { return true; }
+  if (previous.flow && previous.flow->multiplier_branch_wait) {
+    return SharcFetchInterlock::condition;
+  }
+  if (producer && consumed != 0 && (produced(producer->opcode) & consumed) != 0) {
+    return sharc_float_multiply_encoding(producer->opcode) ? SharcFetchInterlock::multiplier
+                                                           : SharcFetchInterlock::condition;
+  }
   constexpr unsigned int rts = 10;
   if ((branch->opcode >> class_shift) == rts && reg == pc_stack &&
       sharc_condition(cpu, condition)) {
     throw std::runtime_error("SHARC return after PCSTK write interlock not qualified");
   }
-  return false;
+  return SharcFetchInterlock::none;
 } catch (const std::exception &error) {
 
   std::ostringstream message;

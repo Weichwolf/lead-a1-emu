@@ -46,6 +46,9 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-multiplier-branch-test test/sharc_multiplier_branch_test.cpp)
+  target_link_libraries(lead-a1-sharc-multiplier-branch-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_multiplier_branch_stalls COMMAND lead-a1-sharc-multiplier-branch-test)
   add_executable(lead-a1-sharc-compare-test test/sharc_compare_test.cpp)
   target_link_libraries(lead-a1-sharc-compare-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_compare_and_relational_conditions COMMAND lead-a1-sharc-compare-test)
@@ -401,7 +404,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-quiet-clock-test
       lead-a1-sharc-fetch-loop-test
       lead-a1-sharc-dag-stall-test
-      lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test lead-a1-sharc-float-test lead-a1-sharc-float-multiply-test lead-a1-sharc-compare-test
+      lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test lead-a1-sharc-float-test lead-a1-sharc-float-multiply-test lead-a1-sharc-compare-test lead-a1-sharc-multiplier-branch-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
       lead-a1-memory-test lead-a1-original-arm-test lead-a1-mmu-walk-test
       lead-a1-mmu-cpu-test lead-a1-arm-data-test lead-a1-original-cache-test

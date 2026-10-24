@@ -419,7 +419,7 @@ void multiplier_branch_flags() {
     state.data[0][1] = known(sign | one_half);
     Sharc cpu(memory, state);
     SharcFetch fetch(memory, flow());
-    require(run_until(cpu, fetch, target) == (multiplier_condition ? 1U : 0U));
+    require(run_until(cpu, fetch, target) == (multiplier_condition ? 2U : 0U));
     require(cpu.state().data[0][3] == known(sign | three_quarters));
     require((cpu.state().system[6].value & multiplier_flags) == multiply_negative);
     require((cpu.state().system[6].value & alu_flags) == 1);

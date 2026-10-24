@@ -1,0 +1,67 @@
+Two-clock multiplier flag branch interlocks
+
+Primary evidence: Programming Reference rev2.4,4-115/116/Table4-55 and case2,
+9-32/34,9-44/46,10-33. Case2 adds one Decode hold to the ordinary condition
+interlock when the immediately preceding compute uses the multiplier and the
+branch consumes a multiplier flag. Architectural flag availability after
+retirement does not remove the second hold. Manuals remain local; provenance
+is in reference/sharc.json. No private implementation is a build input.
+
+The bound sequencer qualifies the implemented normal/positive-zero floating
+multiplier's structural dependencies on MV/MS and their complements. Direct
+absolute/relative JUMP, CALL and ordinary RTS retain their shared Address
+decisions, native stack effects, immediate suppression and real DB slots.
+Arithmetic status still follows sharc-floating-multiply.txt; fixed multiply,
+exception outcomes and complete operand forwarding remain unqualified.
+
+First hold: F1/F2/Decode, cursor and suppression stay unchanged; the actual
+Address producer enters Execute and Address becomes absent. Successful native
+retirement updates the result/flags. Flow retains multiplier_branch_wait. A
+failed producer keeps Execute and the wait; no later clock can consume it or
+silently complete its effects.
+
+Second hold: the retained Decode branch still does not resolve. No instruction
+enters Execute, no guest NOP executes and the wait clears with the whole clock
+commit. Supported quiet effects/ownership use the existing bound clock. The
+following advancing clock selects the real condition/target in Address.
+Pending MODE1, PM/cache conflicts and mixed loop stalls retain their guards.
+Failed clocks preserve CPU/cache/transport and the pending wait.
+
+An intervening guest instruction removes this immediate-producer dependency.
+A branch on retained ALU flags after MUL has no multiplier stall. Ordinary
+ALU/shifter/BTF producers retain one-clock interlocks. Conditional post-modify,
+floating-to-fixed compute stalls, dual-operand MUL forwarding and general
+combinations of dependencies remain separate unfinished work.
+
+Typed snapshots preserve the additional hold before and after producer
+retirement. A pending wait requires a multiplier-condition Decode branch,
+absent Address/cache/loop/suppression and either actual multiplier Execute or
+no Execute after retirement. Malformed shapes reject. Validation checks
+represented resources, not absent historical instructions or a board/disk image.
+
+sharc_multiplier_branch_stalls checks a literal nine-column five-stage oracle:
+Table4-55 extended by case2's extra hold, with actual multiply/branch/target
+retirement. Every phase resumes against independent RAM/CPU/fetch before and
+after Execute retirement. Captured producer/branch words survive actual RAM
+replacement by invalid words. A fixed 1152-case matrix covers four multiplier
+conditions, four PE sign combinations, SISD/SIMD and SISD parallel old-value
+copies, four branch kinds, both DB modes and zero/one/two guest NOPs. Literal
+truth bits, products, DB-slot increments and native CALL/RTS frames are checked.
+Twelve additional SISD/SIMD positive-zero cases check MV/MS/complements and no
+false dependency for TRUE or retained EQ.
+
+Unknown operands preserve the failed producer/wait and allow repaired captured
+execution. The second hold needs no ASTAT value; a later unknown Address
+decision fails atomically until repaired. False MV returns need no stack.
+Actual cache conflict, wrong bus and foreign SYSCTL transaction fail without
+consuming the wait; repaired clocks continue. Malformed snapshots check absent/
+wrong Decode/Execute, Address, suppression, loop and cache phases. The corrected
+two-clock expectation in sharc_floating_multiply failed against eb0be72 before
+this implementation. No checks were weakened; no fuzz inputs.
+
+  cmake --build --preset strict
+  ctest --test-dir build/strict -R '^(sharc_multiplier_branch_stalls|sharc_floating_multiply|sharc_branch_pipeline)$' --output-on-failure
+
+Available-bus clock grants remain separate from physical Nord timing. Original
+complete boot/application/audio, hardware comparison, global bus/DAG/loop/cache
+arbitration, host SIMD/JIT/concurrency and performance remain unfinished.

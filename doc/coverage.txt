@@ -248,6 +248,13 @@ ID  State    Evidence / remaining work
              pass; possible adjacent dual-input forwarding rejects atomically
              until its additional stall phase is qualified. Parallel transfers
              retain old full40 inputs and rollback (sharc-floating-multiply.txt).
+             Immediate multiplier-flag branches retain both Decode holds
+             required by PGR4-116/case2. Actual producer retirement precedes an
+             additional quiet hold; typed continuation and clock/producer
+             failure preserve its pending state. Native absolute/relative
+             JUMP/CALL/RTS, DB slots and gap cases have literal phase/frame/
+             result oracles (sharc-multiplier-branches.txt). Full mixed
+             dependency/global timing and original audio remain unqualified.
              Runtime SPI RX DMA has a completed-bootstrap handoff, finite
              four-word FIFO plus receive buffer, explicit grouped memory grants,
              signed cursor steps, zero-count65536 semantics and transactional
@@ -407,6 +414,12 @@ ID  State    Evidence / remaining work
              actual compare/overflow interlocks, retained decisions with later
              unknown controls, clocked CACC-loop checkpoint continuation and
              real parallel-load/store rollback (sharc-compare.txt).
+             Multiplier branch tests add a literal nine-column stage oracle,
+             independently rebound continuations at occupied/empty phases and
+             1152 finite branch/condition/sign/mode/gap/DB cases plus twelve
+             positive-zero/unrelated-condition cases. Captured RAM
+             replacement, failed producer/clock repair, unknown flags/stack and
+             malformed wait states have independent checks.
              TSan preset prepared; no concurrent native code or TSan claim yet.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

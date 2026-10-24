@@ -21,8 +21,11 @@ PGRrev2.4,4-115/117/Table4-55 requires an interlock when a conditional branch
 in Decode depends on the immediately preceding Address instruction's flags.
 That clock holds F1/F2/Decode, moves the actual producer to Execute and leaves
 Address empty. The F1 cursor and Decode suppression mask hold, and no next
-address is accepted. After actual producer retirement, the following clock
-resolves the branch from its updated flags. An absent phase is not a guest NOP.
+address is accepted. For ALU/shifter/BTF producers, the following clock after
+actual retirement resolves the branch from its updated flags. A multiplier
+flag dependency requires two holds per4-116/case2; its additional quiet phase
+and retained state are specified in sharc-multiplier-branches.txt. An absent
+phase is not a guest NOP.
 
 Dependency masks distinguish ALU flags, multiplier MN/MV/MU/MI, shifter SZ/SV/SS
 and system-bit-test BTF. Compute-only, immediate shifts, register moves with
@@ -36,8 +39,9 @@ at a control interlock remain guarded rather than assuming merged stalls;
 capture/interlocks, explicit ASTAT/FLAGS effect latencies, indirect branches,
 RTI, loop/ISR/IDLE sequencing and full physical/global timing remain open.
 
-Snapshots include the branch decision/target and the existing flow/cache
-phases. Invalid early/missing decisions, impossible taken/target pairs, false
+Snapshots include the branch decision/target, pending additional multiplier
+hold and existing flow/cache phases. Invalid early/missing decisions,
+impossible taken/target pairs, false
 unconditional decisions, unsupported conditions and wrong direct targets
 reject. Failed clocks preserve CPU/cache/transport; failed native retirement
 retains its already clocked Execute word. See sharc-fetch-flow.txt for the

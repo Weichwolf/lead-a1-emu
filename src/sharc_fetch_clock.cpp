@@ -122,12 +122,20 @@ SharcFetchEvent clock_transport(SharcMemory &memory,
   if (sequenced && detail::sharc_fetch_dag_stall(cpu, previous, bus)) {
     return dag_stalled_clock(previous, next);
   }
-  const bool interlock = sequenced && detail::sharc_fetch_interlock(cpu, previous);
+  const auto interlock =
+      sequenced ? detail::sharc_fetch_interlock(cpu, previous) : detail::SharcFetchInterlock::none;
+  const bool control_stall = interlock != detail::SharcFetchInterlock::none;
   const bool cache_stall = previous.lookup && previous.lookup->wait;
   if (sequenced && detail::sharc_fetch_loop_stall(previous)) {
-    return loop_startup_clock(previous, next, bus, interlock, cache_stall);
+    return loop_startup_clock(previous, next, bus, control_stall, cache_stall);
   }
-  if (cache_stall || interlock) { return stalled_clock(previous, next, cache, bus, interlock); }
+  if (cache_stall || control_stall) {
+    const auto event = stalled_clock(previous, next, cache, bus, control_stall);
+    if (control_stall && next.flow) {
+      next.flow->multiplier_branch_wait = interlock == detail::SharcFetchInterlock::multiplier;
+    }
+    return event;
+  }
   const auto event =
       normal_clock(memory, cache, previous, next, cpu.effective[4], next_address, bus);
   if (sequenced) { detail::sharc_fetch_flow(cpu, previous, next); }
