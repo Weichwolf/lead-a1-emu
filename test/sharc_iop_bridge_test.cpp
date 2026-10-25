@@ -558,6 +558,139 @@ void malformed_read_snapshots() {
   require(register_value(zero.cpu, 0) == 0 && zero.target.current.reads == 0);
 }
 
+constexpr std::uint32_t dpi_address = 0x1c10;
+constexpr lead_a1::SharcIoMapping bridge_span{.first_word = 0x1c00, .words = 0x900};
+constexpr lead_a1::SharcIoMapping sru_window{.first_word = 0x2400, .words = 0x100};
+constexpr lead_a1::SharcIoMapping dpi_window{.first_word = 0x1c00, .words = 0x100};
+
+struct PortFixture {
+  Registers sru_target;
+  Registers dpi_target;
+  SharcMemory peripheral;
+  std::optional<SharcIopBridge> bridge;
+  std::optional<lead_a1::SharcIopPort> sru;
+  std::optional<lead_a1::SharcIopPort> dpi;
+  SharcMemory memory;
+  Sharc cpu;
+
+  explicit PortFixture(SharcIopState saved = {}, lead_a1::SharcState state = initial())
+      : cpu(memory, state) {
+    peripheral.map_io(window, sru_target);
+    peripheral.map_io({.first_word = dpi_address, .words = 4}, dpi_target);
+    auto &bound = bridge.emplace(memory, peripheral, bridge_span, saved);
+    memory.map_io(sru_window, sru.emplace(bound, sru_window));
+    memory.map_io(dpi_window, dpi.emplace(bound, dpi_window));
+    memory.map({.bank = 0, .first_halfword = 0, .halfwords = 128, .name = "owned port code"});
+  }
+
+  SharcIopBridge &bus() {
+    if (!bridge) { throw std::logic_error("Missing port fixture bridge"); }
+    return *bridge;
+  }
+
+  void code(unsigned int offset, std::uint64_t instruction) {
+    memory.write({.address = base + offset, .width = lead_a1::SharcWidth::wide48}, instruction);
+  }
+
+  void issue(AccessKind operation, unsigned int cycles, std::uint32_t word) {
+    bus().issue(
+        {.pc = cpu.state().pc, .address = word, .operation = operation, .delivery_cycles = cycles});
+  }
+
+  void ticks(unsigned int count) {
+    for (unsigned int cycle = 0; cycle < count; ++cycle) { bus().tick(); }
+  }
+
+  void step() { static_cast<void>(cpu.step()); }
+};
+
+void disjoint_ports_share_pipeline_and_snapshot() {
+  PortFixture fixture;
+  fixture.code(0, move(AccessKind::write, 0, address));
+  fixture.code(1, move(AccessKind::write, 1, dpi_address));
+  fixture.code(2, move(AccessKind::read, 2, address));
+  fixture.issue(AccessKind::write, 5, address);
+  fixture.step();
+  fixture.ticks(1);
+  fixture.issue(AccessKind::write, 4, dpi_address);
+  require(!fixture.bus().ready());
+  fixture.ticks(1);
+  fixture.step();
+  fixture.ticks(1);
+  fixture.issue(AccessKind::read, 8, address);
+  const auto saved = fixture.bus().snapshot();
+  require(saved.clocks == 3 && saved.write_count == 2);
+  PortFixture restored(saved, fixture.cpu.state());
+  restored.code(2, move(AccessKind::read, 2, address));
+  fixture.ticks(2);
+  require(fixture.sru_target.current.writes == 1 && fixture.dpi_target.current.writes == 0);
+  fixture.ticks(1);
+  require(fixture.dpi_target.current.writes == 1 && fixture.sru_target.current.reads == 0);
+  fixture.ticks(7);
+  require(!fixture.bus().ready());
+  fixture.ticks(1);
+  restored.ticks(11);
+  require(fixture.bus().snapshot() == restored.bus().snapshot());
+  fixture.step();
+  restored.step();
+  require(fixture.cpu.state() == restored.cpu.state());
+  require(register_value(fixture.cpu, 2) == first_value);
+  require(fixture.sru_target.current == restored.sru_target.current);
+  require(fixture.dpi_target.current == restored.dpi_target.current);
+  require(fixture.dpi_target.current.words[0] == second_value);
+}
+
+void disjoint_port_response_and_transaction_ownership() {
+  PortFixture fixture;
+  fixture.dpi_target.current.words[0] = third_value;
+  fixture.code(0, move(AccessKind::read, 2, dpi_address));
+  fixture.issue(AccessKind::read, 8, dpi_address);
+  fixture.ticks(8);
+  const auto response = fixture.bus().snapshot();
+  fixture.memory.set_pc(base);
+  fixture.memory.begin_instruction();
+  rejected([&] { static_cast<void>(fixture.memory.read({.address = address})); }, "ready request");
+  fixture.memory.abort_instruction();
+  require(fixture.bus().snapshot() == response && fixture.dpi_target.current.reads == 1);
+  fixture.step();
+  require(register_value(fixture.cpu, 2) == third_value && fixture.dpi_target.current.reads == 1);
+  fixture.code(1, move(AccessKind::write, 0, address));
+  fixture.issue(AccessKind::write, 4, address);
+  const auto ticket = fixture.bus().snapshot();
+  fixture.memory.set_pc(base + 1);
+  fixture.memory.begin_instruction();
+  fixture.memory.write({.address = address}, first_value);
+  rejected([&] { static_cast<void>(fixture.memory.read({.address = dpi_address})); }, "Nested");
+  fixture.memory.abort_instruction();
+  require(fixture.bus().snapshot() == ticket && fixture.sru_target.current.writes == 0);
+  fixture.step();
+  fixture.ticks(4);
+  require(fixture.sru_target.current.writes == 1 &&
+          fixture.sru_target.current.words[0] == first_value);
+}
+
+void invalid_port_windows_and_offsets() {
+  PortFixture fixture;
+  auto &bus = fixture.bus();
+  rejected([&] { const lead_a1::SharcIopPort port(bus, {}); }, "outside its bridge");
+  constexpr lead_a1::SharcIoMapping before{.first_word = 0x1bff, .words = 1};
+  constexpr lead_a1::SharcIoMapping after{.first_word = 0x2500, .words = 1};
+  constexpr lead_a1::SharcIoMapping crossing{.first_word = 0x24ff, .words = 2};
+  constexpr lead_a1::SharcIoMapping huge{.first_word = 0xffffffff, .words = 1};
+  for (const auto mapping : {before, after, crossing, huge}) {
+    rejected([&] { const lead_a1::SharcIopPort port(bus, mapping); }, "outside its bridge");
+  }
+  lead_a1::SharcIopPort view(bus, sru_window);
+  rejected([&] { static_cast<void>(view.read({.address = 1, .size = 4})); }, "aligned32-bit");
+  rejected([&] { static_cast<void>(view.read({.size = 2})); }, "aligned32-bit");
+  constexpr std::uint32_t end_offset = 0x400;
+  rejected([&] { view.write({.address = end_offset, .size = 4}, 0); }, "within its window");
+  require(bus.snapshot() == SharcIopState{});
+  fixture.memory.begin_instruction();
+  rejected([&] { const lead_a1::SharcIopPort port(bus, sru_window); }, "active transaction");
+  fixture.memory.abort_instruction();
+}
+
 }
 
 int main() try {
@@ -574,6 +707,9 @@ int main() try {
   invalid_snapshots();
   transaction_and_callback_guards();
   malformed_read_snapshots();
+  disjoint_ports_share_pipeline_and_snapshot();
+  disjoint_port_response_and_transaction_ownership();
+  invalid_port_windows_and_offsets();
   std::cout << "IOP posted writes, real read capture, bounded timing and rollback pass\n";
   return 0;
 } catch (const std::exception &error) {

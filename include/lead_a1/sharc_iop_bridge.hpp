@@ -70,6 +70,7 @@ public:
   void abort_instruction() noexcept override;
 
 private:
+  friend class SharcIopPort;
   void idle() const;
   void validate_intent(SharcIopIntent intent) const;
   void validate_state(const SharcIopState &state) const;
@@ -83,6 +84,24 @@ private:
   SharcIoMapping window_;
   SharcIopState current_;
   std::optional<SharcIopState> staged_;
+};
+
+// Disjoint core address windows can share the same bridge queue and clock.
+// This view translates relative callback offsets only; it has no own timing,
+// target data or readiness. Map each view once in the bound core memory.
+class SharcIopPort final : public MemoryDevice {
+public:
+  SharcIopPort(SharcIopBridge &bridge, SharcIoMapping window);
+  [[nodiscard]] std::uint64_t read(MemoryAccess access) override;
+  void write(MemoryAccess access, std::uint64_t value) override;
+  void begin_instruction() override;
+  void commit_instruction() noexcept override;
+  void abort_instruction() noexcept override;
+
+private:
+  [[nodiscard]] MemoryAccess translate(MemoryAccess access) const;
+  SharcIopBridge &bridge_;
+  SharcIoMapping window_;
 };
 
 }

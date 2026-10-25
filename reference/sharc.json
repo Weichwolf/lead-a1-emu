@@ -670,8 +670,8 @@
     "limits": "GroupF logical reference only; pending/overlap/gated composition guards remain where not qualified. Other groups,pin data/pads,physical phase,complete peripheral coupling and five-stage native/VISA composition remain open. No boot/audio/USB/hardware claim",
     "original_reference": {
       "scope": "Four placements,two serial cadences; instruction-order fork after existing power checkpoint; explicit5/8 CCLK inputs, no physical phase claim",
-      "additional_instructions": 48,
-      "groups": 8,
+      "additional_instructions": 60,
+      "groups": 10,
       "pben2_targets": [
         "0x1a5405d6",
         "0x1a0005d6",
@@ -685,13 +685,15 @@
         "0x00000000"
       ],
       "immediates": "FFC0/F03F Type17b fields are signed16, not assumed zero-extended32",
-      "next_operation": "Real backend SRU_CLK2 read at0x2432 remains unmapped after all eight writes mature; elapsed144 bridge clocks with explicit5/8 inputs",
+      "next_operation": "Real backend IDP_PP_CTL read at0x24b1 remains unmapped after all ten writes mature; elapsed178 bridge clocks with explicit5/8 inputs. SRU-only projection omits this intervening non-SRU operation",
       "pcs": [
-        "0x1c5c1a",
-        "0x1c5ba2",
-        "0x1c07e1",
-        "0x1c06ad"
-      ]
+        "0x1c5c36",
+        "0x1c5bbe",
+        "0x1c07fd",
+        "0x1c06c9"
+      ],
+      "pben_instructions": 48,
+      "timing_instructions": 12
     }
   },
   "iop_control_bridge_reference": {
@@ -712,6 +714,71 @@
     ],
     "contract": "Real CPU source captured at posted-store retirement. Separate target memory receives delayed transactions. Reads drain writes, capture actual target once and retain response until exact request retirement. Delivery faults keep elapsed time and issue PC, then require no-clock retry_due",
     "snapshot": "Fixed storage bound4 is not asserted silicon FIFO depth. Validate queue,history,requests,read timing and response state; restore core/backend separately",
-    "limits": "Explicit latency input does not identify physical phase. Core IOP>=30000,FIFO/buffer hang/BHD,conditional/aborted accesses,port arbitration,complete five-stage clocking and board integration remain open"
+    "limits": "Explicit latency input does not identify physical phase. Core IOP>=30000,FIFO/buffer hang/BHD,conditional/aborted accesses,port arbitration,complete five-stage clocking and board integration remain open",
+    "disjoint_views": "SharcIopPort translates disjoint core mappings into one bridge span, preserving queue,write spacing,read drain,cached response,clock and transaction ownership. Original reference maps2400..24ff and1c00..1cff into span1c00..24ff; existing direct PMCTL prefix remains separately bounded"
+  },
+  "dai_timing_reference": {
+    "primary": "HWRrev1.1 A-124/128 GroupA,A-135/138 GroupC,B-14 reset,10-33 effect latency; official pinned21489 header independently corroborates CLK5 fields",
+    "addresses": {
+      "clock": "0x2430..0x2435",
+      "frame": "0x2450..0x2454"
+    },
+    "reset_clock": [
+      "0x252630c2",
+      "0x3def7bde",
+      "0x3def7bde",
+      "0x3def7bde",
+      "0x3def7bde",
+      "0x3def7bde"
+    ],
+    "reset_frame": [
+      "0x2736b4e3",
+      "0x3def7bde",
+      "0x3def7bde",
+      "0x01ef7bde",
+      "0x000003de"
+    ],
+    "sources": "0..19 DAI_PB01..20_O;20..25 SPORT0..5_CLK/FS_O;26 DIR_CLK/FS_O;27 clock DIR_TDMCLK_O but reserved in frame;28/29 PCG_CLKA/B or FSA/B;30/31 LOW/HIGH. Every dynamic input optional, not an inferred pad voltage or clock frequency",
+    "destinations": {
+      "clock_modeled": 35,
+      "frame_modeled": 25,
+      "clock_field_masks": [
+        63,
+        63,
+        63,
+        63,
+        59,
+        63
+      ],
+      "frame_field_masks": [
+        63,
+        63,
+        63,
+        31,
+        3,
+        0
+      ]
+    },
+    "effects": "Delivered write retains current routing before2PCLK, equal known levels through uncertain2..3PCLK, guaranteed new route after3PCLK; live source changes evaluate both possibilities. Full/half-PCLK age and independent pending words survive validated snapshots",
+    "pll_disagreement": "CLK4 bits14..10 shaded in HWR FigureA-65 but official sru21489.h defines SPDIF_PLLCLK_I at shift10. HWR14-14 mentions an external PLL input without resolving the address field. Raw reset retained; output query and changes remain guarded pending evidence. Do not label definitely nonexistent",
+    "original_reference": {
+      "additional_instructions": 12,
+      "scope": "After existing48-instruction PBEN reference,all four placements at both serial cadences,explicit5/8-clock inputs; no physical phase claim",
+      "clock_target": "0x3de57bde",
+      "frame_target": "0x3de5fbde",
+      "signals": "IDP0 clock/frame choose DAI_PB11/PB12; both remain unknown without explicit source levels",
+      "next_operation": "IDP_PP_CTL read at0x24b1;10 writes matured,178 bridge clocks including failed read; CPU/IAB/SYSCTL/SPI retained",
+      "pcs": [
+        "0x1c5c36",
+        "0x1c5bbe",
+        "0x1c07fd",
+        "0x1c06c9"
+      ]
+    },
+    "limits": "Instruction-order/logical routing reference only. CLK4 field2 disagreement,pending/overlap/gated paths,physical phase,all DPI/data/pad/peripheral/board coupling and five-stage native/VISA remain open. No boot/audio/USB/hardware qualification",
+    "package_header_confirmation": {
+      "reference": "dai_enable_reference.package_header_confirmation",
+      "scope": "Same directly extracted pinned sru21489.h. Numeric CLK5 shifts and CLK4 PLL field discrepancy only; header stays local and is not included in builds or reused as implementation"
+    }
   }
 }

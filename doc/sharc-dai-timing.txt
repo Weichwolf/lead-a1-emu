@@ -1,0 +1,87 @@
+DAI Group A clock and Group C frame routing
+
+SharcDaiTiming maps separate instances at CLK0..5 (2430..2435) and FS0..4
+(2450..2454). HWRrev1.1 B-14 gives all eleven raw reset words. Each live
+destination selects one five-bit source. Sources0..19 are DAI_PB01..20_O,
+20..25 are SPORT0..5 clock or frame outputs,26 is DIR clock/frame output,
+28/29 are PCG clock/frame A/B and30/31 are LOW/HIGH. Clock27 is DIR_TDMCLK;
+frame27 is reserved and rejects. Each dynamic input is optional. A pin-buffer
+output is neither its output enable nor an inferred pad voltage. No frequency,
+physical wiring, oscillator, IDP sampling or SPORT operation is invented.
+
+The output API names a register index and five-bit field index. Fields are
+ordered low to high. The documented destination topology is:
+
+  CLK0 SPORT0..5 clocks
+  CLK1 SRC0 IP/OP,SRC1 IP/OP,SRC2 IP/OP clocks
+  CLK2 SRC3 IP/OP,DIT clock,IDP0/PDAP clock,IDP1 clock,IDP2 clock
+  CLK3 IDP3..7 clocks,DIT HF clock
+  CLK4 PCG EXTA,EXTB,unresolved PLL,DIT sync,PCG sync CLKA,CLKB
+  CLK5 SPORT6,SPORT7,PCG sync CLKC,CLKD,PCG EXTC,EXTD
+  FS0  SPORT0..5 frames
+  FS1  SRC0 IP/OP,SRC1 IP/OP,SRC2 IP/OP frames
+  FS2  SRC3 IP/OP,DIT frame,IDP0 frame/PDAP hold,IDP1 frame,IDP2 frame
+  FS3  IDP3..7 frames; field5 has no destination
+  FS4  SPORT6/7 frames; fields2..5 have no destinations
+
+HWR A-128 FigureA-65 shades CLK4 bits14..10. The official21489 header
+instead assigns SPDIF_PLLCLK_I there (shift10); HWR14-14 separately describes
+an external S/PDIF PLL input. This disagreement is unresolved. The model
+retains the B-14 raw reset bits, refuses changes to that field and rejects its
+output query. It does not call the destination definitely nonexistent. Thus
+35 clock destinations and25 frame destinations are currently modeled. Full
+hardware acceptance still requires resolving this field. No manufacturer
+macro/source implementation is reused; pinned header metadata is in
+reference/sharc.json. CLK5 shifts are independently corroborated there.
+
+Delivered configuration and signal effects are separate. HWR10-33 gives
+2..3 PCLK effect latency. Before two elapsed periods the old route applies;
+from two until three both routes remain possible; at three the new route is
+guaranteed. Equal known source levels remain known during the middle interval.
+Live source changes are observed through both possibilities, never frozen at
+configuration time. Full and half-PCLK APIs retain exact fractional age per
+pending word; zero/large intervals and mixed calls do not invent time.
+
+MemoryDevice transactions stage target configuration; committed outputs do
+not expose tentative writes. Idle snapshots retain routes, pending half-period
+ages and explicit inputs. Restore checks source restrictions, unused registers,
+intervals and the unresolved PLL field. External inputs/clocks/snapshots reject
+active transactions. Source updates are independent from configuration clocks.
+Raw reserved bits outside real fields read back unchanged after a write.
+
+As in the enable router, unsettled guest readback, overlapping writes and
+stopped-DAI composition remain explicit unqualified paths. These guards are
+emulator gaps, not claims that valid original operations fail on silicon.
+The separate IOP bridge supplies real4/5-clock posted stores and7/8-clock
+reads. Its owner advances elapsed effect intervals before new deliveries.
+Normal routing/effect updates use fixed state without allocation.
+
+Owned checks list eleven reset words and independent default source identities,
+exercise all valid source encodings across the35/25 destinations, distinguish
+frame27 from clock27, and check unknown/live/equal/unequal signals, exact full/
+half intervals, independent word ages, restore, transactions and malformed/
+gated/unqualified accesses. Actual native stores and loads through the bridge
+select IDP0 clock from PB11 and frame from PB12; both signals remain unknown
+until explicit external levels are supplied. Tests do not infer pad voltage.
+
+The optional original reference retains its native/common-clock/power and
+48-instruction PBEN prefix. Twelve more actual instructions execute the
+CLK2/FS2 groups using actual reads, literal masks and distinct stores. Raw
+words become3de57bde/3de5fbde: IDP0 clock/frame select PB11/PB12 respectively.
+Both signals remain unknown; no external levels are supplied. All ten prior
+writes have matured before the next actual unsupported IDP_PP_CTL read at24b1,
+at original PCs1c5c36/1c5bbe/1c07fd/1c06c9. Explicit5/8-clock inputs give178
+bridge clocks including that failed read. CPU/IAB/SYSCTL/SPI remain unchanged.
+
+The static SRU-only projection omits intervening non-SRU operations; the next
+DPI group is not the next actual instruction. IDP_PP_CTL precedes SRU2_PIN0.
+The owner exposes disjoint DAI/DPI views of one bridge in preparation for
+those original DPI accesses; no DPI register/data or successful operation
+is fabricated. This is an instruction-order reference, not physical timing.
+
+Complete five-stage native/VISA timing, physical phase, DPI/data/pad/peripheral
+coupling, original boot and all instrument/host/audio/USB/UI/storage/update/
+hardware acceptance remain open. The complete objective is unchanged.
+
+  cmake --build --preset strict --target lead-a1-sharc-dai-timing-test format-check
+  ctest --preset strict -R '^sharc_dai_clock_frame_routing$' --output-on-failure

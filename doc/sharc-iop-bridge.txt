@@ -32,6 +32,15 @@ Restore checks request pairing, queue continuity, timing and history. Clock
 events, issue and snapshots reject active transactions. Normal queue/clock
 operations use fixed state and do not allocate.
 
+SharcIopPort exposes a disjoint core mapping inside the same bridge span.
+It translates relative byte offsets to the bridge's logical address domain;
+it has no separate queue, clock or response. Thus a DPI read drains earlier
+DAI writes, and a port cannot consume another port's response. Each view
+maps once and shares the bound core's transaction; multiple peripheral
+accesses inside a single unqualified CPU transaction still reject. Invalid
+view spans, offsets, widths and construction during a transaction reject.
+Core/backend/port mappings must be restored together with the bridge state.
+
 When composing a core/PCLK ratio of2 with PMCTL1 and DAI effects, advance the
 elapsed half-PCLK interval before tick delivers a new write. A write arriving
 on that edge must not age during the interval preceding its arrival. The
@@ -58,14 +67,18 @@ no-clock delivery retry, queue/response restores and malformed ownership,
 requests and snapshots. A real DAI read/mask/OR/store/read composition advances
 effect intervals before deliveries, including a half-period arrival.
 
-The optional original reference uses explicit5/8-clock inputs for eight actual
-PBEN2/PBEN3 groups (48 instructions) after its unchanged power checkpoint.
-At the next SRU_CLK2 read at2432 all eight writes have matured. With these
-inputs144 bridge clocks have elapsed, including the failing ninth read;
+The optional original reference uses explicit5/8-clock inputs for ten actual
+PBEN2/PBEN3/CLK2/FS2 groups (60 instructions) after its unchanged power checkpoint.
+At the next IDP_PP_CTL read at24b1 all ten writes have matured. With these
+inputs178 bridge clocks have elapsed, including the failing eleventh read;
 its CPU/IAB remain unchanged and the original issuing PC is retained.
 This is instruction-order evidence with a stated local clock origin; it does
 not resolve native/VISA Address timing, unknown global phase or physical SPI
 overlap. Earlier native candidate input and ordinary payload checks stay intact.
+Disjoint2400..24ff and1c00..1cff views share span1c00..24ff. Existing direct
+PMCTL/power handling in the separate common prefix remains explicit; this
+reference does not assert that those paths already have complete IOP timing.
+Port views solve address/queue composition, not that remaining clock gap.
 
   cmake --build --preset strict --target lead-a1-sharc-iop-bridge-test format-check
   ctest --preset strict -R '^sharc_iop_posted_control_transfers$' --output-on-failure

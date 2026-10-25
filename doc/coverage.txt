@@ -81,7 +81,14 @@ ID  State    Evidence / remaining work
              backend and CPU transactions have separate rollback. Snapshot and
              half-PCLK effect APIs retain fractional progress. Exact physical
              phase, FIFO/buffer waits and full five-stage composition remain
-             open (sharc-iop-bridge.txt). Native count loops of at least five instructions
+             open (sharc-iop-bridge.txt). Disjoint address views now share one
+             bridge queue/clock/response across DAI and DPI; no second timing
+             domain or fabricated data is introduced. A separate DAI clock/frame
+             router models six CLK and five FS registers,35/25 destinations,
+             optional source levels, correct distinct code27 behavior and2..3
+             PCLK effects. CLK4's conflicting PLL field stays explicitly guarded.
+             Full pad/IDP/SPORT/clock/board coupling remains open
+             (sharc-dai-timing.txt). Native count loops of at least five instructions
              execute ordinary CALL/RTS, nested callees and conditional polling;
              final e-3 pre-pop, PCSTK/PCSTKP reads and failed pre-pop/pending-effect
              rollback have independent tests (sharc-long-loops.txt). Other loop
@@ -655,13 +662,20 @@ ID  State    Evidence / remaining work
              core work before delivery, read capture,11..13-clock write/read
              bounds, delivery faults/retry without extra clocks, separately
              restored owners, malformed requests/state and transaction guards.
-             The original reference adds48 actual instructions through eight
-             PBEN2/PBEN3 read/AND/OR/write groups using explicit5/8-clock inputs.
+             The original reference adds60 actual instructions through ten
+             PBEN2/PBEN3/CLK2/FS2 read/AND/OR/write groups using explicit5/8 inputs.
              Intermediate raw words include signed Type17b masks; the next
-             unsupported target is SRU_CLK2 at2432. CPU/IAB/SYSCTL/SPI remain
+             unsupported target is IDP_PP_CTL at24b1. CPU/IAB/SYSCTL/SPI remain
              unchanged on that failed delivery, after prior writes really drain.
              The earlier pending PBEN2 read is now executed with real timing;
              exact physical phase is still unqualified (sharc-iop-bridge.txt).
+             Independent clock/frame checks cover eleven reset words, all valid
+             sources,35/25 destinations, dynamic/unknown/equal/unequal routes,
+             fractional intervals, restore, malformed/gated/transaction paths
+             and actual CPU store/read composition. Shared-port tests prove
+             cross-view write spacing/draining, response ownership, rollback
+             and independently restored queue/target state. Physical wiring and
+             IDP/SPORT behavior are not inferred from these logical components.
              No clocked VISA boot or complete application is qualified.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

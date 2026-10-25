@@ -51,8 +51,9 @@ PBEN3 progresses1d71f79b ->1d71f780 ->1d71f000 ->1d700000 ->1d000000 ->0.
 Its FFC0/F03F Type17b masks are sign extended; repeated reads come from the
 actual delivered peripheral, with no collapsed writes or invented readback.
 The previously guarded immediate PBEN2 read now completes after documented
-bridge delays. The next unsupported target is SRU_CLK2 at2432, with original
-PCs1c5c1a/1c5ba2/1c07e1/1c06ad. All prior writes have matured at that failure.
+bridge delays. The following CLK2/FS2 groups now execute using the timing
+router (sharc-dai-timing.txt). The next unsupported target is IDP_PP_CTL at24b1,
+with original PCs1c5c36/1c5bbe/1c07fd/1c06c9. All prior writes have matured.
 
 The reference uses explicit5-clock write/8-clock read timing inputs, not a
 physical Nord phase. Component tests cover both documented bounds and actual
