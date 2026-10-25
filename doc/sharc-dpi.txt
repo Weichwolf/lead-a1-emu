@@ -51,11 +51,15 @@ correct settled route. These tests do not establish physical Nord timing.
 
 The separate original_sharc_clocked_iop fixture executes both actual6-instruction
 RMW groups, followed by zero USTAT1. A separate static field decoder over all
-four pinned original slices and PGR12-12/Type15b establish maskFFFFF03F and
-OR operands0540/0280: the PIN/PBEN field6..11 selects SPI_CLK_O/SPI_CLK_PBEN_O.
+four pinned original slices and PGR12-12/Type17b establish the encoded16-bit
+fieldF03F and OR operands0540/0280. HWR TablesA-113/114 name PIN selector21
+SPI_MISO_O and PBEN selector10 SPIMISO_PBEN_O, at field6..11 for DPI pin2.
+The maskFFFFF03F follows the model's sign-extension assumption, not an explicit
+extension rule in PGR9-62; see sharc-visa-execution.txt for that open evidence gap.
 Literal AND results18017016/0d00c00b and final18017556/0d00c28b are checked,
 including every R0/R1 value, mixed width/PC and real posted write. These are
-idempotent changes for the explicit family inputs, not observed Nord pad levels.
+idempotent results under that assumption and the explicit family inputs, not
+independent silicon arithmetic or observed Nord pad levels.
 The profile reaches95 application instructions/240 local CCLK with the last
 PBEN0 write still posted. The next actual SPIDMAC1084 store requires a timed
 SPI binding; its precise failure preserves CPU/IAB/queue/SPI/router state.

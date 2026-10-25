@@ -686,8 +686,13 @@ ID  State    Evidence / remaining work
              VISA tests add44 literal length formats, split/mixed-width data,
              full IAB/delay retention, changed RAM, separate-owner restores,
              unknown/permission faults and repair, malformed continuity and
-             cross-block rejection. All8 candidate original runs separately
-             read their first three VISA entries, preserve native resources,
+             cross-block rejection.
+             Type17b upper16-bit sign extension remains a model assumption;
+             PGR9-62 confirms the form but not that rule. Signed-edge/full-mask
+             original RMW expectations do not prove it independently
+             (sharc-visa-execution.txt).
+             All8 candidate original runs separately read their first three
+             VISA entries, preserve native resources,
              then execute the actual JUMP at8c005 and first VISA CALL through
              the clocked transport. Eight further grants retire those two
              instructions and reach common entry1c0528 with its real frame.

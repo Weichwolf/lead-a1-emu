@@ -1129,7 +1129,8 @@ void original_application_dpi(lead_a1::SharcMemory &memory,
                               SerialInput &serial,
                               HeaderDevices devices) {
   require(devices.bridge != nullptr && devices.dpi_pin != nullptr && devices.dpi_enable != nullptr);
-  // Static original fields checked independently against PGR12-12/Type15b:
+  // Static original fields: PGR12-12/Type17b; signed extension is a model
+  // assumption still needing an independent rule (sharc-visa-execution.txt).
   // R1=-4033, R0&=R1, R1=1344/640, R0|=R1. These restore field6..11.
   constexpr std::uint32_t mask = 0xfffff03f;
   constexpr std::uint32_t pin_select = 0x540;

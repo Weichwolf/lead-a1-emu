@@ -29,6 +29,14 @@ short-loop bodies to remain uncompressed. Begin/end increments use the real
 short-word length; native counter behavior retains its one-word default.
 General mixed-width loops, PC-stack DB arbitration and cache timing are open.
 
+Type17b's16-bit immediate is currently sign-extended by the model. PGRrev2.4
+9-62/10-23 confirms the operand/register form but does not explicitly state
+the upper16-bit extension rule. The signed-edge tests and original full-mask
+RMW results therefore check that model assumption; they do not independently
+prove the extension on silicon. A precise primary rule or independent simulator/
+hardware observation remains required. Do not infer the rule from desired
+idempotence or change the original operand/instruction to obtain it.
+
 This API is an instruction-order reference, not the five-stage native/VISA
 fetch/branch connection. Buffer capture/Decode events remain explicit owner
 inputs. It does not certify global clocking, automatic cache/port grants or
