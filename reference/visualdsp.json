@@ -37,6 +37,11 @@
       "path": "214xx/ldr/489_spi/489_spi.asm",
       "bytes": 23249,
       "sha256": "283b966e6f1f5238a2d019bf3517c0b3b9987be64163ac66db33f3d5d816927f"
+    },
+    {
+      "path": "214xx/include/sru21489.h",
+      "bytes": 154418,
+      "sha256": "6a74d65ab34b9703d4e3fea20a27b905bb097611fc20307384ac1a4e50858c76"
     }
   ],
   "limits": "Presence of target headers/simulator DLLs is not simulator, peripheral or silicon qualification. Actual assembler/simulator use and independent case results must be recorded separately.",

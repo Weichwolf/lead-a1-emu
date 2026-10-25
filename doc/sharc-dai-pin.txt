@@ -1,0 +1,55 @@
+DAI Group D pin-data routing reference
+
+SharcDaiPin maps IOP2460..2464, five words containing four7-bit selectors
+for20 pin-buffer input destinations. HWRrev1.1 A-138..143/TableA-79 and
+FiguresA-79..83 establish the source/destination fields; B-14 supplies the
+five raw family reset words. PIN4 bits28/29 invert destinations19/20.
+Other high bits remain stored independently of the routing fields.
+
+Dynamic source codes are00..31,34..3b,3d..4d,50..53 (79 inputs). Reserved
+codes32/33,3c,4e/4f,54..7d reject.7e/7f select LOW/HIGH. The manual's binary
+strings for hex51/52 disagree with its hexadecimal column. The official
+VisualDSP5.1.2 sru21489.h corroborates hex51/52 and inversion shifts28/29;
+its size/hash is pinned in reference/visualdsp.json. Only factual metadata
+is reused; manufacturer headers remain local. Manual hashes/provenance are
+in reference/sharc.json. No assembler/simulator execution is implied.
+
+Sources are optional live Boolean inputs. A missing source remains unknown,
+including after inversion. Pin-buffer drive composes these routed levels
+with separate SharcDaiEnable outputs into high/low/high-impedance/unresolved
+masks. Routing output, drive and sampled physical pad are separate. No pad
+feedback, voltage, pull resistor, physical board wiring or source clock is
+inferred from a selector. The owner must connect observed signals explicitly.
+
+Delivered writes capture routing and inversion together. HWR10-33 effects
+use2..3 PCLK: before2 old outputs remain; at2..3 old/new possibilities are
+retained; at3 the target is guaranteed. Equal known live inputs stay known
+in the intermediate interval. Half-period ages survive snapshots and mixed
+full/half-period clocks. Different register words age independently. Reads
+and overlapping writes while an effect is pending remain explicit timing
+guards. A stopped DAI clock also rejects access/output/advance pending a
+qualified gated composition. These are remaining model gaps to correct when
+required by original operation, not asserted hardware rejection rules.
+
+MemoryDevice transactions stage words/ages, with committed outputs isolated
+from tentative writes. Source/clock/snapshot events reject active transactions.
+Malformed selectors, pending intervals and reserved input slots reject.
+Normal clock/signal operations use fixed state and do not allocate.
+
+Owned tests list all81 valid selectors independently, exercise1782 source/
+destination/inversion selections with low/high/unknown inputs, five reset
+words/default sources, all reserved codes, inversion/effect intervals, raw
+reserved bits, live equal/unequal routes, fractional independent restores,
+clock gates, drive masks and transaction ownership. Actual fetched native
+4/5-write7/8-read cases preserve a stored value across later CPU source change,
+then compose pin/enable delivery and drive. Late backend write failure retains
+CPU/fetch/queue/target, and retry_due delivers at the same elapsed clock.
+
+The original clocked IOP owner now includes this backend and advances its
+half-PCLK intervals before new bus deliveries. Its extended application
+reference checks actual pin/frame/enable RMW groups and the next unmapped
+DAI Group B data register. Complete startup, SPORT/PCG/source coupling,
+physical comparisons, host MIDI/audio/USB and parameter readback remain open.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_dai_pin_(data_routing|posted_io)|original_sharc_clocked_iop|native_build)$' --output-on-failure

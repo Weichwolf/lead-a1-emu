@@ -115,7 +115,14 @@ ID  State    Evidence / remaining work
              state and high/low/high-impedance/unresolved drive composition.
              No guessed DAI gate or pad feedback is applied to DPI. INPUT/pad
              sampling/interrupts and full peripheral coupling remain open
-             (sharc-dpi.txt). A separate PDAP receiver now captures
+             (sharc-dpi.txt). DAI GroupD pin-data routing now maps five
+             seven-bit-selector words for20 destinations,79 optional dynamic
+             sources, LOW/HIGH, reserved holes and PIN4 inversion19/20. Raw
+             reset/reserved state,2..3-PCLK effects, fractional ages, transaction
+             isolation and separate high/low/HiZ/unresolved drive composition
+             have owned checks. Pad feedback, source/peripheral/board coupling,
+             stopped-clock and unsettled readback remain explicit gaps
+             (sharc-dai-pin.txt). A separate PDAP receiver now captures
              explicit known DAI/AMI inputs on selected clock edges, preserves
              HOLD/partial words and implements four pack formats, an eight-word
              FIFO, overflow/threshold requests, W1S commands and delayed disable.
@@ -588,8 +595,8 @@ ID  State    Evidence / remaining work
              The separate clocked IOP profile now preserves actual native
              posted SPI setup, all ordinary records/final-cell checks and384
              vector words through original P1I/RTI/native-VISA transition.
-             Its application reference reaches128/104 original instructions
-             and the real unbound SRU_PIN0/2460 read; no full cold boot or
+             Its application reference reaches176/140 original instructions
+             and the real unbound SRU_DAT0/1 read at2440/2441; no full cold boot or
              manual-function acceptance follows (sharc-iop-bridge.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
 5   pending  No firmware audio, audio serial/DMA model, host audio or timing evidence.
@@ -804,13 +811,25 @@ ID  State    Evidence / remaining work
              the completed vector cursor92180 or serial state. Five/single
              further six-instruction SRU RMW groups have independent original
              PC/width/operand and family-reset intermediate expectations.
-             All8 placements/cadences reach128/104 application instructions;
-             the next actual SRU_PIN0/2460 read (+279/+228) remains unbound.
-             Its due failure preserves CPU/IAB/exact read with no response,
-             while earlier writes have genuinely drained/matured. No PIN value
-             is invented. Complete startup, native PMCTL/core-IOP timing,
+             The earlier128/104 checkpoints enter the actual DAI GroupD
+             backend and preserve those SPI-route expectations after the first
+             PIN0 read, before later RMWs change them. Eight/six further RMW
+             groups check every PC/width/R0/R1 and posted value against original
+             fields and explicit family inputs. All8 placements/cadences reach
+             176/140 application instructions. The next genuine unmapped
+             DAT0/2440 (+383) or DAT1/2441 (+302) read retains CPU/IAB/exact due
+             request without a response, after prior writes drain/mature.
+             Literal final pin/frame/enable state and retained SPI4d14/cursor
+             92180 are checked. No data value is invented. Complete startup, native PMCTL/core-IOP timing,
              internal RAM-port/DMA arbitration, physical F2/phase and board
              coupling remain gaps (sharc-iop-bridge.txt).
+             DAI pin checks independently enumerate81 valid selectors and1782
+             source/destination/inversion selections with low/high/unknown
+             signals, all reserved codes, five reset words/default sources,
+             literal effect intervals, reserved bits, gates and independent
+             fractional restores. Real fetched4/5-write7/8-read compositions
+             retain source capture and pin/enable drive masks; late target
+             faults abort staged routing and retry without extra elapsed time.
              DPI tests add independent source/reset tables for all14 outputs,
              literal half-period phases, live equal/unknown routes, reserved
              inputs/readback, fractional independent restore, transactions and

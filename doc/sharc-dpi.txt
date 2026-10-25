@@ -62,9 +62,10 @@ idempotent results under that assumption and the explicit family inputs, not
 independent silicon arithmetic or observed Nord pad levels.
 The95-application-instruction/240-local-CCLK checkpoint retains its last PBEN0
 write as genuinely posted. The continuous timed SPI owner now executes the
-following SPIDMAC/SPICTL setup and further SRU groups. The next unbound target
-is DAI SRU_PIN0/2460; see sharc-iop-bridge.txt for the128/104-instruction
-profiles and their exact due-read failure. This is not complete startup.
+following SPIDMAC/SPICTL setup and further DAI pin/frame/enable groups.
+The next unbound targets are SRU_DAT0/2440 and SRU_DAT1/2441; see
+sharc-iop-bridge.txt for the176/140-instruction profiles and exact due-read
+failure. This is not complete startup.
 See sharc-iop-bridge.txt for timing inputs and earlier-stage gaps.
 
   cmake --build --preset strict

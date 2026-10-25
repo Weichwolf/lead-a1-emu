@@ -7,6 +7,7 @@
 #include "sharc/peripherals/sharc_clock.hpp"
 #include "sharc/peripherals/sharc_control.hpp"
 #include "sharc/peripherals/sharc_dai_enable.hpp"
+#include "sharc/peripherals/sharc_dai_pin.hpp"
 #include "sharc/peripherals/sharc_dai_timing.hpp"
 #include "sharc/peripherals/sharc_dpi_routing.hpp"
 #include "sharc/peripherals/sharc_pdap.hpp"
@@ -392,6 +393,7 @@ struct HeaderDevices {
   Placement placement{};
   lead_a1::SharcPower *power{};
   lead_a1::SharcDaiEnable *dai{};
+  lead_a1::SharcDaiPin *pin_routes{};
   lead_a1::SharcDaiTiming *clock_routes{};
   lead_a1::SharcDaiTiming *frame_routes{};
   lead_a1::SharcPdap *pdap{};
@@ -412,9 +414,11 @@ void advance_bound_peripherals(HeaderDevices devices) {
   if (devices.profile != OriginalProfile::clocked_iop) { return; }
   require(devices.bridge != nullptr && devices.power != nullptr && devices.dai != nullptr &&
           devices.clock_routes != nullptr && devices.frame_routes != nullptr &&
-          devices.pdap != nullptr && devices.dpi_pin != nullptr && devices.dpi_enable != nullptr);
+          devices.pdap != nullptr && devices.dpi_pin != nullptr && devices.dpi_enable != nullptr &&
+          devices.pin_routes != nullptr);
   devices.power->advance_half_pclk(1);
   devices.dai->advance_half_pclk(1);
+  devices.pin_routes->advance_half_pclk(1);
   devices.clock_routes->advance_half_pclk(1);
   devices.frame_routes->advance_half_pclk(1);
   devices.pdap->advance_cclk(1);
@@ -1168,7 +1172,10 @@ struct OriginalRmw {
   std::uint32_t selected;
   std::uint32_t cleared;
   std::uint32_t result;
+  bool verify_spi_checkpoint{};
 };
+
+void check_post_spi_outputs(HeaderDevices devices);
 
 void original_post_spi_group(lead_a1::SharcMemory &memory,
                              lead_a1::Sharc &cpu,
@@ -1193,6 +1200,7 @@ void original_post_spi_group(lead_a1::SharcMemory &memory,
     }
     const auto step = original_application_retire(memory, cpu, fetch, serial, devices);
     require(step.pc == pc && step.address_units == group.widths[index]);
+    if (index == 0 && group.verify_spi_checkpoint) { check_post_spi_outputs(devices); }
     require(cpu.state().data[0][0] ==
             (lead_a1::SharcKnown40{.value = std::uint64_t{r0[index]} << 8, .known = full40}));
     require(cpu.state().data[0][1] ==
@@ -1217,23 +1225,38 @@ bool uses_clock_initializer(Placement placement) {
   return false;
 }
 
-void original_pin_boundary(lead_a1::SharcMemory &memory,
-                           lead_a1::Sharc &cpu,
-                           lead_a1::SharcFetch &fetch,
-                           SerialInput &serial,
-                           HeaderDevices devices) {
+void check_post_spi_outputs(HeaderDevices devices) {
+  const bool clocks = uses_clock_initializer(devices.placement);
+  constexpr std::uint32_t clock_result = 0x252ef7bd;
+  constexpr std::uint32_t clock_reset = 0x252630c2;
+  constexpr std::uint32_t enable_clock_result = 0x0e2412ca;
+  constexpr std::uint32_t enable_other_result = 0x0e2482c1;
+  const auto enables = devices.dai->snapshot();
+  const auto timing = devices.clock_routes->snapshot();
+  require(!enables.pending[0] &&
+          enables.routes[0] == (clocks ? enable_clock_result : enable_other_result));
+  require(!timing.pending[0] && timing.routes[0] == (clocks ? clock_result : clock_reset));
+}
+
+void original_data_boundary(lead_a1::SharcMemory &memory,
+                            lead_a1::Sharc &cpu,
+                            lead_a1::SharcFetch &fetch,
+                            SerialInput &serial,
+                            HeaderDevices devices) {
   original_application_prepare(memory, cpu, fetch, serial, devices);
-  constexpr std::uint32_t pin0 = 0x2460;
-  const auto pc =
-      devices.placement.second_call + (uses_clock_initializer(devices.placement) ? 279U : 228U);
+  const bool clocks = uses_clock_initializer(devices.placement);
+  constexpr std::uint32_t first_data = 0x2440;
+  constexpr std::uint32_t second_data = 0x2441;
+  const auto data_word = clocks ? first_data : second_data;
+  const auto pc = devices.placement.second_call + (clocks ? 383U : 302U);
   const auto access = fetch.peripheral_access(cpu);
   require(access == (lead_a1::SharcFetchIopAccess{
-                        .pc = pc, .address = pin0, .operation = lead_a1::AccessKind::read}));
+                        .pc = pc, .address = data_word, .operation = lead_a1::AccessKind::read}));
   const auto core = cpu.state();
   const auto pipeline = fetch.state();
   std::ostringstream prefix;
-  prefix << "SHARC IOP bridge pc=0x" << std::hex << pc
-         << " word-address=0x2460 operation=read cclk=";
+  prefix << "SHARC IOP bridge pc=0x" << std::hex << pc << " word-address=0x" << data_word
+         << " operation=read cclk=";
   bool stopped{};
   try {
     static_cast<void>(original_application_retire(memory, cpu, fetch, serial, devices));
@@ -1248,7 +1271,8 @@ void original_pin_boundary(lead_a1::SharcMemory &memory,
   const auto bus = devices.bridge->snapshot();
   require(stopped && cpu.state() == core && fetch.state() == pipeline && !memory.active() &&
           bus.write_count == 0 && bus.request && bus.request->pc == pc &&
-          bus.request->address == pin0 && bus.request->operation == lead_a1::AccessKind::read &&
+          bus.request->address == data_word &&
+          bus.request->operation == lead_a1::AccessKind::read &&
           bus.request->delivery_cycles == 8 && bus.read && bus.read->started_at &&
           !bus.read->response && bus.clocks == *bus.read->started_at + 8 &&
           !devices.bridge->ready() && !devices.bridge->waiting());
@@ -1257,6 +1281,165 @@ void original_pin_boundary(lead_a1::SharcMemory &memory,
   require(devices.spi.state().port_control == configured && devices.spi.state().control == 0 &&
           devices.spi.state().serial.remaining == 0 &&
           devices.spi.state().serial.next_word == vector_end);
+}
+
+constexpr std::array<OriginalRmw, 8> pin_clock_groups{{
+    {.offset = 279,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2460,
+     .initial = 0x4c80a94,
+     .mask = 0xffe03fff,
+     .selected = 0xe4000,
+     .cleared = 0x4c00a94,
+     .result = 0x4ce4a94,
+     .verify_spi_checkpoint = true},
+    {.offset = 293,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2450,
+     .initial = 0x2736b4e3,
+     .mask = 0xfffffc1f,
+     .selected = 0x3a0,
+     .cleared = 0x2736b403,
+     .result = 0x2736b7a3},
+    {.offset = 305,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2450,
+     .initial = 0x2736b7a3,
+     .mask = 0xfff07fff,
+     .selected = 0xe8000,
+     .cleared = 0x273037a3,
+     .result = 0x273eb7a3},
+    {.offset = 319,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2450,
+     .initial = 0x273eb7a3,
+     .mask = 0xffffffe0,
+     .selected = 0x1d,
+     .cleared = 0x273eb7a0,
+     .result = 0x273eb7bd},
+    {.offset = 331,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2450,
+     .initial = 0x273eb7bd,
+     .mask = 0xffff83ff,
+     .selected = 0x7400,
+     .cleared = 0x273e83bd,
+     .result = 0x273ef7bd},
+    {.offset = 343,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2478,
+     .initial = 0xe2412ca,
+     .mask = 0xff03ffff,
+     .selected = 0x40000,
+     .cleared = 0xe0012ca,
+     .result = 0xe0412ca},
+    {.offset = 357,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2460,
+     .initial = 0x4ce4a94,
+     .mask = 0xf01fffff,
+     .selected = 0x7600000,
+     .cleared = 0xe4a94,
+     .result = 0x76e4a94},
+    {.offset = 371,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0xe0412ca,
+     .mask = 0xffffffc0,
+     .selected = 0x0,
+     .cleared = 0xe0412c0,
+     .result = 0xe0412c0},
+}};
+
+constexpr std::array<OriginalRmw, 6> pin_other_groups{{
+    {.offset = 228,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2460,
+     .initial = 0x4c80a94,
+     .mask = 0xffffff80,
+     .selected = 0x14,
+     .cleared = 0x4c80a80,
+     .result = 0x4c80a94,
+     .verify_spi_checkpoint = true},
+    {.offset = 240,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0xe2482c1,
+     .mask = 0xfffff03f,
+     .selected = 0x40,
+     .cleared = 0xe248001,
+     .result = 0xe248041},
+    {.offset = 252,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2460,
+     .initial = 0x4c80a94,
+     .mask = 0xffffc07f,
+     .selected = 0xa80,
+     .cleared = 0x4c80014,
+     .result = 0x4c80a94},
+    {.offset = 264,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2478,
+     .initial = 0xe248041,
+     .mask = 0xc0ffffff,
+     .selected = 0x1000000,
+     .cleared = 0x248041,
+     .result = 0x1248041},
+    {.offset = 278,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2461,
+     .initial = 0x4e84b96,
+     .mask = 0xffffff80,
+     .selected = 0x18,
+     .cleared = 0x4e84b80,
+     .result = 0x4e84b98},
+    {.offset = 290,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2479,
+     .initial = 0x1348d30f,
+     .mask = 0xffffffc0,
+     .selected = 0x0,
+     .cleared = 0x1348d300,
+     .result = 0x1348d300},
+}};
+
+void original_pin_boundary(lead_a1::SharcMemory &memory,
+                           lead_a1::Sharc &cpu,
+                           lead_a1::SharcFetch &fetch,
+                           SerialInput &serial,
+                           HeaderDevices devices) {
+  const bool clocks = uses_clock_initializer(devices.placement);
+  const auto groups = clocks ? std::span<const OriginalRmw>(pin_clock_groups)
+                             : std::span<const OriginalRmw>(pin_other_groups);
+  for (const auto &group : groups) {
+    original_post_spi_group(memory, cpu, fetch, serial, devices, group);
+  }
+  original_data_boundary(memory, cpu, fetch, serial, devices);
+  const auto pins = devices.pin_routes->snapshot();
+  const auto enables = devices.dai->snapshot();
+  const auto frames = devices.frame_routes->snapshot();
+  constexpr std::uint32_t pin_clock_result = 0x076e4a94;
+  constexpr std::uint32_t pin_other_result = 0x04c80a94;
+  constexpr std::uint32_t pin1_other_result = 0x04e84b98;
+  constexpr std::uint32_t pin1_reset = 0x04e84b96;
+  constexpr std::uint32_t enable_clock_result = 0x0e0412c0;
+  constexpr std::uint32_t enable_other_result = 0x01248041;
+  constexpr std::uint32_t enable1_other_result = 0x1348d300;
+  constexpr std::uint32_t enable1_reset = 0x1348d30f;
+  constexpr std::uint32_t frame_clock_result = 0x273ef7bd;
+  constexpr std::uint32_t frame_reset = 0x2736b4e3;
+  require(!pins.pending[0] && !pins.pending[1] &&
+          pins.routes[0] == (clocks ? pin_clock_result : pin_other_result) &&
+          pins.routes[1] == (clocks ? pin1_reset : pin1_other_result));
+  require(!enables.pending[0] && !enables.pending[1] &&
+          enables.routes[0] == (clocks ? enable_clock_result : enable_other_result) &&
+          enables.routes[1] == (clocks ? enable1_reset : enable1_other_result));
+  require(!frames.pending[0] && frames.routes[0] == (clocks ? frame_clock_result : frame_reset));
+  constexpr unsigned int earlier_clock = 128;
+  constexpr unsigned int earlier_other = 104;
+  const auto instructions = (clocks ? earlier_clock : earlier_other) + (6 * groups.size());
+  std::cout << "  Clocked application:" << instructions
+            << " actual instructions; DAI pin routing; DAT0/1 read remains unbound\n";
 }
 
 void original_post_spi_routing(lead_a1::SharcMemory &memory,
@@ -1323,19 +1506,12 @@ void original_post_spi_routing(lead_a1::SharcMemory &memory,
     original_post_spi_group(memory, cpu, fetch, serial, devices, enable_group);
   }
   original_pin_boundary(memory, cpu, fetch, serial, devices);
-  const auto enables = devices.dai->snapshot();
-  const auto timing = devices.clock_routes->snapshot();
-  require(!enables.pending[0] &&
-          enables.routes[0] == (clocks ? clock_groups.back().result : enable_group.result));
-  require(!timing.pending[0] &&
-          timing.routes[0] == (clocks ? clock_groups[3].result : clock_groups[0].initial));
   constexpr unsigned int earlier_instructions = 95;
   constexpr unsigned int spi_instructions = 3;
   const auto instructions =
       earlier_instructions + spi_instructions + (6 * (clocks ? clock_groups.size() : 1U));
-  std::cout << "  Clocked application:" << instructions
-            << " actual instructions; real SPI configuration and further SRU RMWs; PIN0 at2460 "
-               "remains unbound\n";
+  std::cout << "  Earlier SPI checkpoint:" << instructions
+            << " actual instructions through SPI and initial SRU groups\n";
 }
 
 void original_application_spi_boundary(lead_a1::SharcMemory &memory,
@@ -1912,6 +2088,7 @@ void sequenced_first_header(lead_a1::SharcMemory &memory,
 struct OriginalRouting {
   lead_a1::SharcPower power;
   lead_a1::SharcDaiEnable dai{power};
+  lead_a1::SharcDaiPin pins{power};
   lead_a1::SharcDaiTiming clocks{power, lead_a1::SharcDaiTimingGroup::clock};
   lead_a1::SharcDaiTiming frames{power, lead_a1::SharcDaiTimingGroup::frame};
   lead_a1::SharcPdap pdap{power};
@@ -1961,6 +2138,8 @@ struct OriginalRouting {
       memory.map_io(dma_window, spi_dma.emplace(bound, dma_window));
       constexpr lead_a1::SharcIoMapping power_window{.first_word = 0x2001, .words = 1};
       peripheral.map_io(power_window, power);
+      constexpr std::uint32_t dai_pin0 = 0x2460;
+      peripheral.map_io({.first_word = dai_pin0, .words = 5}, pins);
       constexpr std::uint32_t dpi_pin0 = 0x1c10;
       constexpr std::uint32_t dpi_pben0 = 0x1c20;
       peripheral.map_io({.first_word = dpi_pin0, .words = 3}, dpi_pin);
@@ -2058,6 +2237,7 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                           .placement = placement,
                           .power = &routing.power,
                           .dai = &routing.dai,
+                          .pin_routes = &routing.pins,
                           .clock_routes = &routing.clocks,
                           .frame_routes = &routing.frames,
                           .pdap = &routing.pdap,

@@ -177,11 +177,22 @@ reset words establish every intermediate. Conditional final raw CLK0/PBEN0
 words are252ef7bd/0e2412ca for transport0,252630c2/0e2482c1 for transport1.
 These program identities establish no physical processor/slot assignments.
 
-The resulting128/104-instruction application prefixes stop on the actual next
-SRU_PIN0/2460 read at second-CALL+279/+228. The unmapped backend failure
-retains CPU/IAB and the exact due read PC/address/operation with no response;
-prior posted writes have really drained and matured. No guessed PIN value
-or successful access is supplied. This is incomplete application startup.
+The128/104-instruction SPI checkpoints then enter the real DAI GroupD pin
+router at2460..2464 (sharc-dai-pin.txt). Eight further RMW groups in both
+transport0 programs update PIN0, FS0 and PBEN0; six in both transport1 programs
+update PIN0/PIN1 and PBEN0/PBEN1. Independent original fields/widths and HWR
+reset metadata establish all R0/R1/PC/post-value intermediates. The earlier
+CLK0/PBEN0 expectations are checked after the first actual PIN0 read drains
+them, before the new groups change those routes. Type17b mask arithmetic
+retains the same explicit qualification above.
+
+The resulting176/140-instruction application prefixes stop on the actual next
+GroupB data read: DAT0/2440 at second-CALL+383 for transport0, DAT1/2441 at+302
+for transport1. The unmapped backend failure retains CPU/IAB and the exact
+due read PC/address/operation with no response. Earlier writes have genuinely
+drained/matured; final pin/frame/enable words have literal expectations and
+SPI still retains control0/port4d14/cursor92180. No data value or successful
+access is fabricated. This is incomplete application startup.
 Earlier native PMCTL/core-IOP timing, independent prefetch/DMA holds, physical
 phase, SPI enable/flush timing and full board coupling remain separate gaps.
 
