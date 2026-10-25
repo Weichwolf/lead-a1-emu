@@ -19,7 +19,7 @@
       "local_copy_bytes": 18156850,
       "local_copy_sha256": "a9534d75e8946af83d5c9e250bb7e212224786b56977d6fec90d88e178f034dc",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified; no source reused.",
-      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals; A-4 reserved readback, A-8 PMCTL1 two-PCLK effect, A-11/13 shutdown/accelerator fields, 23-11 clocks enabled by default;12-8/16 PDAP clock/hold,masking,packing/core FIFO;12-20 full32-bit PDAP payload vs SIP tags;12-23/28 overflow/threshold/enable readiness;A-174/182 control/W1S/status fields,B-17 reset;3-4/15 SPORT index28/modifier16/count16/encodedCP29,3-26/35 unknown parameters/standard start/count0/chaining/index-address descending TCB,3-45/50 completion/PCI/26CCLK internalTCB,11-42/54 buffer+shifter/core-DMA/completion/insertion;11-4/36 standard and TDM framing/select/word formats,11-58 second-SCLK control effects/three-SCLK readiness, A-155/172 control/divisor/selection/error fields and six-CCLK disable flush,B-4/9 native pair map; internalFS four-SCLK activation remains unimplemented"
+      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals; A-4 reserved readback, A-8 PMCTL1 two-PCLK effect, A-11/13 shutdown/accelerator fields, 23-11 clocks enabled by default;12-8/16 PDAP clock/hold,masking,packing/core FIFO;12-20 full32-bit PDAP payload vs SIP tags;12-23/28 overflow/threshold/enable readiness;A-174/182 control/W1S/status fields,B-17 reset;3-4/15 SPORT index28/modifier16/count16/encodedCP29,3-26/35 unknown parameters/standard start/count0/chaining/index-address descending TCB,3-45/50 completion/PCI/26CCLK internalTCB,11-42/54 buffer+shifter/core-DMA/completion/insertion;11-4/36 standard and TDM framing/select/word formats,11-58 second-SCLK control effects/three-SCLK readiness, A-155/172 control/divisor/selection/error fields and six-CCLK disable flush,B-4/9 native pair map; internalFS four-SCLK activation remains unimplemented;2-3/5,A-14/18,B-17 PICR source mux,19 priorities,five-bit fields,disabled/software encodings and reset words; no physical mux latency established;15-4 PCG A/B self-input tie-low exceptions,15-19/20 PCG source-dependent startup/disable effects (clock generator still unimplemented)"
     },
     {
       "author": "Analog Devices",
@@ -746,7 +746,7 @@
       "0x01ef7bde",
       "0x000003de"
     ],
-    "sources": "0..19 DAI_PB01..20_O;20..25 SPORT0..5_CLK/FS_O;26 DIR_CLK/FS_O;27 clock DIR_TDMCLK_O but reserved in frame;28/29 PCG_CLKA/B or FSA/B;30/31 LOW/HIGH. Every dynamic input optional, not an inferred pad voltage or clock frequency",
+    "sources": "0..19 DAI_PB01..20_O;20..25 SPORT0..5_CLK/FS_O;26 DIR_CLK/FS_O;27 clock DIR_TDMCLK_O but reserved in frame;28/29 PCG_CLKA/B or FSA/B;30/31 LOW/HIGH. Every dynamic input optional, not an inferred pad voltage or clock frequency; HWR15-4 clock CLK4 field0/code28 and field1/code29 self-PCG feedback selections tie LOW, including pending-route evaluation",
     "destinations": {
       "clock_modeled": 35,
       "frame_modeled": 25,
@@ -840,17 +840,51 @@
     "original_reference": {
       "application_instructions": [
         358,
-        398
+        431
       ],
       "scope": "Four original programs at two SPI cadences,explicit family reset inputs and5/8 IOP timing,unmodified firmware",
       "checked": "Twelve SPCTLN groups,24 DMA parameter groups,24 TCBs plus cyclic partners,CS/SPMCTL/SPCTL setup; all original payload/vector/SPI/DAI checks retained",
       "serial_inputs": "Unknown; no SCLK supplied, no effective mode/DMA activation or firmware serial data claimed",
       "next_accesses": [
         "PCG_PW1/0x24c4 posted write",
-        "PICR0/0x2200 read"
+        "IDP_CTL1/0x24b2 DMA/ping-pong enable write after PICR setup"
       ]
     },
     "private_corroboration": "Static factual metadata at lead-a1-src dac415e5ddefafea6878f1139bd6b2b4b3881652 independently agrees for all24 DMA groups/TCBs/cyclic partners. No private source or original instruction bytes imported",
     "limits": "Internal clocks/FS,I2S/packed/loopback/companding,buffer error/ack/partial RX status,live reconfiguration,full DMA arbitration/interrupt/DAI/PCG/board coupling and physical timing remain open; no boot/audio/MIDI/USB/UI readback/storage/recovery/hardware qualification"
+  },
+  "picr_reference": {
+    "primary": "HWR2-3/5,A-14/18,B-17; PGR9-22,10-9/10 for following Type5b moves and A-4/6 MODE1",
+    "registers": [
+      "0x2200",
+      "0x2201",
+      "0x2202",
+      "0x2203"
+    ],
+    "reset": [
+      "0x0a418820",
+      "0x16a4a0e6",
+      "0x2307b9ac",
+      "0x12"
+    ],
+    "routing": "Nineteen priorities; first3 words contain6five-bit fields,finalword one. Constants disabled0x11/14/16/1e LOW andsoftware0x1f HIGH. All other source levels explicit/optional,including0DAIHI. Priority masks are not IRPTL bit numbers",
+    "state": "Committed logical mux,raw reserved bits retained,staged register transactions,independent source/snapshot ownership; physical effect and IRQ sampling latency unqualified",
+    "owned_evidence": "1824 literal source/destination/level cases;reset,duplicate routing,unknown/live/constant sources,reserved bits,transactions,independent restore,malformed inputs;actual fetched4/5write7/8read source capture and late-target rollback/no-time retry",
+    "original_reference": {
+      "scope": "Four original programs at two SPI cadences,unchanged firmware; real SPI source1 mux to existing P1I event path",
+      "transport1_additional_instructions": 33,
+      "application_instructions": [
+        358,
+        431
+      ],
+      "PICR0": [
+        "0x0a418820",
+        "0x0a418020",
+        "0x0a41b020"
+      ],
+      "following": "MODE1 RND32 clear/CBUFEN set,save/secondary register setup/restore,IDP_CTL0/CTL1 programming",
+      "next_access": "Posted IDP_CTL1/24b2=0x10101 write at secondCall+987 fails after later indexB+999/2418 store retires; all3 writes remain,CPU/fetch retained at+1002,no core request"
+    },
+    "limits": "No general core priority entry/level sampling/DAI-DPI aggregation/physical mux phase,PCG/IDP DMA,full cold boot,audio/MIDI/USB/observedUI/storage/recovery/hardware qualification"
   }
 }

@@ -108,6 +108,9 @@ ID  State    Evidence / remaining work
              router models six CLK and five FS registers,35/25 destinations,
              optional source levels, correct distinct code27 behavior and2..3
              PCLK effects. CLK4's conflicting PLL field stays explicitly guarded.
+             PCG self-input selections CLK4 field0/code28 and field1/code29
+             now correctly route LOW per HWR15-4. Literal self/cross routing,
+             fractional effects and restored pending transitions are checked.
              Full pad/IDP/SPORT/clock/board coupling remains open
              (sharc-dai-timing.txt). SRU2 PIN/PBEN references now route14
              destinations from the distinct documented source sets, with six
@@ -165,6 +168,12 @@ ID  State    Evidence / remaining work
              sparse128-slot framing and independent snapshots have owned tests.
              Internal clocks/FS,I2S/packing/companding/errors/partial status and
              complete DAI/board/IRQ coupling remain open (sharc-sport.txt).
+             PICR0..3 now routes19 logical priorities from explicit optional
+             sources; disabled/software constants, delivered transactions and
+             snapshots have independent tests. Real original SPI events check
+             source1->P1 selection before the existing P1I latch/RTI path.
+             General native priority/level sampling and physical mux latency
+             remain open (sharc-picr.txt).
              Explicit unlooped native P1I recognition sets the bit25 interrupt
              frame/IMASKP, holds its own latch clear and preserves other latches.
              Immediate conditional RTI preserves ISR results without borrowing
@@ -612,9 +621,10 @@ ID  State    Evidence / remaining work
              The separate clocked IOP profile now preserves actual native
              posted SPI setup, all ordinary records/final-cell checks and384
              vector words through original P1I/RTI/native-VISA transition.
-             Its application reference reaches358/398 original instructions,
+             Its application reference reaches358/431 original instructions,
              including actual SPORT control/DMA setup, then fails at real
-             PCG_PW1/24c4 write or PICR0/2200 read. No source SCLK/serial data,
+             PCG_PW1/24c4 write or IDP_CTL1/24b2 DMA-enable write. No source
+             SCLK/serial data,
              full cold boot or manual-function acceptance (sharc-sport.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
 5   partial  Native SPORT word-buffer/DMA reference now transfers owned32-bit
@@ -878,12 +888,21 @@ ID  State    Evidence / remaining work
              PC/width/register/post-value expectations. All24 actual TCBs and
              cyclic partners match factual original/static expectations;
              odd normal-word indices and separate buffers remain unchanged.
-             All eight cases reach358/398 application instructions, failing
-             on real PCG_PW1/24c4 posted write or PICR0/2200 read delivery with
-             unchanged CPU/IAB and exact due requests. Prior data/pin/enable/
+             All eight cases reach358/431 application instructions, failing
+             on real PCG_PW1/24c4 posted write or IDP_CTL1/24b2 DMA-enable delivery with
+             retained CPU/IAB and exact posted writes. Transport1's final
+             indexB store retires before the older CTL1 delivery fails.
+             Prior data/pin/enable/
              frame/clock,vector/payload and original SPI assertions remain.
              With no source SCLK supplied, raw controls/parameters are stored
-             but effective SPORT/DMA/wire state is not fabricated. Complete
+             but effective SPORT/DMA/wire state is not fabricated. Transport1
+             now executes33 additional instructions through PICR0 RMW and
+             secondary-register/mode setup, then IDP_CTL0/CTL1 configuration.
+             Independent PC/width/value expectations preserve image-specific
+             stack bases and secondary B0/I0/L0/R0/R2/R3/M8/M1. The final+999
+             IDP indexB write really retires before prior+987 CTL1 delivery
+             fails; all three queued writes and post-retirement CPU/fetch are
+             retained. No IDP DMA/data/IRQ is invented (sharc-picr.txt). Complete
              SPORT/audio/source/board coupling, full boot and physical timing
              remain open (sharc-sport.txt).
              SPORT DMA tests add50 independently listed count/stride/direction

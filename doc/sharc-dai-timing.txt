@@ -86,3 +86,9 @@ hardware acceptance remain open. The complete objective is unchanged.
 
   cmake --build --preset strict --target lead-a1-sharc-dai-timing-test format-check
   ctest --preset strict -R '^sharc_dai_clock_frame_routing$' --output-on-failure
+
+HWR15-4 establishes two PCG self-input restrictions: CLK4 field0
+code28 (PCG_EXTA<-CLKA) and field1 code29 (PCG_EXTB<-CLKB) are tied LOW.
+The logical mux enforces these exceptions for both current/pending routes.
+Literal self/cross selections, unknown/high inputs, fractional switching and
+independent pending restore are checked; no PCG source clock is generated.

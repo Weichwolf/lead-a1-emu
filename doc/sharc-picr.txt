@@ -1,0 +1,63 @@
+Programmable interrupt source routing reference
+
+SharcPicr models PICR0..3 at native IOP2200..2203 (HWR2-3..5,A-14..18,
+B-17). Nineteen logical priorities P0..18 each select a five-bit source.
+PICR0/1/2 hold six fields at shifts0/5/10/15/20/25; PICR3 holds P18 at0.
+Family reset words are0a418820,16a4a0e6,2307b9ac,00000012. This establishes
+an explicit family reference, not a measured Nord reset or package identity.
+
+All source inputs start unknown. Codes11,14,16,1e (hex) are disabled/LOW;
+1f is software/HIGH. Every other code is a dynamic optional level, including
+code0 (DAIHI). Clearing a software selection to0 therefore routes DAIHI;
+it does not fabricate a universally deasserted interrupt. Optional false is
+known LOW, not missing input. Source changes propagate through the committed
+logical mux. destinations() returns priority bits, NOT core IMASK/IRPTL/
+LIRPTL bit numbers. Repeated source selections can feed several priorities.
+The mux does not itself latch, acknowledge, mask, arbitrate or enter a core
+interrupt. Full DAI/DPI/core interrupt behavior remains separate work.
+
+Delivered reads/writes retain all raw bits; unused upper fields do not create
+phantom destinations. Reserved readback has no independent silicon proof.
+Transactions stage register writes; outputs remain committed until commit.
+Source events and snapshots reject active instructions. Snapshots retain
+raw selectors and known/unknown inputs for independent restoration; dynamic
+state on constant codes is malformed. Misaligned/wrong-width/out-of-window/
+oversized accesses fail. A bound IOP bridge adds PC/address/operation context.
+The logical selection is qualified at delivered accesses only; physical mux
+settling, interrupt sampling latency and simultaneous rerouting/IRQ phase
+remain unqualified. No undocumented PCLK delay is invented.
+
+Owned tests check1824 independent source/destination/level cases using a
+literal destination-field table and source classification. Reset words,
+unknown/live inputs, software/disabled levels, duplicate routing, reserved
+bits, separately restored state, transactions and malformed inputs are checked.
+Fetched native4/5-write7/8-read cases verify source capture before later CPU
+changes, actual mux effects, software selection, backend rollback and retry
+without extra elapsed time. They do not qualify arbitrary native IRQ entry.
+
+The original clocked reference now routes actual SPI completion events through
+PICR's source1 selection before the already-qualified P1I latch/RTI path.
+Other core priorities explicitly reject at this reference boundary. All other
+unobserved peripheral source levels remain unknown. This event-boundary fixture
+is not a complete level-sampling board interrupt controller.
+
+Both original transport1 programs execute PICR0 read/CLR4c00/SET3000/write:
+0a418820 ->0a418020 ->0a41b020, selecting DAILI for P2 while retaining SPIHI
+for P1. Subsequent original instructions clear MODE1.RND32, set CBUFEN,
+save MODE1, initialize secondary B0/I0/L0/R0/R2/R3/M8/M1 with image-specific
+stack addresses, then restore MODE1. Actual IDP_CTL0/CTL1 programming follows.
+All PCs/widths/results/post-values are checked against original fields and
+PGR encodings, not recorded emulator output. Transport1 reaches431 application
+instructions and fails at actual posted IDP_CTL1/24b2=10101 delivery. Later
+IDP_DMA_I0A/2408 and I0B/2418 writes remain queued. I0B at+999 really retires
+before prior CTL1 delivery fails; CPU/fetch after that retirement and all three
+posted writes remain, with no outstanding core request.
+Transport0 retains its358-instruction PCG_PW1 frontier. Four original programs
+at two serial cadences retain all earlier payload/vector/SPI/SPORT/DAI checks.
+No SPORT SCLK, IDP samples, audio, full boot or hardware result is invented.
+
+Next implement PCG source clocks/frame generation, IDP DMA/ping-pong and full
+interrupt coupling. The complete objective.txt acceptance remains required.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_(programmable_interrupt_routing|picr_posted_control)|original_sharc_clocked_iop)$' --output-on-failure

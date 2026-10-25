@@ -142,11 +142,19 @@ void set_repeated_routes(SharcDaiTiming &router, SharcDaiTimingGroup group, unsi
   }
 }
 
-void verify_repeated_routes(SharcDaiTiming &router, SharcDaiTimingGroup group, bool high) {
+void verify_repeated_routes(SharcDaiTiming &router,
+                            SharcDaiTimingGroup group,
+                            bool high,
+                            unsigned int source) {
   for (unsigned int word = 0; word < words; ++word) {
     for (unsigned int field = 0; field < fields; ++field) {
       if ((valid_fields(group, word) & (1U << field)) == 0) { continue; }
-      require(router.output({.word = word, .field = field}) == high);
+      constexpr unsigned int a_clock = 28;
+      constexpr unsigned int b_clock = 29;
+      const bool tied_low =
+          group == SharcDaiTimingGroup::clock && word == 4 &&
+          ((field == 0 && source == a_clock) || (field == 1 && source == b_clock));
+      require(router.output({.word = word, .field = field}) == (high && !tied_low));
     }
   }
 }
@@ -161,7 +169,7 @@ void all_sources_and_independent_words() {
       router.advance_pclk(3);
       const bool dynamic = source < dynamic_sources;
       if (dynamic) { router.source(source, true); }
-      verify_repeated_routes(router, group, dynamic || source == source_count - 1);
+      verify_repeated_routes(router, group, dynamic || source == source_count - 1, source);
       if (!dynamic) { continue; }
       router.source(source, std::nullopt);
       require(!router.output({.word = 2, .field = 3}).has_value());
@@ -169,6 +177,38 @@ void all_sources_and_independent_words() {
       require(router.output({.word = 2, .field = 3}) == false);
     }
   }
+}
+
+void pcg_self_inputs_are_tied_low() {
+  lead_a1::SharcPower power;
+  SharcDaiTiming router(power, SharcDaiTimingGroup::clock);
+  constexpr std::uint32_t self_inputs = 0x3def7bbc;
+  constexpr std::uint32_t cross_inputs = 0x3def7b9d;
+  constexpr unsigned int pcg_a = 28;
+  constexpr unsigned int pcg_b = 29;
+  write(router, 4, self_inputs);
+  router.advance_pclk(3);
+  require(router.output({.word = 4, .field = 0}) == false &&
+          router.output({.word = 4, .field = 1}) == false);
+  router.source(pcg_a, true);
+  router.source(pcg_b, true);
+  require(router.output({.word = 4, .field = 0}) == false &&
+          router.output({.word = 4, .field = 1}) == false);
+  write(router, 4, cross_inputs);
+  router.advance_half_pclk(3);
+  require(router.output({.word = 4, .field = 0}) == false);
+  router.advance_half_pclk(1);
+  require(!router.output({.word = 4, .field = 0}) && !router.output({.word = 4, .field = 1}));
+  SharcDaiTiming restored(power, SharcDaiTimingGroup::clock, router.snapshot());
+  restored.advance_half_pclk(2);
+  require(restored.output({.word = 4, .field = 0}) == true &&
+          restored.output({.word = 4, .field = 1}) == true);
+  write(restored, 4, self_inputs);
+  restored.advance_half_pclk(4);
+  require(!restored.output({.word = 4, .field = 0}));
+  restored.advance_half_pclk(2);
+  require(restored.output({.word = 4, .field = 0}) == false &&
+          restored.output({.word = 4, .field = 1}) == false);
 }
 
 void exact_intervals_and_restore() {
@@ -372,6 +412,7 @@ int main() try {
   reset_and_destination_topology();
   independent_reset_sources();
   all_sources_and_independent_words();
+  pcg_self_inputs_are_tied_low();
   exact_intervals_and_restore();
   live_inputs_during_uncertain_switch();
   malformed_and_unqualified_inputs();

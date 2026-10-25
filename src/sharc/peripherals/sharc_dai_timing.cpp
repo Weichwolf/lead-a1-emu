@@ -43,6 +43,22 @@ std::optional<bool> level(const SharcDaiTimingState &state, unsigned int encodin
   return state.sources[encoding];
 }
 
+std::optional<bool> routed_level(const SharcDaiTimingState &state,
+                                 SharcDaiTimingGroup group,
+                                 SharcDaiTimingTap tap,
+                                 std::uint32_t word) {
+  const auto encoding = selector(word, tap.field);
+  constexpr unsigned int pcg_a_clock = 28;
+  constexpr unsigned int pcg_b_clock = 29;
+  // HWR15-4: the two PCG clock outputs cannot feed their own EXT input.
+  if (group == SharcDaiTimingGroup::clock && tap.word == 4 &&
+      ((tap.field == 0 && encoding == pcg_a_clock) ||
+       (tap.field == 1 && encoding == pcg_b_clock))) {
+    return false;
+  }
+  return level(state, encoding);
+}
+
 }
 
 SharcDaiTiming::SharcDaiTiming(SharcPower &power,
@@ -117,10 +133,10 @@ std::optional<bool> SharcDaiTiming::output(SharcDaiTimingTap tap) const {
   if (tap.field >= field_count || (fields(tap.word) & (1U << tap.field)) == 0) {
     throw std::out_of_range("Unqualified/nonexistent SHARC DAI timing destination");
   }
-  auto value = level(current_, selector(current_.routes[tap.word], tap.field));
+  auto value = routed_level(current_, group_, tap, current_.routes[tap.word]);
   const auto pending = current_.pending[tap.word];
   if (pending && pending->half_periods >= first_possible_effect) {
-    const auto target = level(current_, selector(pending->target, tap.field));
+    const auto target = routed_level(current_, group_, tap, pending->target);
     if (value != target) { value.reset(); }
   }
   return value;
