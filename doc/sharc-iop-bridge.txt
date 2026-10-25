@@ -64,11 +64,17 @@ A failed due transfer needs retry_due, not another core hold. Snapshots retain
 existing CPU, fetch and bridge state without a new hidden wait counter.
 Native counter-loop callees outside the active body also support these holds.
 The existing native/fetched loop and CALL-frame guards validate the paired
-owners. An already captured callee Address branch may retain its Decode mask;
-the complete transport and core stay fixed until the real advance/retirement.
-Loop-body IOP, count1 four-body startup with unresolved architectural stack,
-arithmetic loops, active delay slots and other mode/cache/IRQ compositions
-remain guarded. This does not qualify all loop or branch IOP timing.
+owners. Count1 four-body startup uses its existing private functional CALL
+bookkeeping; architectural depth/stack/resource flags remain unknown. A scalar
+IOP access cannot expose those private frames. Stack observers still fail.
+Deferred arithmetic-loop setup also supports IOP outside its future body,
+using the existing frame/end-window guard. It does not sample the unresolved
+termination condition or enter the body during a hold. Captured callee
+branches and deferred entry branches may retain their Decode masks; the
+complete transport and core stay fixed until real advance/retirement.
+Loop-body IOP, active arithmetic loops/delay slots and other mode/cache/IRQ
+compositions remain guarded. Startup stack arbitration, general loop/branch
+IOP timing and physical timing are still unqualified.
 
 Open: exact physical phase selection for4/5 and7/8, independent prefetch/DMA
 arbitration during IOP holds, general five-stage peripheral scheduling,
@@ -98,14 +104,24 @@ replacements avoid reliance on the unresolved Type17b sign-extension rule.
 Another112 cases reject unknown source bits or bank selection without changing
 CPU/fetch/control/request/target state, then repair the owned fixture and
 rebind the actual CPU/fetch to post and deliver exactly one original value.
-Another28 cases compose four-/six-instruction DO loops, actual delayed/ordinary
-CALLs, nested callees, all4/5-write7/8-read bounds and counts1/2/3/5 (excluding
-unresolved count1 four-body startup). Literal PCs, return frames, stack depths,
+Another32 cases compose four-/six-instruction DO loops, actual delayed/ordinary
+CALLs, nested callees, all4/5-write7/8-read bounds and counts1/2/3/5. Literal
+PCs, return frames, known or explicitly unknown stack depths,
 pre-pop states, iteration totals, target values and access counts are checked.
 Every hold retains the entire CPU/transport. Each case also restores separate
 RAM/CPU/fetch/bridge/target owners during the first read wait and continues
 through actual retirement. Missing loop counterparts and mismatched counters
-reject without target effects; real body IOP and count1 startup still reject.
+reject without target effects; real body IOP still rejects. Count1 startup
+retains unknown architectural entries/resource flags through actual IOP and
+independent read-wait restores. PCSTK/PCSTKP observers after real store/read
+still fail on the retained instruction, even after RAM replacement; fabricated
+architectural depth is rejected.
+Four additional deferred-setup cases check actual DO/PCSTK, changed store
+sources, USTAT readback, native stack/depth readback, continuous posted stores
+and all4/5-write7/8-read bounds. Every wait retains the entire native frame and
+unresolved arithmetic flags. The final spacing hold preserves a real captured
+entry JUMP(DB)/Decode mask; two exact values remain genuinely posted at the
+checkpoint, with literal addresses/timestamps and unchanged target contents.
 
 The optional original reference uses explicit5/8-clock inputs for ten actual
 PBEN2/PBEN3/CLK2/FS2 groups and PP_CTL setup (64 instructions) after its
@@ -121,27 +137,53 @@ PMCTL/power handling in the separate common prefix remains explicit; this
 reference does not assert that those paths already have complete IOP timing.
 Port views solve address/queue composition, not that remaining clock gap.
 
-The separate original_sharc_clocked_iop profile continues the real common-call
-return into the second CALL and application initialization through the bound
-five-stage native/VISA transport. PMCTL1 is posted through the same queue as
-DAI/DPI. Each elapsed half-PCLK precedes newly due deliveries. This profile
-starts a stated local clock epoch after the common call and supplies5/8-clock
-inputs; earlier native/core-IOP/PMCTL timing and physical Nord phase remain
-separate gaps. It neither runs the functional fork first nor seeds its device
-state from that fork. All eight placements/cadences retire95 further actual
-instructions:18 power/modifier,64 routing/PP_CTL, twelve SRU2 PIN0/PBEN0 RMW
-instructions and compact zero USTAT1. The first PIN0 read now succeeds at217
-local CCLK. Static original fields and PGR short-compute semantics establish
-each R0/R1 intermediate, PC/width and real posted target/value independently.
-The explicit family reset words are restored idempotently (sharc-dpi.txt).
-After95 instructions the local epoch is240 CCLK:95 retirement clocks, six
-refills, thirteen seven-clock read extensions and twelve four-clock posted
-drains. The final PBEN0 store remains genuinely posted. The next actual
-SPIDMAC1084 store at second-CALL target+207 is guarded because the existing
-SPI DMA mapping is not yet bound through this timed bridge. CPU/IAB/queue,
-SPI and both routers remain unchanged by that failure. No immediate-success
-fallback, extra guest polling or SPI reset is supplied. This is not a physical
-Nord timing measurement or complete original startup.
+The separate original_sharc_clocked_iop profile binds the SAME boot SPI
+instance through backend1000..1084 and disjoint core1000..1006/1080..1084
+views of span1000..24ff. Native loader instructions now issue real posted
+DMA-register stores and drain/read actual SPI status through this bridge.
+The external serial source starts once after genuine DMA arm, then keeps its
+fixed2/3-CCLK edge cadence across records and IOP holds. Each elapsed clock
+continues serial/DMA/interrupt events and peripheral half-PCLK aging before
+new bridge deliveries. Read response and retirement share one clock; writes
+keep their own acceptance clock. No extra poll, device reset or functional
+fork seeds this fixture.
+
+All ordinary payload checks and the independent final-cell oracle remain.
+At native8c08e, IMSPI=1 at8c08b and CSPI=384 at8c08d are genuinely posted,
+with literal values/addresses/two-clock spacing; CSPI has not arrived yet.
+IDLE waits for the actual arm before completion. All384 actual DMA vector
+words are compared before original P1I/RTI and the unchanged self-modifying
+native/VISA transition. This control-register composition does not couple
+all internal RAM-port/DMA arbitration or qualify physical F2 visibility.
+
+The actual common-call RTS establishes a LOCAL application epoch inside the
+continuous bridge clock; no clock/device state is reset. PMCTL1 and all DAI/
+DPI/PDAP traffic use the same queue. The earlier95-instruction checkpoint
+retains first PIN0/1c10 read at217 local CCLK and95/240 totals under explicit
+5/8-clock inputs. Every PC/width, R0/R1 result and posted value is checked.
+Full upper16 extension of Type17b masks remains a model assumption, so the
+full-mask arithmetic/idempotence expectations are conditional, not independent
+extension evidence (sharc-visa-execution.txt).
+
+Three more original instructions at second-CALL+207/+210/+213 postSPIDMAC=0,
+setUSTAT1 bits4d14 and postSPICTL=4d14. Both actual stores capture the CPU
+source and remain pending for their proper delivery; the first does not
+immediately mutate SPI. The following real SRU read drains them, preserving
+the completed vector cursor92180 and the same serial/buffer state.
+Both transport0 programs then execute four CLK0 RMW groups and one PBEN0
+group (30 instructions); both transport1 programs execute one PBEN0 group
+(six instructions). Independent original field/width metadata and HWR B-14/15
+reset words establish every intermediate. Conditional final raw CLK0/PBEN0
+words are252ef7bd/0e2412ca for transport0,252630c2/0e2482c1 for transport1.
+These program identities establish no physical processor/slot assignments.
+
+The resulting128/104-instruction application prefixes stop on the actual next
+SRU_PIN0/2460 read at second-CALL+279/+228. The unmapped backend failure
+retains CPU/IAB and the exact due read PC/address/operation with no response;
+prior posted writes have really drained and matured. No guessed PIN value
+or successful access is supplied. This is incomplete application startup.
+Earlier native PMCTL/core-IOP timing, independent prefetch/DMA holds, physical
+phase, SPI enable/flush timing and full board coupling remain separate gaps.
 
   cmake --build --preset strict
   ctest --preset strict -R '^(sharc_fetched_iop_waits|sharc_iop_posted_control_transfers|original_sharc_clocked_iop)$' --output-on-failure

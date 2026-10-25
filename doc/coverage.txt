@@ -96,7 +96,10 @@ ID  State    Evidence / remaining work
              write acceptance retains its own clock. Due delivery failures
              require no-time retry, not another hold. Native counter-loop
              callees validate paired native/fetched loop and CALL frames;
-             full CPU/transport holds retain captured callee Address redirects.
+             count1 startup retains private control and unknown architectural
+             stack/resources. Deferred arithmetic setup validates its real
+             frame/end window without sampling termination. Full CPU/transport
+             holds retain captured callee and deferred-entry Address redirects.
              Other mode/branch/cache/loop/IRQ
              compositions and independent prefetch/DMA arbitration during holds
              remain gaps (sharc-iop-bridge.txt). Disjoint address views share one
@@ -582,6 +585,12 @@ ID  State    Evidence / remaining work
              loader/application boot and audio remain open (sharc-clock.txt).
              All-way fixture stops on unknown random replacement. No cold boot or
              complete instrument behavior (arm-reference.txt, features.tsv).
+             The separate clocked IOP profile now preserves actual native
+             posted SPI setup, all ordinary records/final-cell checks and384
+             vector words through original P1I/RTI/native-VISA transition.
+             Its application reference reaches128/104 original instructions
+             and the real unbound SRU_PIN0/2460 read; no full cold boot or
+             manual-function acceptance follows (sharc-iop-bridge.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
 5   pending  No firmware audio, audio serial/DMA model, host audio or timing evidence.
 6   partial  Native searchable GTK table for slots A-D, documented CC references,
@@ -763,30 +772,45 @@ ID  State    Evidence / remaining work
              request/target on failure, then rebind repaired owned inputs and
              deliver exactly once. DAG/complementary load destinations remain
              guarded pending independent pipeline composition checks.
-             Another28 native four-/six-body loop cases compose real delayed/
+             Another32 native four-/six-body loop cases compose real delayed/
              ordinary CALLs, nested callees and all4/5-write7/8-read bounds.
              Literal access PCs/counts/values, CALL frames, stack depths,
-             pre-pop and iteration results accompany28 independent restores
+             pre-pop and iteration results accompany32 independent restores
              during actual read waits. Missing native/fetch counterparts,
-             mismatched counters, real loop-body IOP and unresolved count1
-             four-body startup reject without target effects. Other loop,
-             arithmetic/cache/IRQ and physical timing compositions remain open.
-             original_sharc_clocked_iop separately continues the actual common
-             RTS through the second CALL and95 further original instructions.
-             PMCTL1 and all routing/PP_CTL traffic share one posted bridge;
-             effects advance before new deliveries. All8 placements/cadences
-             execute the actual SRU2_PIN0 read at1c10 after217 local-epoch CCLK
-             under explicit5/8 timing inputs. Independent static operand/width
-             checks establish both6-instruction PIN0/PBEN0 RMW groups and
-             zero USTAT1. Every actual R0/R1 result, PC/width and posted value
-             is checked; the family reset routes are restored idempotently.
-             After95 instructions/240 local CCLK, the next original SPIDMAC1084
-             write at second-CALL target+207 needs a qualified SPI bridge binding.
-             That failure retains CPU/IAB/queue/SPI/routing and the pending
-             PBEN0 write; no guessed delivery or polling is supplied. No
-             functional fork seeds this fixture. Earlier native/core-IOP/PMCTL
-             timing, independent prefetch/DMA holds and physical phase remain
-             separate gaps.
+             mismatched counters and real loop-body IOP reject without target
+             effects. Count1 startup preserves unknown architectural stack/
+             resource flags; actual PCSTK/PCSTKP observers after IOP still fail,
+             including retained-opcode retry and fabricated-depth rejection.
+             Four deferred-setup cases retain unknown termination flags and
+             native DO/PCSTK frames across actual IOP, source changes/readback
+             and a captured entry JUMP(DB). Final continuous stores retain
+             exact pending values/timestamps and unchanged target contents.
+             Startup stack arbitration, active arithmetic/cache/IRQ and
+             physical timing compositions remain open.
+             original_sharc_clocked_iop now binds the SAME boot-continuation
+             SPI instance through real posted native loader DMA accesses.
+             Serial/DMA/IRQ and half-PCLK device aging continue through each
+             hold. Read response/retirement share one clock; no extra poll,
+             reset or functional-fork seeding occurs. Ordinary record and
+             independent final-cell oracles remain intact. Native8c08e checks
+             actual queued IMSPI=1/CSPI=384, their original PCs/timestamps and
+             remaining0 before delivery. IDLE waits for genuine arm before
+             all384 vector-word checks and original P1I/RTI/transition.
+             The common RTS captures an application epoch inside the continuous
+             bridge clock. Existing95/240-local-CCLK/first-read217 expectations
+             remain, with Type17b arithmetic explicitly conditional. Real
+             +207/+210/+213 instructions postSPIDMAC0/setUSTAT1/postSPICTL4d14.
+             Their first following real SRU read drains delivery without losing
+             the completed vector cursor92180 or serial state. Five/single
+             further six-instruction SRU RMW groups have independent original
+             PC/width/operand and family-reset intermediate expectations.
+             All8 placements/cadences reach128/104 application instructions;
+             the next actual SRU_PIN0/2460 read (+279/+228) remains unbound.
+             Its due failure preserves CPU/IAB/exact read with no response,
+             while earlier writes have genuinely drained/matured. No PIN value
+             is invented. Complete startup, native PMCTL/core-IOP timing,
+             internal RAM-port/DMA arbitration, physical F2/phase and board
+             coupling remain gaps (sharc-iop-bridge.txt).
              DPI tests add independent source/reset tables for all14 outputs,
              literal half-period phases, live equal/unknown routes, reserved
              inputs/readback, fractional independent restore, transactions and

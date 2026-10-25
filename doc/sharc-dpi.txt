@@ -60,9 +60,11 @@ Literal AND results18017016/0d00c00b and final18017556/0d00c28b are checked,
 including every R0/R1 value, mixed width/PC and real posted write. These are
 idempotent results under that assumption and the explicit family inputs, not
 independent silicon arithmetic or observed Nord pad levels.
-The profile reaches95 application instructions/240 local CCLK with the last
-PBEN0 write still posted. The next actual SPIDMAC1084 store requires a timed
-SPI binding; its precise failure preserves CPU/IAB/queue/SPI/router state.
+The95-application-instruction/240-local-CCLK checkpoint retains its last PBEN0
+write as genuinely posted. The continuous timed SPI owner now executes the
+following SPIDMAC/SPICTL setup and further SRU groups. The next unbound target
+is DAI SRU_PIN0/2460; see sharc-iop-bridge.txt for the128/104-instruction
+profiles and their exact due-read failure. This is not complete startup.
 See sharc-iop-bridge.txt for timing inputs and earlier-stage gaps.
 
   cmake --build --preset strict

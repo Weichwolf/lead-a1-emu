@@ -12,6 +12,7 @@
 #include "sharc/peripherals/sharc_pdap.hpp"
 #include "sharc/peripherals/sharc_power.hpp"
 #include "sharc/peripherals/sharc_spi.hpp"
+#include "sharc/peripherals/sharc_spi_port.hpp"
 #include "sharc/pipeline/sharc_fetch.hpp"
 #include "sharc/visa/sharc_visa.hpp"
 
@@ -397,13 +398,30 @@ struct HeaderDevices {
   lead_a1::SharcIopBridge *bridge{};
   lead_a1::SharcDpiRouting *dpi_pin{};
   lead_a1::SharcDpiRouting *dpi_enable{};
+  std::uint64_t iop_epoch{};
 };
 
 void check_frontier(const lead_a1::Sharc &cpu,
                     const lead_a1::SharcControl &control,
                     const lead_a1::SharcSpi &spi,
                     SerialInput serial,
-                    std::size_t terminal);
+                    std::size_t terminal,
+                    std::optional<lead_a1::SharcIopState> pending = {});
+
+void advance_bound_peripherals(HeaderDevices devices) {
+  if (devices.profile != OriginalProfile::clocked_iop) { return; }
+  require(devices.bridge != nullptr && devices.power != nullptr && devices.dai != nullptr &&
+          devices.clock_routes != nullptr && devices.frame_routes != nullptr &&
+          devices.pdap != nullptr && devices.dpi_pin != nullptr && devices.dpi_enable != nullptr);
+  devices.power->advance_half_pclk(1);
+  devices.dai->advance_half_pclk(1);
+  devices.clock_routes->advance_half_pclk(1);
+  devices.frame_routes->advance_half_pclk(1);
+  devices.pdap->advance_cclk(1);
+  devices.dpi_pin->advance_half_pclk(1);
+  devices.dpi_enable->advance_half_pclk(1);
+  devices.bridge->tick(); // Age the elapsed interval before delivering its new writes.
+}
 
 void advance_devices(lead_a1::SharcMemory &memory,
                      lead_a1::Sharc &cpu,
@@ -418,6 +436,7 @@ void advance_devices(lead_a1::SharcMemory &memory,
     devices.spi.acknowledge_interrupt();
   }
   require(!devices.spi.state().overflow);
+  advance_bound_peripherals(devices);
 }
 
 struct StreamRecord {
@@ -440,16 +459,22 @@ void sequenced_vector_receive(lead_a1::SharcMemory &memory,
   const auto held = fetch.state();
   require(expected.idle_pc && !expected.pending[10]);
   unsigned int ticks{};
-  while (devices.spi.state().serial.remaining != 0 && ticks < limit) {
+  bool started = devices.spi.state().serial.remaining != 0;
+  while ((!started || devices.spi.state().serial.remaining != 0) && ticks < limit) {
     advance_devices(memory, cpu, serial, devices);
     ++ticks;
-    if (devices.spi.state().serial.remaining == 0) {
+    if (!started && devices.spi.state().serial.remaining != 0) {
+      require(devices.spi.state().serial.remaining == vector_words &&
+              devices.spi.state().serial.next_word == destination);
+      started = true;
+    }
+    if (started && devices.spi.state().serial.remaining == 0) {
       expected.system[10].value |= p1i;
       expected.effective[10].value |= p1i;
     }
     require(cpu.state() == expected && fetch.state() == held);
   }
-  require(ticks < limit && devices.spi.state().serial.remaining == 0 &&
+  require(started && ticks < limit && devices.spi.state().serial.remaining == 0 &&
           devices.spi.state().serial.next_word == destination + vector_words &&
           serial.bit == serial.stream.size() * 8);
   const auto payload = serial.stream.size() - kernel_bytes;
@@ -713,6 +738,7 @@ void advance_clocked_visa_devices(lead_a1::SharcMemory &memory,
     devices.spi.acknowledge_interrupt();
   }
   require(!devices.spi.state().overflow);
+  advance_bound_peripherals(devices);
 }
 
 void check_original_clocked_visa_common(lead_a1::SharcMemory &memory,
@@ -1015,25 +1041,13 @@ void original_visa_power_reference(lead_a1::SharcMemory &memory,
                "delayed PMCTL1 outputs and eight modifiers\n";
 }
 
-// A new explicit local CCLK/PCLK epoch after the actual common-call RTS.
-// Earlier native/core-IOP and PMCTL timing remains a separately bounded input.
+// Earlier native PMCTL/core-IOP timing is still a separately bounded input.
 void original_application_clock(lead_a1::SharcMemory &memory,
                                 lead_a1::Sharc &cpu,
                                 SerialInput &serial,
                                 HeaderDevices devices) {
-  require(devices.bridge != nullptr && devices.power != nullptr && devices.dai != nullptr &&
-          devices.clock_routes != nullptr && devices.frame_routes != nullptr &&
-          devices.pdap != nullptr);
+  require(devices.profile == OriginalProfile::clocked_iop);
   advance_clocked_visa_devices(memory, cpu, serial, devices);
-  devices.power->advance_half_pclk(1);
-  devices.dai->advance_half_pclk(1);
-  devices.clock_routes->advance_half_pclk(1);
-  devices.frame_routes->advance_half_pclk(1);
-  devices.pdap->advance_cclk(1);
-  require(devices.dpi_pin != nullptr && devices.dpi_enable != nullptr);
-  devices.dpi_pin->advance_half_pclk(1);
-  devices.dpi_enable->advance_half_pclk(1);
-  devices.bridge->tick(); // Deliver new writes after the elapsed device interval.
 }
 
 void original_application_prepare(lead_a1::SharcMemory &memory,
@@ -1053,11 +1067,15 @@ void original_application_prepare(lead_a1::SharcMemory &memory,
   throw std::runtime_error("Missing original application Execute");
 }
 
-lead_a1::SharcStep original_application_retire(lead_a1::SharcMemory &memory,
-                                               lead_a1::Sharc &cpu,
-                                               lead_a1::SharcFetch &fetch,
-                                               SerialInput &serial,
-                                               HeaderDevices devices) {
+enum class OriginalClock : std::uint8_t { native, visa };
+enum class RetireClock : std::uint8_t { pending, elapsed };
+
+bool wait_original_iop(lead_a1::SharcMemory &memory,
+                       lead_a1::Sharc &cpu,
+                       lead_a1::SharcFetch &fetch,
+                       SerialInput &serial,
+                       HeaderDevices devices,
+                       OriginalClock clock_source) {
   require(devices.bridge != nullptr);
   const auto access = fetch.peripheral_access(cpu);
   const bool read = access && access->operation == lead_a1::AccessKind::read;
@@ -1077,15 +1095,247 @@ lead_a1::SharcStep original_application_retire(lead_a1::SharcMemory &memory,
     const auto pc = cpu.state().pc;
     while (!devices.bridge->ready()) {
       if (!read) { fetch.wait_iop(cpu, *devices.bridge); }
-      original_application_clock(memory, cpu, serial, devices);
+      if (clock_source == OriginalClock::native) {
+        advance_devices(memory, cpu, serial, devices);
+      } else {
+        original_application_clock(memory, cpu, serial, devices);
+      }
       if (read && !devices.bridge->ready()) { fetch.wait_iop(cpu, *devices.bridge); }
       require(fetch.state() == held && cpu.state().pc == pc);
     }
   }
+  return read;
+}
+
+RetireClock retire_loader_instruction(lead_a1::SharcMemory &memory,
+                                      lead_a1::Sharc &cpu,
+                                      lead_a1::SharcFetch &fetch,
+                                      SerialInput &serial,
+                                      HeaderDevices devices) {
+  const bool read = devices.profile == OriginalProfile::clocked_iop &&
+                    wait_original_iop(memory, cpu, fetch, serial, devices, OriginalClock::native);
+  require(cpu.step(fetch).minimum_core_cycles == 1);
+  return read ? RetireClock::elapsed : RetireClock::pending;
+}
+
+void finish_loader_clock(lead_a1::SharcMemory &memory,
+                         lead_a1::Sharc &cpu,
+                         SerialInput &serial,
+                         HeaderDevices devices,
+                         RetireClock clock) {
+  if (clock == RetireClock::pending) { advance_devices(memory, cpu, serial, devices); }
+}
+
+lead_a1::SharcStep original_application_retire(lead_a1::SharcMemory &memory,
+                                               lead_a1::Sharc &cpu,
+                                               lead_a1::SharcFetch &fetch,
+                                               SerialInput &serial,
+                                               HeaderDevices devices) {
+  const bool read = wait_original_iop(memory, cpu, fetch, serial, devices, OriginalClock::visa);
   const auto step = cpu.step(fetch);
   require(step.minimum_core_cycles == 1);
   if (!read) { original_application_clock(memory, cpu, serial, devices); }
   return step;
+}
+
+struct ExpectedPosted {
+  std::uint32_t pc;
+  std::uint32_t address;
+  std::uint32_t value;
+};
+
+void check_posted_application(HeaderDevices devices, ExpectedPosted expected) {
+  const auto bus = devices.bridge->snapshot();
+  unsigned int matches{};
+  for (const auto &write : bus.writes) {
+    if (write && write->intent.pc == expected.pc) {
+      require(write->intent.address == expected.address &&
+              write->intent.operation == lead_a1::AccessKind::write &&
+              write->intent.delivery_cycles == 5 && write->value == expected.value &&
+              bus.clocks == write->posted_at + 1);
+      ++matches;
+    }
+  }
+  require(matches == 1);
+}
+
+struct OriginalRmw {
+  unsigned int offset;
+  std::array<unsigned int, 6> widths;
+  std::uint32_t address;
+  std::uint32_t initial;
+  std::uint32_t mask;
+  std::uint32_t selected;
+  std::uint32_t cleared;
+  std::uint32_t result;
+};
+
+void original_post_spi_group(lead_a1::SharcMemory &memory,
+                             lead_a1::Sharc &cpu,
+                             lead_a1::SharcFetch &fetch,
+                             SerialInput &serial,
+                             HeaderDevices devices,
+                             const OriginalRmw &group) {
+  const std::array r0{
+      group.initial, group.initial, group.cleared, group.cleared, group.result, group.result};
+  const std::array r1{0U, group.mask, group.mask, group.selected, group.selected, group.selected};
+  auto pc = devices.placement.second_call + group.offset;
+  constexpr std::uint64_t full40 = 0xffffffffff;
+  for (unsigned int index = 0; index < r0.size(); ++index) {
+    original_application_prepare(memory, cpu, fetch, serial, devices);
+    const auto access = fetch.peripheral_access(cpu);
+    const auto previous_r1 = cpu.state().data[0][1];
+    require(access.has_value() == (index == 0 || index == 5));
+    if (access) {
+      require(access->pc == pc && access->address == group.address &&
+              access->operation ==
+                  (index == 0 ? lead_a1::AccessKind::read : lead_a1::AccessKind::write));
+    }
+    const auto step = original_application_retire(memory, cpu, fetch, serial, devices);
+    require(step.pc == pc && step.address_units == group.widths[index]);
+    require(cpu.state().data[0][0] ==
+            (lead_a1::SharcKnown40{.value = std::uint64_t{r0[index]} << 8, .known = full40}));
+    require(cpu.state().data[0][1] ==
+            (index == 0
+                 ? previous_r1
+                 : lead_a1::SharcKnown40{.value = std::uint64_t{r1[index]} << 8, .known = full40}));
+    if (index == 5) {
+      check_posted_application(devices,
+                               {.pc = pc, .address = group.address, .value = group.result});
+    }
+    pc += group.widths[index];
+  }
+}
+
+bool uses_clock_initializer(Placement placement) {
+  if (placement.second_call == placements[0][0].second_call ||
+      placement.second_call == placements[1][0].second_call) {
+    return true;
+  }
+  require(placement.second_call == placements[0][1].second_call ||
+          placement.second_call == placements[1][1].second_call);
+  return false;
+}
+
+void original_pin_boundary(lead_a1::SharcMemory &memory,
+                           lead_a1::Sharc &cpu,
+                           lead_a1::SharcFetch &fetch,
+                           SerialInput &serial,
+                           HeaderDevices devices) {
+  original_application_prepare(memory, cpu, fetch, serial, devices);
+  constexpr std::uint32_t pin0 = 0x2460;
+  const auto pc =
+      devices.placement.second_call + (uses_clock_initializer(devices.placement) ? 279U : 228U);
+  const auto access = fetch.peripheral_access(cpu);
+  require(access == (lead_a1::SharcFetchIopAccess{
+                        .pc = pc, .address = pin0, .operation = lead_a1::AccessKind::read}));
+  const auto core = cpu.state();
+  const auto pipeline = fetch.state();
+  std::ostringstream prefix;
+  prefix << "SHARC IOP bridge pc=0x" << std::hex << pc
+         << " word-address=0x2460 operation=read cclk=";
+  bool stopped{};
+  try {
+    static_cast<void>(original_application_retire(memory, cpu, fetch, serial, devices));
+  } catch (const std::runtime_error &error) {
+    const std::string message(error.what());
+    if (!message.starts_with(prefix.str()) ||
+        message.find("Unmapped SHARC IOP register") == std::string::npos) {
+      throw;
+    }
+    stopped = true;
+  }
+  const auto bus = devices.bridge->snapshot();
+  require(stopped && cpu.state() == core && fetch.state() == pipeline && !memory.active() &&
+          bus.write_count == 0 && bus.request && bus.request->pc == pc &&
+          bus.request->address == pin0 && bus.request->operation == lead_a1::AccessKind::read &&
+          bus.request->delivery_cycles == 8 && bus.read && bus.read->started_at &&
+          !bus.read->response && bus.clocks == *bus.read->started_at + 8 &&
+          !devices.bridge->ready() && !devices.bridge->waiting());
+  constexpr std::uint32_t configured = 0x4d14;
+  constexpr std::uint32_t vector_end = 0x92180;
+  require(devices.spi.state().port_control == configured && devices.spi.state().control == 0 &&
+          devices.spi.state().serial.remaining == 0 &&
+          devices.spi.state().serial.next_word == vector_end);
+}
+
+void original_post_spi_routing(lead_a1::SharcMemory &memory,
+                               lead_a1::Sharc &cpu,
+                               lead_a1::SharcFetch &fetch,
+                               SerialInput &serial,
+                               HeaderDevices devices) {
+  // Independent static fields + HWR B-14/15 reset words. Compact signed masks
+  // remain conditional on the Type17b model assumption, as in the earlier RMWs.
+  constexpr std::array<OriginalRmw, 5> clock_groups{{{.offset = 216,
+                                                      .widths = {3, 2, 1, 2, 1, 3},
+                                                      .address = 0x2430,
+                                                      .initial = 0x252630c2,
+                                                      .mask = 0xfffffc1f,
+                                                      .selected = 0x3a0,
+                                                      .cleared = 0x25263002,
+                                                      .result = 0x252633a2},
+                                                     {.offset = 228,
+                                                      .widths = {3, 3, 1, 3, 1, 3},
+                                                      .address = 0x2430,
+                                                      .initial = 0x252633a2,
+                                                      .mask = 0xfff07fff,
+                                                      .selected = 0xe8000,
+                                                      .cleared = 0x252033a2,
+                                                      .result = 0x252eb3a2},
+                                                     {.offset = 242,
+                                                      .widths = {3, 2, 1, 2, 1, 3},
+                                                      .address = 0x2430,
+                                                      .initial = 0x252eb3a2,
+                                                      .mask = 0xffffffe0,
+                                                      .selected = 0x1d,
+                                                      .cleared = 0x252eb3a0,
+                                                      .result = 0x252eb3bd},
+                                                     {.offset = 254,
+                                                      .widths = {3, 2, 1, 2, 1, 3},
+                                                      .address = 0x2430,
+                                                      .initial = 0x252eb3bd,
+                                                      .mask = 0xffff83ff,
+                                                      .selected = 0x7400,
+                                                      .cleared = 0x252e83bd,
+                                                      .result = 0x252ef7bd},
+                                                     {.offset = 266,
+                                                      .widths = {3, 3, 1, 2, 1, 3},
+                                                      .address = 0x2478,
+                                                      .initial = 0x0e2482ca,
+                                                      .mask = 0xfffc0fff,
+                                                      .selected = 0x1000,
+                                                      .cleared = 0x0e2402ca,
+                                                      .result = 0x0e2412ca}}};
+  constexpr OriginalRmw enable_group{.offset = 216,
+                                     .widths = {3, 2, 1, 2, 1, 3},
+                                     .address = 0x2478,
+                                     .initial = 0x0e2482ca,
+                                     .mask = 0xffffffc0,
+                                     .selected = 1,
+                                     .cleared = 0x0e2482c0,
+                                     .result = 0x0e2482c1};
+  const bool clocks = uses_clock_initializer(devices.placement);
+  if (clocks) {
+    for (const auto &group : clock_groups) {
+      original_post_spi_group(memory, cpu, fetch, serial, devices, group);
+    }
+  } else {
+    original_post_spi_group(memory, cpu, fetch, serial, devices, enable_group);
+  }
+  original_pin_boundary(memory, cpu, fetch, serial, devices);
+  const auto enables = devices.dai->snapshot();
+  const auto timing = devices.clock_routes->snapshot();
+  require(!enables.pending[0] &&
+          enables.routes[0] == (clocks ? clock_groups.back().result : enable_group.result));
+  require(!timing.pending[0] &&
+          timing.routes[0] == (clocks ? clock_groups[3].result : clock_groups[0].initial));
+  constexpr unsigned int earlier_instructions = 95;
+  constexpr unsigned int spi_instructions = 3;
+  const auto instructions =
+      earlier_instructions + spi_instructions + (6 * (clocks ? clock_groups.size() : 1U));
+  std::cout << "  Clocked application:" << instructions
+            << " actual instructions; real SPI configuration and further SRU RMWs; PIN0 at2460 "
+               "remains unbound\n";
 }
 
 void original_application_spi_boundary(lead_a1::SharcMemory &memory,
@@ -1093,34 +1343,30 @@ void original_application_spi_boundary(lead_a1::SharcMemory &memory,
                                        lead_a1::SharcFetch &fetch,
                                        SerialInput &serial,
                                        HeaderDevices devices) {
-  original_application_prepare(memory, cpu, fetch, serial, devices);
-  constexpr unsigned int spi_offset = 207;
+  constexpr std::array<unsigned int, 3> offsets{207, 210, 213};
   constexpr std::uint32_t spi_dma = 0x1084;
-  const auto pc = devices.placement.second_call + spi_offset;
-  const auto access = fetch.peripheral_access(cpu);
-  require(access == (lead_a1::SharcFetchIopAccess{
-                        .pc = pc, .address = spi_dma, .operation = lead_a1::AccessKind::write}));
-  require(cpu.state().system[0] == (lead_a1::SharcKnown32{.known = full32}));
-  const auto before = cpu.state();
-  const auto pipeline = fetch.state();
-  const auto queue = devices.bridge->snapshot();
-  const auto spi = devices.spi.state();
-  const auto pins = devices.dpi_pin->snapshot();
-  const auto enables = devices.dpi_enable->snapshot();
-  std::ostringstream expected;
-  expected << "Original IOP owner pc=0x" << std::hex << pc
-           << " word-address=0x1084 operation=write: no qualified bridge mapping";
-  bool stopped{};
-  try {
-    static_cast<void>(original_application_retire(memory, cpu, fetch, serial, devices));
-  } catch (const std::runtime_error &error) {
-    if (error.what() != expected.str()) { throw; }
-    stopped = true;
+  constexpr std::uint32_t spi_control = 0x1000;
+  constexpr std::uint32_t configured = 0x4d14;
+  const auto before = devices.spi.state();
+  for (unsigned int index = 0; index < offsets.size(); ++index) {
+    original_application_prepare(memory, cpu, fetch, serial, devices);
+    const auto access = fetch.peripheral_access(cpu);
+    require(access.has_value() == (index != 1));
+    const auto pc = devices.placement.second_call + offsets[index];
+    if (access) {
+      require(access->pc == pc && access->operation == lead_a1::AccessKind::write &&
+              access->address == (index == 0 ? spi_dma : spi_control));
+    }
+    const auto step = original_application_retire(memory, cpu, fetch, serial, devices);
+    require(step.pc == pc && step.address_units == 3);
+    const auto value = index == 0 ? 0U : configured;
+    require(cpu.state().system[0] == (lead_a1::SharcKnown32{.value = value, .known = full32}));
+    if (access) {
+      check_posted_application(devices, {.pc = pc, .address = access->address, .value = value});
+    }
+    if (index == 0) { require(devices.spi.state() == before); }
   }
-  require(stopped && cpu.state() == before && fetch.state() == pipeline &&
-          devices.bridge->snapshot() == queue && devices.spi.state() == spi &&
-          devices.dpi_pin->snapshot() == pins && devices.dpi_enable->snapshot() == enables &&
-          !memory.active());
+  original_post_spi_routing(memory, cpu, fetch, serial, devices);
 }
 
 void original_application_dpi(lead_a1::SharcMemory &memory,
@@ -1202,19 +1448,19 @@ void original_application_dpi(lead_a1::SharcMemory &memory,
     }
     if (index == 0) {
       constexpr unsigned int first_read_clock = 217;
-      require(devices.bridge->state().clocks == first_read_clock);
+      require(devices.bridge->state().clocks - devices.iop_epoch == first_read_clock);
       check_original_power_outputs(cpu, devices);
       check_original_timing_routes(devices);
       check_original_pdap(devices);
     }
   }
   constexpr unsigned int elapsed = 95 + 6 + (13 * 7) + (12 * 4);
-  require(devices.bridge->state().clocks == elapsed &&
+  require(devices.bridge->state().clocks - devices.iop_epoch == elapsed &&
           devices.dpi_pin->snapshot() == initial_pins &&
           devices.dpi_enable->snapshot() == initial_enables);
   original_application_spi_boundary(memory, cpu, fetch, serial, devices);
-  std::cout << "  Clocked application:95 actual instructions; two original SRU2 RMW groups "
-               "and zero USTAT1; explicit5/8 IOP timing; next SPIDMAC write needs binding\n";
+  std::cout << "  Earlier clocked checkpoint:95 instructions/240 local CCLK through SRU2; "
+               "explicit5/8 IOP timing\n";
 }
 
 void original_clocked_application(lead_a1::SharcMemory &memory,
@@ -1222,7 +1468,10 @@ void original_clocked_application(lead_a1::SharcMemory &memory,
                                   lead_a1::SharcFetch &fetch,
                                   SerialInput &serial,
                                   HeaderDevices devices) {
-  require(devices.bridge != nullptr && devices.bridge->snapshot() == lead_a1::SharcIopState{});
+  require(devices.bridge != nullptr);
+  const auto initial_bus = devices.bridge->snapshot();
+  require(initial_bus.write_count == 0 && !initial_bus.request && !initial_bus.read);
+  devices.iop_epoch = initial_bus.clocks;
   constexpr unsigned int power_instructions = 18;
   constexpr unsigned int instructions = 82;
   for (unsigned int index = 0; index < instructions; ++index) {
@@ -1478,12 +1727,18 @@ void sequenced_finalizer(lead_a1::SharcMemory &memory,
                                                    : lead_a1::SharcFetchBus::available;
     static_cast<void>(fetch.advance_sequenced(cpu, bus));
     ++clocks;
-    if (fetch.state().execute) { require(cpu.step(fetch).minimum_core_cycles == 1); }
-    advance_devices(memory, cpu, serial, devices);
+    auto retired_clock = RetireClock::pending;
+    if (fetch.state().execute) {
+      retired_clock = retire_loader_instruction(memory, cpu, fetch, serial, devices);
+    }
+    finish_loader_clock(memory, cpu, serial, devices, retired_clock);
   }
   require(cpu.state().pc == frontier && cpu.state().depth == 1 && cpu.state().loops_empty == false);
   require(!cpu.state().count_loop && !cpu.state().branch && !memory.active());
-  check_frontier(cpu, devices.control, devices.spi, serial, terminal);
+  const auto pending = devices.profile == OriginalProfile::clocked_iop
+                           ? std::optional{devices.bridge->snapshot()}
+                           : std::nullopt;
+  check_frontier(cpu, devices.control, devices.spi, serial, terminal, pending);
   const auto address = fetch.state().address;
   const auto flow = fetch.state().flow;
   constexpr std::uint32_t loop_start = 0x8c003;
@@ -1532,8 +1787,11 @@ void sequenced_next_records(lead_a1::SharcMemory &memory,
       devices.clock.accessed = false;
       static_cast<void>(fetch.advance_sequenced(cpu));
       ++clocks;
-      if (fetch.state().execute) { require(cpu.step(fetch).minimum_core_cycles == 1); }
-      advance_devices(memory, cpu, serial, devices);
+      auto retired_clock = RetireClock::pending;
+      if (fetch.state().execute) {
+        retired_clock = retire_loader_instruction(memory, cpu, fetch, serial, devices);
+      }
+      finish_loader_clock(memory, cpu, serial, devices, retired_clock);
       if (cpu.state().pc == parsed) {
         header_seen = true;
         for (unsigned int index = 0; index < 3; ++index) {
@@ -1579,9 +1837,10 @@ void sequenced_first_record(lead_a1::SharcMemory &memory,
     static_cast<void>(fetch.advance_sequenced(cpu));
     ++clocks;
     const auto executing = fetch.state().execute;
+    auto retired_clock = RetireClock::pending;
     if (executing) {
       const auto pc = executing->address;
-      require(cpu.step(fetch).minimum_core_cycles == 1);
+      retired_clock = retire_loader_instruction(memory, cpu, fetch, serial, devices);
       if (pc == setup) {
         const auto loop = cpu.state().count_loop;
         require(loop && loop->total == count / 2);
@@ -1589,15 +1848,7 @@ void sequenced_first_record(lead_a1::SharcMemory &memory,
       }
       if (pc == reader_call) { ++calls; }
     }
-    require(!devices.clock.accessed);
-    devices.clock.device.advance({.core_cycles = 1});
-    serial.advance(devices.spi, memory);
-    static_cast<void>(devices.spi.service_dma(memory));
-    if (devices.spi.state().interrupt_pending) {
-      cpu.latch_interrupt(0x1000);
-      devices.spi.acknowledge_interrupt();
-    }
-    require(!devices.spi.state().overflow);
+    finish_loader_clock(memory, cpu, serial, devices, retired_clock);
   }
   require(cpu.state().pc == next_header && !cpu.state().count_loop && cpu.state().depth == 0);
   const auto flow = fetch.state().flow;
@@ -1626,20 +1877,12 @@ void sequenced_first_header(lead_a1::SharcMemory &memory,
     devices.clock.accessed = false;
     static_cast<void>(fetch.advance_sequenced(cpu));
     ++clocks;
+    auto retired_clock = RetireClock::pending;
     if (fetch.state().execute) {
-      require(cpu.step(fetch).minimum_core_cycles == 1);
+      retired_clock = retire_loader_instruction(memory, cpu, fetch, serial, devices);
       ++instructions;
     }
-    require(!devices.clock.accessed);
-    devices.clock.device.advance({.core_cycles = 1});
-    serial.advance(devices.spi, memory);
-    static_cast<void>(devices.spi.service_dma(memory));
-    if (devices.spi.state().interrupt_pending) {
-      constexpr std::uint32_t p1i = 0x1000;
-      cpu.latch_interrupt(p1i);
-      devices.spi.acknowledge_interrupt();
-    }
-    require(!devices.spi.state().overflow);
+    finish_loader_clock(memory, cpu, serial, devices, retired_clock);
   }
   require(cpu.state().pc == parsed && cpu.state().depth == 0 && instructions != 0);
   constexpr std::array<unsigned int, 3> registers{8, 2, 3};
@@ -1679,8 +1922,15 @@ struct OriginalRouting {
   std::optional<lead_a1::SharcIopPort> sru;
   std::optional<lead_a1::SharcIopPort> dpi;
   std::optional<lead_a1::SharcIopPort> power_port;
+  std::optional<lead_a1::SharcSpiPort> spi;
+  std::optional<lead_a1::SharcIopPort> spi_core;
+  std::optional<lead_a1::SharcIopPort> spi_dma;
 
-  lead_a1::SharcIopBridge *map(lead_a1::SharcMemory &memory, OriginalProfile profile) {
+  lead_a1::SharcIopBridge *
+  map(lead_a1::SharcMemory &memory, OriginalProfile profile, lead_a1::SharcSpi &serial) {
+    if (profile != OriginalProfile::clocked_iop) {
+      memory.map_io({.first_word = spi_index, .words = 5}, serial);
+    }
     if (profile != OriginalProfile::visa_reference && profile != OriginalProfile::clocked_iop) {
       return nullptr;
     }
@@ -1689,7 +1939,10 @@ struct OriginalRouting {
     constexpr std::uint32_t first_frame = 0x2450;
     constexpr std::uint32_t idp_control = 0x24b0;
     constexpr unsigned int idp_span = 0x21;
-    constexpr lead_a1::SharcIoMapping window{.first_word = 0x1c00, .words = 0x900};
+    const lead_a1::SharcIoMapping window =
+        profile == OriginalProfile::clocked_iop
+            ? lead_a1::SharcIoMapping{.first_word = 0x1000, .words = 0x1500}
+            : lead_a1::SharcIoMapping{.first_word = 0x1c00, .words = 0x900};
     constexpr lead_a1::SharcIoMapping sru_window{.first_word = 0x2400, .words = 0x100};
     constexpr lead_a1::SharcIoMapping dpi_window{.first_word = 0x1c00, .words = 0x100};
     peripheral.map_io({.first_word = first_pben, .words = 4}, dai);
@@ -1700,6 +1953,12 @@ struct OriginalRouting {
     memory.map_io(sru_window, sru.emplace(bound, sru_window));
     memory.map_io(dpi_window, dpi.emplace(bound, dpi_window));
     if (profile == OriginalProfile::clocked_iop) {
+      constexpr lead_a1::SharcIoMapping spi_window{.first_word = 0x1000, .words = 0x85};
+      constexpr lead_a1::SharcIoMapping core_window{.first_word = 0x1000, .words = 7};
+      constexpr lead_a1::SharcIoMapping dma_window{.first_word = 0x1080, .words = 5};
+      peripheral.map_io(spi_window, spi.emplace(serial));
+      memory.map_io(core_window, spi_core.emplace(bound, core_window));
+      memory.map_io(dma_window, spi_dma.emplace(bound, dma_window));
       constexpr lead_a1::SharcIoMapping power_window{.first_word = 0x2001, .words = 1};
       peripheral.map_io(power_window, power);
       constexpr std::uint32_t dpi_pin0 = 0x1c10;
@@ -1726,11 +1985,11 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
   ObservedClock clock;
   memory.map_io({.first_word = 0x2000, .words = 1}, clock);
   map_original_power(memory, routing.power, profile);
-  auto *bus = routing.map(memory, profile);
   lead_a1::SharcControl control(true);
   lead_a1::SharcSpi spi(boot.state());
+  auto *bus = routing.map(memory, profile, spi);
   memory.map_io({.first_word = sysctl, .words = 1}, control);
-  memory.map_io({.first_word = spi_index, .words = 5}, spi);
+
   lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(reset), &control);
   lead_a1::SharcFetchState transport;
   transport.flow = lead_a1::SharcFetchFlow{.next = reset};
@@ -1867,11 +2126,35 @@ Inventory inventory(std::span<const std::byte> stream, Placement placement) {
   return result;
 }
 
+void check_vector_arm(const lead_a1::SharcSpi &spi,
+                      const std::optional<lead_a1::SharcIopState> &pending) {
+  constexpr unsigned int vector_words = 384;
+  if (!pending) {
+    require(spi.state().serial.remaining == vector_words);
+    return;
+  }
+  const auto &bus = *pending;
+  const auto first = bus.writes[0];
+  const auto last = bus.writes[1];
+  constexpr std::uint32_t modifier_pc = 0x8c08b;
+  constexpr std::uint32_t count_pc = 0x8c08d;
+  constexpr std::uint32_t modifier_word = 0x1081;
+  constexpr std::uint32_t count_word = 0x1082;
+  require(spi.state().serial.remaining == 0 && bus.write_count == 2 && !bus.request && !bus.read &&
+          first && last && first->intent.pc == modifier_pc &&
+          first->intent.address == modifier_word && first->value == 1 &&
+          last->intent.pc == count_pc && last->intent.address == count_word &&
+          last->value == vector_words && first->intent.delivery_cycles == 5 &&
+          last->intent.delivery_cycles == 5 && last->posted_at == first->posted_at + 2 &&
+          bus.clocks == last->posted_at + 1);
+}
+
 void check_frontier(const lead_a1::Sharc &cpu,
                     const lead_a1::SharcControl &control,
                     const lead_a1::SharcSpi &spi,
                     SerialInput serial,
-                    std::size_t terminal) {
+                    std::size_t terminal,
+                    std::optional<lead_a1::SharcIopState> pending) {
   const auto &state = cpu.state();
   require(!state.interrupt && !state.idle_pc);
   require(state.pc == frontier && state.depth == 1 && state.loops_empty == false &&
@@ -1890,8 +2173,8 @@ void check_frontier(const lead_a1::Sharc &cpu,
           !state.cache.pending_flush);
   constexpr std::uint32_t vector_destination = 0x92000;
   constexpr unsigned int vector_words = 384;
-  require(spi.state().serial.next_word == vector_destination &&
-          spi.state().serial.remaining == vector_words && spi.state().modifier == 1);
+  require(spi.state().serial.next_word == vector_destination && spi.state().modifier == 1);
+  check_vector_arm(spi, pending);
   require(state.data[0][1].value == std::uint64_t{vector_destination} * 256 &&
           state.data[0][2].value == std::uint64_t{vector_words} * 256);
   const auto saved = (std::uint64_t{word(serial.stream, terminal + 8)} << 32) |

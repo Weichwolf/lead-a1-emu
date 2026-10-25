@@ -44,5 +44,9 @@ unknown input state, held interrupt requests, retained DMA data, actual MMIO
 abort/retry and malformed accesses. Actual fetched CPU/IOP tests cover all
 four4/5-write7/8-read combinations, late target failure and no-time retry.
 Original DSP and coupled ARM/SPI prefix regressions retain their independent
-payload/control assertions. The original application's timed SPI binding,
-complete startup and physical board behavior remain open.
+payload/control assertions. The separate original_sharc_clocked_iop profile
+now shares this same boot instance through actual posted native-loader and
+application accesses (sharc-iop-bridge.txt). Its ordinary payload/vector/
+P1I/RTI checks and application SPI0/4d14 stores precede the remaining unbound
+SRU_PIN0/2460 read. Core IOP delivery does not qualify the distinct SPI enable/
+flush effects above, complete startup or physical board behavior.

@@ -700,6 +700,13 @@ void loop_callee_program(Fixture &fixture, LoopChoice choice) {
   fixture.code({.offset = nested_offset + 2, .opcode = rts});
 }
 
+void unknown_startup_stack(const lead_a1::SharcState &core) {
+  constexpr std::uint32_t resource_flags = 0x4600000;
+  require(!core.depth && !core.loops_empty && present(core.count_loop).control &&
+          (core.system[8].known & resource_flags) == 0);
+  for (const auto frame : core.pc_stack) { require(!frame); }
+}
+
 void check_callee(const Fixture &fixture, LoopChoice choice, unsigned int accesses) {
   const auto &core = fixture.cpu.state();
   const auto &transport = fixture.fetch.state();
@@ -713,8 +720,13 @@ void check_callee(const Fixture &fixture, LoopChoice choice, unsigned int access
   const auto iteration = accesses / offsets.size();
   const auto floor = choice.length == 4 && iteration == choice.count - 1 ? 0U : 1U;
   const auto &loop = present(core.count_loop);
-  require(loop.remaining == choice.count - iteration && loop.frame_live == (floor != 0) &&
-          core.depth == floor + (slot < 2 ? 1U : 2U));
+  require(loop.remaining == choice.count - iteration);
+  if (choice.length == 4 && choice.count == 1) {
+    require(loop.frame_live);
+    unknown_startup_stack(core);
+    return;
+  }
+  require(loop.frame_live == (floor != 0) && core.depth == floor + (slot < 2 ? 1U : 2U));
   constexpr std::uint32_t call_frame = 0x1000000;
   constexpr std::uint32_t special_frame = 0x2000000;
   const auto return_pc = native + (choice.length == 4 ? 4U : 2U);
@@ -741,9 +753,19 @@ void rejected_callee_bindings(Fixture &fixture) {
            "mode/branch/cache/loop/IRQ context not qualified");
   auto mismatched = core;
   ++present(mismatched.count_loop).total;
-  lead_a1::Sharc other_count(fixture.memory, mismatched, &fixture.control);
-  rejected([&] { static_cast<void>(fixture.fetch.peripheral_access(other_count)); },
-           "long-loop/native counter mismatch");
+  if (present(mismatched.count_loop).control) {
+    rejected([&] { const lead_a1::Sharc invalid(fixture.memory, mismatched, &fixture.control); },
+             "unknown four-loop startup state");
+    auto wrong_fetch = transport;
+    ++present(present(present(wrong_fetch.flow).long_loop).counter).saved_depth;
+    lead_a1::SharcFetch other_fetch(fixture.memory, wrong_fetch);
+    rejected([&] { static_cast<void>(other_fetch.peripheral_access(fixture.cpu)); },
+             "long-loop/native counter mismatch");
+  } else {
+    lead_a1::Sharc other_count(fixture.memory, mismatched, &fixture.control);
+    rejected([&] { static_cast<void>(fixture.fetch.peripheral_access(other_count)); },
+             "long-loop/native counter mismatch");
+  }
   require(fixture.cpu.state() == core && fixture.fetch.state() == transport &&
           fixture.bus.snapshot() == bus && fixture.target.current.writes == 0 &&
           fixture.target.current.reads == 0);
@@ -807,7 +829,7 @@ bool callee_tick(Fixture &fixture, LoopChoice choice, unsigned int accesses) {
   return false;
 }
 
-void loop_callee_case(LoopChoice choice) {
+lead_a1::SharcState loop_initial() {
   constexpr SourceChoice source{.reg = 0x2e,
                                 .bank_bit = 5,
                                 .alternate = false,
@@ -816,6 +838,11 @@ void loop_callee_case(LoopChoice choice) {
                                 .read_cycles = 8};
   auto state = source_initial(source);
   state.data[0][1] = {.known = full40};
+  return state;
+}
+
+void loop_callee_case(LoopChoice choice) {
+  auto state = loop_initial();
   Fixture fixture(false, {}, state, sequenced(native));
   loop_callee_program(fixture, choice);
   unsigned int accesses{};
@@ -839,7 +866,6 @@ void loop_callee_matrix() {
   unsigned int cases{};
   for (const unsigned int length : {4U, 6U}) {
     for (const unsigned int count : {1U, 2U, 3U, 5U}) {
-      if (length == 4 && count == 1) { continue; }
       for (const unsigned int writes : {4U, 5U}) {
         for (const unsigned int reads : {7U, 8U}) {
           loop_callee_case({.length = length, .count = count, .writes = writes, .reads = reads});
@@ -848,7 +874,7 @@ void loop_callee_matrix() {
       }
     }
   }
-  constexpr unsigned int expected_cases = 28;
+  constexpr unsigned int expected_cases = 32;
   require(cases == expected_cases);
 }
 
@@ -872,9 +898,11 @@ void guarded_loop_body_io() {
   }
 }
 
-void guarded_count_one_startup() {
-  Fixture fixture;
-  loop_callee_program(fixture, {.length = 4, .count = 1, .writes = 5, .reads = 8});
+void startup_stack_observer(std::uint64_t observer) {
+  Fixture fixture(false, {}, loop_initial(), sequenced(native));
+  constexpr LoopChoice choice{.length = 4, .count = 1, .writes = 5, .reads = 8};
+  loop_callee_program(fixture, choice);
+  fixture.code({.offset = helper_offset + 2, .opcode = observer});
   constexpr unsigned int limit = 32;
   unsigned int clocks{};
   while (clocks < limit) {
@@ -886,24 +914,158 @@ void guarded_count_one_startup() {
     fixture.bus.tick();
     ++clocks;
   }
+  unknown_startup_stack(fixture.cpu.state());
+  static_cast<void>(fixture.write(choice.writes));
+  fixture.next();
+  static_cast<void>(fixture.read(choice.reads));
+  unknown_startup_stack(fixture.cpu.state());
+  fixture.next();
   const auto core = fixture.cpu.state();
   const auto transport = fixture.fetch.state();
   const auto bus = fixture.bus.snapshot();
-  require(core.pc == native + helper_offset && present(core.count_loop).control && !core.depth);
-  rejected([&fixture] { static_cast<void>(fixture.fetch.peripheral_access(fixture.cpu)); },
-           "mode/branch/cache/loop/IRQ context not qualified");
+  require(core.pc == native + helper_offset + 2 && fixture.target.current.writes == 1 &&
+          fixture.target.current.reads == 1 && fixture.target.current.words[0] == first_value);
+  rejected([&fixture] { static_cast<void>(fixture.cpu.step(fixture.fetch)); },
+           "Unknown SHARC PC stack depth");
+  fixture.code({.offset = helper_offset + 2, .opcode = 0});
+  rejected([&fixture] { static_cast<void>(fixture.cpu.step(fixture.fetch)); },
+           "Unknown SHARC PC stack depth");
+  auto fabricated = core;
+  fabricated.depth = 2;
+  rejected([&] { const lead_a1::Sharc invalid(fixture.memory, fabricated, &fixture.control); },
+           "unknown four-loop startup state");
   require(fixture.cpu.state() == core && fixture.fetch.state() == transport &&
-          fixture.bus.snapshot() == bus && fixture.target.current.reads == 0 &&
-          fixture.target.current.writes == 0);
+          fixture.bus.snapshot() == bus && fixture.target.current.reads == 1 &&
+          fixture.target.current.writes == 1);
+}
+
+void unknown_startup_observers() {
+  constexpr std::array<std::uint64_t, 2> observers{0x767e00000000, 0x767e80000000};
+  for (const auto observer : observers) { startup_stack_observer(observer); }
+}
+
+constexpr unsigned int deferred_entry = 64;
+constexpr unsigned int deferred_body = 16;
+constexpr unsigned int deferred_end = 17;
+constexpr std::uint32_t deferred_parent = 0x10c0078;
+
+lead_a1::SharcState deferred_initial() {
+  auto state = initial(native + deferred_entry);
+  state.depth = 1;
+  state.pc_stack[0] = deferred_parent;
+  state.system[6] = {};
+  state.effective[6] = {}; // Deferred IOP must not sample the future termination condition.
+  return state;
+}
+
+void deferred_program(Fixture &fixture) {
+  constexpr std::uint64_t deferred_do = 0x0e0000ffffd1;
+  constexpr std::uint64_t write_stack = 0x0f6400000000;
+  constexpr std::uint64_t immediate_r0 = 0x0f0000000000;
+  constexpr std::uint64_t read_stack_r0 = 0x767e00000000;
+  constexpr std::uint64_t read_depth_r1 = 0x767e80800000;
+  constexpr std::uint64_t jump_db = 0x063e04000000;
+  constexpr unsigned int ustat3 = 0x7e;
+  constexpr unsigned int ustat4 = 0x7f;
+  fixture.code({.offset = deferred_entry, .opcode = deferred_do});
+  fixture.code({.offset = deferred_entry + 1, .opcode = write_stack | (native + deferred_body)});
+  fixture.code({.offset = deferred_entry + 2, .opcode = move(Kind::write, 0)});
+  fixture.code({.offset = deferred_entry + 3, .opcode = immediate_r0 | third_value});
+  fixture.code({.offset = deferred_entry + 4, .opcode = move(Kind::write, 1, address + 1)});
+  fixture.code({.offset = deferred_entry + 5, .opcode = move(Kind::read, ustat4)});
+  fixture.code({.offset = deferred_entry + 7, .opcode = move(Kind::read, ustat3, address + 1)});
+  fixture.code({.offset = deferred_entry + 8, .opcode = read_stack_r0});
+  fixture.code({.offset = deferred_entry + 9, .opcode = read_depth_r1});
+  fixture.code({.offset = deferred_entry + 11, .opcode = move(Kind::write, 0)});
+  fixture.code({.offset = deferred_entry + 12, .opcode = move(Kind::write, 1, address + 1)});
+  fixture.code({.offset = deferred_entry + 13, .opcode = jump_db | (native + deferred_body)});
+}
+
+lead_a1::SharcStep deferred_transfer(Fixture &fixture, Kind operation, unsigned int cycles) {
+  const bool read = operation == Kind::read;
+  const auto core = fixture.cpu.state();
+  const auto transport = fixture.fetch.state();
+  fixture.issue(cycles);
+  while (!fixture.bus.ready()) {
+    if (!read) { fixture.fetch.wait_iop(fixture.cpu, fixture.bus); }
+    fixture.bus.tick();
+    if (read && !fixture.bus.ready()) { fixture.fetch.wait_iop(fixture.cpu, fixture.bus); }
+    require(fixture.cpu.state() == core && fixture.fetch.state() == transport);
+  }
+  const auto step = fixture.cpu.step(fixture.fetch);
+  if (!read) { fixture.bus.tick(); }
+  return step;
+}
+
+struct IopTimings {
+  unsigned int write_cycles;
+  unsigned int read_cycles;
+};
+
+void deferred_iop_case(IopTimings timings) {
+  Fixture fixture(false, {}, deferred_initial(), sequenced(native + deferred_entry));
+  deferred_program(fixture);
+  constexpr unsigned int instructions = 13;
+  unsigned int transfers{};
+  for (unsigned int index = 0; index < instructions; ++index) {
+    fixture.next();
+    const auto access = fixture.fetch.peripheral_access(fixture.cpu);
+    if (access) {
+      const auto cycles =
+          access->operation == Kind::read ? timings.read_cycles : timings.write_cycles;
+      require(deferred_transfer(fixture, access->operation, cycles).pc ==
+              native + deferred_entry + index);
+      const auto &core = fixture.cpu.state();
+      const auto &loop = present(core.arithmetic_loop);
+      require(loop.body == native + deferred_body && loop.end == native + deferred_end &&
+              loop.phase == lead_a1::SharcArithmeticPhase::deferred && loop.saved_depth == 1 &&
+              core.depth == 2 && core.pc_stack[0] == deferred_parent &&
+              core.pc_stack[1] == native + deferred_body && core.system[6].known == 0 &&
+              core.effective[6].known == 0);
+      ++transfers;
+    } else {
+      require(fixture.cpu.step(fixture.fetch).pc == native + deferred_entry + index);
+      fixture.bus.tick();
+    }
+  }
+  require(transfers == 6 && fixture.target.current.writes == 2 &&
+          fixture.target.current.reads == 2 && fixture.target.current.words[0] == first_value &&
+          fixture.target.current.words[1] == second_value);
+  const auto &core = fixture.cpu.state();
+  require(
+      core.system[15] == (lead_a1::SharcKnown32{.value = first_value, .known = all_source_bits}) &&
+      core.system[14] == (lead_a1::SharcKnown32{.value = second_value, .known = all_source_bits}));
+  require(core.pc == native + deferred_entry + instructions &&
+          value(fixture.cpu, 0) == native + deferred_body && value(fixture.cpu, 1) == 2 &&
+          present(core.arithmetic_loop).phase == lead_a1::SharcArithmeticPhase::deferred);
+  const auto queue = fixture.bus.snapshot();
+  const auto &first = present(queue.writes[0]);
+  const auto &second = present(queue.writes[1]);
+  require(queue.write_count == 2 && !queue.request && first.value == native + deferred_body &&
+          second.value == 2 && second.posted_at == first.posted_at + 2 &&
+          queue.clocks == second.posted_at + 1);
+  const auto &branch = present(fixture.fetch.state().address);
+  require(branch.address == native + deferred_entry + instructions &&
+          present(branch.branch).target == native + deferred_body &&
+          present(fixture.fetch.state().flow).next == native + deferred_body);
+}
+
+void deferred_iop_matrix() {
+  for (const unsigned int writes : {4U, 5U}) {
+    for (const unsigned int reads : {7U, 8U}) {
+      deferred_iop_case({.write_cycles = writes, .read_cycles = reads});
+    }
+  }
 }
 
 }
 
 int main() {
   try {
+    deferred_iop_matrix();
     loop_callee_matrix();
     guarded_loop_body_io();
-    guarded_count_one_startup();
+    unknown_startup_observers();
     all_sources();
     unknown_sources_and_banks();
     isolated_read_and_retained_input();
