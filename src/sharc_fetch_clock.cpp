@@ -26,7 +26,7 @@ void validate_clock(const SharcFetchState &state,
   if (sequenced != state.flow.has_value()) {
     throw std::runtime_error("SHARC sequenced fetch requires its sequenced clock");
   }
-  if (next_address) { detail::sharc_fetch_address(*next_address); }
+  if (next_address) { detail::sharc_fetch_program_address(*next_address); }
   if (bus == SharcFetchBus::block_conflict) {
     throw std::runtime_error("SHARC block-conflict arbitration not qualified; not cached");
   }
@@ -168,9 +168,16 @@ SharcFetchEvent clock_transport(SharcMemory &memory,
     }
     return event;
   }
+  constexpr std::uint32_t first_short = 0x100000;
+  if (previous.visa || previous.visa_fetch_aborted ||
+      (previous.fetch1 && *previous.fetch1 >= first_short) ||
+      (next_address && *next_address >= first_short)) {
+    if (!sequenced) { throw std::runtime_error("SHARC VISA fetch requires its sequencer"); }
+    return detail::sharc_fetch_visa_clock(memory, cpu, previous, next, next_address, bus, read);
+  }
   const auto event =
       normal_clock(memory, cache, previous, next, cpu.effective[4], next_address, bus, read);
-  if (sequenced) { detail::sharc_fetch_flow(cpu, previous, next); }
+  if (sequenced) { static_cast<void>(detail::sharc_fetch_flow(cpu, previous, next)); }
   return event;
 }
 
@@ -261,8 +268,8 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
   if (sequenced) { detail::sharc_fetch_arithmetic_clock(core, next, event); }
   if (sequenced) { detail::sharc_fetch_loop_clock(core, state_, next, event.loop_stall); }
   if (sequenced &&
-      (event.address_accepted || (event.loop_stall && state_.flow && state_.flow->long_loop &&
-                                  state_.flow->long_loop->four == SharcFetchFourPhase::hold))) {
+      (!event.stalled || (event.loop_stall && state_.flow && state_.flow->long_loop &&
+                          state_.flow->long_loop->four == SharcFetchFourPhase::hold))) {
     detail::sharc_fetch_dag_prepare(core, next, cpu.control_);
   }
   if (!next.execute) { detail::sharc_fetch_quiet_effects(core, next, cpu.control_); }

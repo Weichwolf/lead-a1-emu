@@ -4,6 +4,7 @@
 #include "lead_a1/memory.hpp"
 #include "lead_a1/sharc_memory.hpp"
 #include "lead_a1/sharc_memory_view.hpp"
+#include "sharc_visa_internal.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -21,7 +22,9 @@ constexpr std::uint32_t first_short = 0x100000;
 constexpr std::uint32_t end_short = 0x200000;
 constexpr unsigned int burst_words = 3;
 
-void validate(const SharcVisaState &state) {
+}
+
+void detail::sharc_visa_validate(const SharcVisaState &state) {
   if (state.decode < first_short || state.decode > end_short || state.fetch < state.decode ||
       state.fetch > end_short || state.count > state.data.size()) {
     throw std::invalid_argument("Invalid VISA buffer addresses/count");
@@ -35,6 +38,8 @@ void validate(const SharcVisaState &state) {
     if (state.data[index] != 0) { throw std::invalid_argument("Nonempty unused VISA buffer cell"); }
   }
 }
+
+namespace {
 
 void consume(SharcVisaState &state, unsigned int words) {
   for (unsigned int index = words; index < state.count; ++index) {
@@ -51,7 +56,7 @@ void consume(SharcVisaState &state, unsigned int words) {
 
 SharcVisaBuffer::SharcVisaBuffer(SharcMemory &memory, SharcVisaState state)
     : memory_(memory), state_(state) {
-  validate(state_);
+  detail::sharc_visa_validate(state_);
 }
 
 void SharcVisaBuffer::capture() try {
@@ -72,7 +77,7 @@ void SharcVisaBuffer::capture() try {
   auto next = state_;
   next.delay = burst;
   next.fetch += burst_words;
-  validate(next);
+  detail::sharc_visa_validate(next);
   state_ = next;
 } catch (const std::exception &error) {
 
@@ -127,7 +132,7 @@ std::optional<SharcVisaInstruction> SharcVisaBuffer::advance(bool accept) try {
     next.count += burst_words;
     next.delay.reset();
   }
-  validate(next);
+  detail::sharc_visa_validate(next);
   state_ = next;
   return decoded;
 } catch (const std::exception &error) {

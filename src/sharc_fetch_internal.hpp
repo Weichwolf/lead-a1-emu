@@ -12,6 +12,15 @@ namespace lead_a1::detail {
 inline constexpr std::uint32_t sharc_fetch_controls = 0x80010;
 void sharc_fetch_validate(const SharcFetchState &state);
 void sharc_fetch_address(std::uint32_t address);
+void sharc_fetch_program_address(std::uint32_t address);
+void sharc_fetch_visa_validate(const SharcFetchState &state);
+[[nodiscard]] SharcFetchEvent sharc_fetch_visa_clock(SharcMemory &memory,
+                                                     const SharcState &cpu,
+                                                     const SharcFetchState &previous,
+                                                     SharcFetchState &next,
+                                                     std::optional<std::uint32_t> address,
+                                                     SharcFetchBus bus,
+                                                     SharcFetchRead read);
 void sharc_fetch_multiplier_guard(const SharcFetchState &state);
 void sharc_fetch_mode(const SharcFetchState &state, SharcKnown32 mode);
 [[nodiscard]] SharcFetchLookup
@@ -39,9 +48,10 @@ void sharc_fetch_dag_validate(const SharcFetchState &state);
 void sharc_fetch_branch_validate(const SharcFetchState &state);
 [[nodiscard]] std::optional<bool> sharc_fetch_branch_retirement(const SharcState &cpu,
                                                                 const SharcFetchWord &word);
-void sharc_fetch_flow(const SharcState &cpu,
-                      const SharcFetchState &previous,
-                      SharcFetchState &next);
+[[nodiscard]] bool sharc_fetch_flow(const SharcState &cpu,
+                                    const SharcFetchState &previous,
+                                    SharcFetchState &next,
+                                    bool address_accepted = true);
 void sharc_fetch_quiet_effects(SharcState &cpu,
                                const SharcFetchState &transport,
                                const SharcControl *control);

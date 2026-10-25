@@ -269,7 +269,7 @@ void guarded_control_and_clock_failures() {
       {.opcode = 0x061200000000 | destination, .reason = "FLAG/loop condition"},
       {.opcode = jump | 0x4000000000 | destination, .reason = "parallel/LA/CI/reserved branch"},
       {.opcode = jump | 0x1000000 | destination, .reason = "parallel/LA/CI/reserved branch"},
-      {.opcode = jump | 0x100000, .reason = "internal native address"},
+      {.opcode = jump | 0x200000, .reason = "internal native or VISA address"},
       {.opcode = 0x083e00000000, .reason = "RTI/loop/indirect/IDLE control"},
       {.opcode = 0x0b3e00000000, .reason = "RTI requires a qualified non-loop P1I frame"},
       {.opcode = 0x0e0000000001, .reason = "arithmetic DO setup"},

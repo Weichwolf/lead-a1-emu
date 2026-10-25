@@ -4,6 +4,7 @@
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_dag.hpp"
 #include "lead_a1/sharc_memory.hpp"
+#include "lead_a1/sharc_visa.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -28,6 +29,8 @@ struct SharcFetchWord {
   // Last retained real end instruction after an arithmetic Fetch1 abort.
   bool arithmetic_exit{};
   std::optional<SharcDagAddress> dag{std::nullopt};
+  // Actual captured encoding; opcode above is its decoded native operation.
+  std::optional<SharcVisaInstruction> visa{std::nullopt};
   bool operator==(const SharcFetchWord &) const = default;
 };
 
@@ -109,6 +112,9 @@ struct SharcFetchState {
   // An issued, uncached RAM fetch whose data response has not arrived in F2.
   // No opcode exists for this address until the owner completes the read.
   std::optional<std::uint32_t> pending_fetch2{std::nullopt};
+  std::optional<SharcVisaState> visa{std::nullopt};
+  // A redirected SW request must never supply bytes to the new IAB epoch.
+  bool visa_fetch_aborted{};
   bool operator==(const SharcFetchState &) const = default;
 };
 
@@ -124,6 +130,8 @@ struct SharcFetchEvent {
   bool loop_stall{};
   bool dag_stall{};
   bool compute_stall{};
+  // Only the fetch engine waits; Decode/Address/Execute continue advancing.
+  bool fetch_stall{};
   bool operator==(const SharcFetchEvent &) const = default;
 };
 

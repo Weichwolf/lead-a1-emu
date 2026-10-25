@@ -580,24 +580,33 @@ void check_original_visa_boundary(lead_a1::SharcMemory &memory,
                                   SerialInput &serial,
                                   HeaderDevices devices) {
   check_original_visa_frontend(memory, cpu, fetch, devices);
-  for (unsigned int clock = 0; clock < 2; ++clock) {
-    require(fetch.advance_sequenced(cpu).address_accepted && !fetch.state().execute);
+  constexpr unsigned int clocks = 8;
+  constexpr std::uint32_t first_call = 0x1c0528;
+  unsigned int retired{};
+  for (unsigned int clock = 0; clock < clocks; ++clock) {
+    devices.clock.accessed = false;
+    require(fetch.advance_sequenced(cpu).address_accepted);
+    if (fetch.state().execute) {
+      const auto step = cpu.step(fetch);
+      require(step.minimum_core_cycles == 1);
+      if (retired == 0) {
+        require(step.pc == self_modify + 1 && step.address_units == 1 &&
+                step.next_pc == devices.placement.visa_entry);
+      } else {
+        require(retired == 1 && step.pc == devices.placement.visa_entry &&
+                step.address_units == 3 && step.next_pc == first_call);
+      }
+      ++retired;
+    }
     advance_devices(memory, cpu, serial, devices);
   }
-  const auto native = cpu.state();
-  const auto transport = fetch.state();
-  const auto controller = devices.control.snapshot();
-  try {
-    static_cast<void>(fetch.advance_sequenced(cpu));
-  } catch (const std::exception &error) {
-    require(std::string(error.what()).find("SHARC fetch requires an internal native address") !=
-            std::string::npos);
-    require(cpu.state() == native && fetch.state() == transport &&
-            devices.control.snapshot() == controller && cpu.state().pc == self_modify + 1);
-    std::cout << "  Original VISA redirect remains guarded in Address at PC0x8c005\n";
-    return;
-  }
-  throw std::runtime_error("Missing original native-to-VISA transport guard");
+  constexpr std::uint32_t call_frame = 0x1000000;
+  require(retired == 2 && cpu.state().pc == first_call && cpu.state().depth == 1 &&
+          cpu.state().pc_stack[0] == (call_frame | (devices.placement.visa_entry + 3)) &&
+          cpu.state().loops_empty == true && !cpu.state().branch && !cpu.state().count_loop &&
+          !cpu.state().arithmetic_loop && !fetch.state().execute && !memory.active());
+  std::cout << "  Clocked native-to-VISA:8 grants, original JUMP and first VISA CALL executed; "
+               "next PC0x1c0528, actual return frame retained\n";
 }
 
 void fill_visa_reference(lead_a1::SharcVisaBuffer &buffer) {
@@ -920,7 +929,7 @@ void original_visa_instruction_reference(lead_a1::SharcMemory &memory,
   const auto transport = fetch.state();
   const auto controller = devices.control.snapshot();
   // Independent instruction-order fork copies the verified CPU checkpoint.
-  // The clocked redirect stays rejected; all input still comes from RAM/IAB.
+  // Its CPU checkpoint precedes the separately exercised clocked transition.
   lead_a1::Sharc cpu(memory, native, &devices.control);
   require(cpu.state() == native);
   std::optional<lead_a1::SharcVisaBuffer> buffer;
@@ -954,9 +963,8 @@ void original_visa_instruction_reference(lead_a1::SharcMemory &memory,
               (lead_a1::SharcClockRatio{.numerator = external_numerator, .denominator = 5}));
   require(checkpoint.state() == native && fetch.state() == transport &&
           devices.control.snapshot() == controller);
-  std::cout
-      << "  Separate VISA instruction-order fork:8286 actual instructions, six original "
-         "wait loops/11 PMCTL accesses, first CALL returned; clocked redirect still guarded\n";
+  std::cout << "  Separate VISA instruction-order fork:8286 actual instructions, six original "
+               "wait loops/11 PMCTL accesses, first CALL returned; full clocked call still open\n";
   if (!buffer) { throw std::runtime_error("Missing original VISA clock-prefix input"); }
   original_visa_power_reference(memory, cpu, *buffer, devices);
   require(checkpoint.state() == native && fetch.state() == transport &&
@@ -1005,9 +1013,11 @@ void sequenced_deferred_foreground(lead_a1::SharcMemory &memory,
   require(controller.control == 4 && controller.effective == 4 && !controller.delayed);
   std::cout << "  Deferred F2 input:4 original foreground instructions, saved SPI vector restored, "
                "PC0x8c005; response phase is not hardware-qualified\n";
+  const lead_a1::Sharc checkpoint(memory, cpu.state(), &devices.control);
+  const lead_a1::SharcFetch checkpoint_fetch(memory, fetch.state());
   check_original_visa_boundary(memory, cpu, fetch, serial, devices);
   if (devices.profile == OriginalProfile::visa_reference) {
-    original_visa_instruction_reference(memory, cpu, fetch, devices);
+    original_visa_instruction_reference(memory, checkpoint, checkpoint_fetch, devices);
   }
 }
 

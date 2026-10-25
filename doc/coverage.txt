@@ -149,15 +149,20 @@ ID  State    Evidence / remaining work
              A separate VISA input retains a five-short-word IAB plus a
              three-word delay. Actual SW16 captures, variable16/32/48 lengths,
              incomplete-prefix backpressure and independent restores have
-             literal tests (sharc-visa.txt). It does not execute VISA or qualify
-             native/VISA redirects, automatic fetch stalls or IRQs.
+             literal tests (sharc-visa.txt). The bound sequencer now clocks this
+             IAB through Decode/Address/Execute, with literal linear-flow
+             schedules, automatic fetch-only stalls and immediate native/VISA
+             JUMP/CALL/RTS (sharc-fetch-visa.txt). Actual encodings/lengths,
+             variable return frames, canceled speculative bursts, DAG stalls,
+             snapshots and failed retirement retain explicit expectations.
+             Complete VISA loops/cache/PM/IRQ timing remains open.
              Sharc::step(IAB) now provides a separate captured VISA CPU
              instruction-order reference. Real transactions consume qualified
              compact compute/move/return/NOP forms, preserve raw encodings and
              advance PC by actual short-word units. CALL frames, redirects,
              delayed slots and single uncompressed counter loops have independent
-             results/rollback checks (sharc-visa-execution.txt). The five-stage
-             native/VISA connection and other mixed-width control remain open.
+             results/rollback checks (sharc-visa-execution.txt). Other
+             mixed-width control and full clocked execution remain open.
              The bound internal cache clock adds conflict lookup, early tag
              reservation, F2 cache/RAM data, Decode fill and early-hit input-bus
              forwarding. Actual owned PM stores, all16 sets/both ways, SPI/DMA
@@ -652,8 +657,11 @@ ID  State    Evidence / remaining work
              unknown/permission faults and repair, malformed continuity and
              cross-block rejection. All8 candidate original runs separately
              read their first three VISA entries, preserve native resources,
-             then require the actual native-to-VISA Address guard at8c005.
-             Those clocked profiles do not execute VISA (sharc-visa.txt).
+             then execute the actual JUMP at8c005 and first VISA CALL through
+             the clocked transport. Eight further grants retire those two
+             instructions and reach common entry1c0528 with its real frame.
+             Full clocked common-call execution remains open
+             (sharc-fetch-visa.txt).
              The separate original_sharc_visa_instructions reference forks
              the verified checkpoint, executes8286 actual native/VISA
              instructions and returns from the common clock call in all8

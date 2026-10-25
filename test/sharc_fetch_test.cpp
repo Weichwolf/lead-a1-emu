@@ -290,7 +290,7 @@ void failed_fetch_and_profile_guards() {
   rejected([&] { const lead_a1::SharcFetch bad(memory, invalid); }, "Invalid SHARC native");
   invalid = fetch.state();
   invalid.fetch2 = lead_a1::SharcFetchWord{.address = 0x100000, .opcode = 0};
-  rejected([&] { const lead_a1::SharcFetch bad(memory, invalid); }, "internal native address");
+  rejected([&] { const lead_a1::SharcFetch bad(memory, invalid); }, "VISA word outside its IAB");
 }
 
 void executable_permission_and_unmapped_bus() {

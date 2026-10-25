@@ -14,12 +14,14 @@ The further CPU-bound cache clock in sharc-fetch-cache.txt supplies actual
 cache lookup/tag/data phases from explicit Address-stage PM requests. Ordinary
 internal fetches bypass the cache; conflicts select cached data or an actual
 partial stall and RAM fill. Pending operations require their bound owner.
-External/VISA addresses, unresolved controls and active memory transactions
+External addresses, unresolved controls and active memory transactions
 fail with phase/PC/MODE2/access context. Neither path infers grants from DMA
 traffic or advances peripherals or global time. The bound clock's supported
 quiet core/SYSCTL maturation has the separate sharc-quiet-clocks.txt contract.
 Address/data arbitration and complete control composition remain separate
-pipeline work. Bound unlooped IDLE/P1I/RTI has the sharc-delayed-idle.txt
+pipeline work. Bound native/VISA input, fetch stalls and immediate redirects
+have the sharc-fetch-visa.txt contract; standalone transport remains native.
+Bound unlooped IDLE/P1I/RTI has the sharc-delayed-idle.txt
 contract. The optional cursor and
 JUMP/CALL/RTS redirects have the bounded sharc-fetch-flow.txt contract; retained
 Address-stage conditions/interlocks are in sharc-branch-pipeline.txt.

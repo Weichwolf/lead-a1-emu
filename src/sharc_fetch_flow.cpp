@@ -42,6 +42,11 @@ void other_control(const SharcState &cpu, const SharcFetchWord &word) {
   constexpr unsigned int immediate_loop = 12;
   constexpr unsigned int register_loop = 13;
   constexpr unsigned int arithmetic_loop = 14;
+  constexpr std::uint64_t idle = 0x008000000000;
+  if (word.visa && ((type >= first_other_control && type <= last_other_control && type != 10) ||
+                    word.opcode == idle)) {
+    throw std::runtime_error("SHARC clocked VISA loop/indirect/RTI timing not qualified");
+  }
   if (type == arithmetic_loop) {
     deferred_arithmetic_setup(cpu, word);
     return;
@@ -49,7 +54,6 @@ void other_control(const SharcState &cpu, const SharcFetchWord &word) {
   if (type == immediate_loop || (type == register_loop && (word.opcode & sharc_pc_mask) >= 4)) {
     return;
   }
-  constexpr std::uint64_t idle = 0x008000000000;
   if (word.opcode == idle) { return; }
   if ((type >= first_other_control && type <= last_other_control) ||
       (type == 0 && word.opcode != 0)) {
@@ -64,6 +68,12 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
   constexpr unsigned int rti = 11;
   const auto type = word.opcode >> class_shift;
   if (sharc_fetch_branch_encoding(word.opcode)) {
+    if (word.visa && type == rti) {
+      throw std::runtime_error("SHARC clocked VISA RTI timing not qualified");
+    }
+    if (word.visa && (word.opcode & delayed) != 0) {
+      throw std::runtime_error("SHARC clocked VISA delayed branch timing not qualified");
+    }
     constexpr auto direct_fields = class_mask | condition_mask | delayed | call | sharc_pc_mask;
     constexpr auto return_fields = class_mask | condition_mask | delayed;
     if ((word.opcode & ~(type == rts || type == rti ? return_fields : direct_fields)) != 0) {
@@ -85,7 +95,7 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
       if (!returned) { throw std::logic_error("Missing SHARC interrupt return target"); }
       address = *returned;
     }
-    sharc_fetch_address(address);
+    sharc_fetch_program_address(address);
     decision.target = address;
     return decision;
   }
@@ -103,13 +113,16 @@ void sharc_fetch_flow_guard(const SharcState &cpu, const SharcFetchState &transp
   sharc_interrupt_guard(cpu);
 }
 
-void sharc_fetch_flow(const SharcState &cpu,
+bool sharc_fetch_flow(const SharcState &cpu,
                       const SharcFetchState &previous,
-                      SharcFetchState &next) try {
+                      SharcFetchState &next,
+                      bool address_accepted) try {
   const auto flow = previous.flow;
   if (!flow) { throw std::logic_error("Missing SHARC sequencer state"); }
   auto updated = *flow;
-  updated.next = (flow->next + 1) & sharc_pc_mask;
+  constexpr std::uint32_t first_short = 0x100000;
+  const auto stride = flow->next >= first_short ? 3U : 1U;
+  if (address_accepted) { updated.next = (flow->next + stride) & sharc_pc_mask; }
   if (next.address) {
     const auto decision = branch(cpu, *next.address);
     next.address->branch = decision;
@@ -129,10 +142,12 @@ void sharc_fetch_flow(const SharcState &cpu,
           (next.address->opcode & delayed) != 0 ? delayed_discard : immediate_discard;
     }
   }
-  if ((updated.discard_decode & 1U) != 0) { next.decode.reset(); }
+  const bool suppressed = (updated.discard_decode & 1U) != 0;
+  if (suppressed) { next.decode.reset(); }
   updated.discard_decode >>= 1;
   next.flow = updated;
   sharc_fetch_loop_flow(cpu, previous, next);
+  return suppressed;
 } catch (const std::exception &error) {
 
   std::ostringstream message;

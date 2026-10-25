@@ -63,6 +63,13 @@ void sharc_fetch_address(std::uint32_t address) {
   }
 }
 
+void sharc_fetch_program_address(std::uint32_t address) {
+  constexpr std::uint32_t visa_end = 0x200000;
+  if (address < native_begin || address >= visa_end) {
+    throw std::invalid_argument("SHARC fetch requires an internal native or VISA address");
+  }
+}
+
 void sharc_fetch_validate(const SharcFetchState &state) {
   if (state.pending_fetch2) {
     sharc_fetch_address(*state.pending_fetch2);
@@ -70,22 +77,23 @@ void sharc_fetch_validate(const SharcFetchState &state) {
       throw std::invalid_argument("Invalid SHARC pending F2 memory response");
     }
   }
-  if (state.fetch1) { sharc_fetch_address(*state.fetch1); }
+  if (state.fetch1) { sharc_fetch_program_address(*state.fetch1); }
   for (const auto &word : {state.fetch2, state.decode, state.address, state.execute}) {
     if (word) {
-      sharc_fetch_address(word->address);
+      sharc_fetch_program_address(word->address);
       if ((word->opcode & ~native_bits) != 0) {
         throw std::invalid_argument("Invalid SHARC native fetched word");
       }
     }
   }
+  sharc_fetch_visa_validate(state);
   cache_metadata(state);
   sharc_fetch_branch_validate(state);
   sharc_fetch_loop_validate(state);
   sharc_fetch_arithmetic_validate(state);
   sharc_fetch_dag_validate(state);
   if (state.flow) {
-    sharc_fetch_address(state.flow->next);
+    sharc_fetch_program_address(state.flow->next);
     if (state.flow->discard_decode > 3) {
       throw std::invalid_argument("Invalid SHARC inherited Decode suppression");
     }
@@ -106,6 +114,9 @@ void SharcFetch::advance(SharcKnown32 effective_mode2,
   }
   if (state_.flow) {
     throw std::runtime_error("SHARC sequenced fetch requires its sequenced clock");
+  }
+  if (state_.visa || state_.visa_fetch_aborted) {
+    throw std::runtime_error("SHARC VISA fetch requires its bound sequencer");
   }
   if (state_.lookup || state_.fill) {
     throw std::runtime_error("SHARC pending cache fetch requires its bound owner");
@@ -196,7 +207,9 @@ SharcStep Sharc::step(SharcFetch &fetch) try {
   auto transport = fetch.state_;
   const auto loop_clock = detail::sharc_fetch_loop_retirement(state_, transport);
   const auto *dag = word && word->dag ? &*word->dag : nullptr;
-  const auto result = step_opcode(opcode, preserve_cache, branch_taken, loop_clock, dag);
+  const auto *visa = word && word->visa ? &*word->visa : nullptr;
+  const auto result =
+      step_opcode(opcode, preserve_cache, branch_taken, loop_clock, dag, visa, true);
   if (idle_delay) { state_.idle_delay_word = idle_delay; }
   transport.execute.reset();
   detail::sharc_fetch_loop_finish(transport);

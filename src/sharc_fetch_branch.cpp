@@ -37,7 +37,7 @@ void word_branch(const SharcFetchWord &word, bool sequenced) {
     return;
   }
   const auto target = *branch->target;
-  sharc_fetch_address(target);
+  sharc_fetch_program_address(target);
   const auto type = word.opcode >> class_shift;
   if (type != rts && type != rti) {
     auto direct = static_cast<std::uint32_t>(word.opcode) & sharc_pc_mask;

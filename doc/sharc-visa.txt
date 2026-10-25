@@ -24,9 +24,11 @@ Snapshots retain addresses, five cells, count and delay; malformed continuity
 and unused cells reject. Foreign memory transactions survive. Failures carry
 the bound memory PC context, short-word address and operation.
 
-This input component does not yet route the native sequencer into VISA,
-execute compact operations, determine automatic F1/IAB stalls, integrate
-cache/DMA ports or resolve mixed-width branch/loop/IRQ timing. Cross-block
+This input component alone does not clock a processor. The bound sequencer
+now integrates its IAB, automatic fetch stalls and qualified native/VISA
+branches (sharc-fetch-visa.txt). Compact retirement has the separate
+sharc-visa-execution.txt contract. Cache/DMA ports and complete mixed-width
+branch/loop/IRQ timing remain open. Cross-block
 bursts remain guarded pending separate arbitration qualification. The owner
 supplies grants and context; no physical Nord clock is selected.
 
@@ -42,12 +44,13 @@ and1c058c for part1 streams. The IAB separately reads the first three48-bit
 VISA entries: two CALLs followed by a self JUMP. Both first calls target1c0528;
 second targets differ per placement (reference/sharc.json). All8 fixtures
 compare those factual fields without changing native CPU/fetch/control state.
-The native transport still fails atomically at the VISA redirect in Address.
-That clocked profile executes no VISA instruction; loader exit/application startup
-and the physical response phase remain unqualified. Original program bytes stay local.
-The separate captured CPU instruction-order API and original clock-prefix fork
-are qualified in sharc-visa-execution.txt. They do not replace this guarded
-five-stage transition or supply a complete VISA runtime.
+The candidate clocked transport now executes the actual native JUMP and first
+VISA CALL in eight further granted clocks, reaching common entry1c0528
+with the real return frame (sharc-fetch-visa.txt). The full clocked common
+call, application startup and physical response phase remain unqualified.
+Original program bytes stay local. The separate captured CPU instruction-order
+API and original clock-prefix fork are qualified in sharc-visa-execution.txt;
+they do not supply missing clocked runtime behavior.
 
   cmake --build --preset strict --target lead-a1-sharc-visa-test lead-a1-original-sharc-test
   ctest --preset strict -R '^(sharc_visa_alignment_buffer|original_sharc_deferred_f2)$' --output-on-failure

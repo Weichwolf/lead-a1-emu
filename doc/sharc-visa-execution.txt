@@ -32,7 +32,8 @@ General mixed-width loops, PC-stack DB arbitration and cache timing are open.
 This API is an instruction-order reference, not the five-stage native/VISA
 fetch/branch connection. Buffer capture/Decode events remain explicit owner
 inputs. It does not certify global clocking, automatic cache/port grants or
-hardware timing. The native SharcFetch redirect at8c005 is still guarded.
+hardware timing. The clocked native/VISA transport is qualified separately in
+sharc-fetch-visa.txt; the complete common call remains open.
 
 Owned tests use literal mixed encodings,64 signed-immediate/register edge
 cases,13 independent short-compute results, three ordered/equal compact COMP
@@ -43,8 +44,8 @@ foreign ownership and read-only-store repair through separately bound state.
 No instruction decoder output is its own expected result.
 
 original_sharc_visa_instructions freshly verifies all originals and runs the
-same candidate-response native prefix. After independently preserving its
-clocked redirect failure, it forks a CPU from that verified checkpoint and
+same candidate-response native prefix. It retains a CPU/transport checkpoint
+before independently exercising the clocked JUMP/first CALL, then forks from it and
 executes the real JUMP/CALL/common clock prefix in instruction order. Each
 placement/cadence must retire8286 actual instructions, including one native
 JUMP, one compact RTS and8256 actual NOPs at six independent wait addresses
@@ -57,7 +58,7 @@ The zero NOPs come from the original RAM-clear/alias history.
 This reference supplies only instruction minimum-clock bounds to PMCTL, with
 equal stable CLKIN counts while bypassed. Ratios18/9/36/5 are modeled relative
 to the explicit CLKIN input; no physical frequency or board phase is inferred.
-It does not replace the failed clocked redirect or qualify a full boot.
+It does not qualify full clocked execution or a full boot.
 The subsequent second-call power/modifier prefix and64-instruction PBEN/clock/
 frame/PP_CTL reference are qualified separately in sharc-power.txt,
 sharc-dai-enable.txt, sharc-dai-timing.txt and sharc-pdap.txt. The next target

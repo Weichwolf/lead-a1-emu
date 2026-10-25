@@ -389,7 +389,8 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
                              std::optional<bool> branch_taken,
                              SharcLoopClock loop_clock,
                              const SharcDagAddress *dag,
-                             const SharcVisaInstruction *visa) {
+                             const SharcVisaInstruction *visa,
+                             bool clocked) {
   auto opcode = captured;
   bool transaction{};
   bool control_transaction{};
@@ -427,14 +428,15 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
       } else {
         detail::sharc_long_loop_prepare(next, *opcode);
       }
-      const auto target = execute(memory_,
-                                  next,
-                                  *opcode,
-                                  control_,
-                                  {.branch_taken = branch_taken,
-                                   .dag = dag,
-                                   .units = units,
-                                   .fetched = captured.has_value() && visa == nullptr});
+      const auto target =
+          execute(memory_,
+                  next,
+                  *opcode,
+                  control_,
+                  {.branch_taken = branch_taken,
+                   .dag = dag,
+                   .units = units,
+                   .fetched = captured.has_value() && (visa == nullptr || clocked)});
       next.pc = target.value_or((state_.pc + units) & detail::sharc_pc_mask);
     }
     // A bound fetch clock already accounted for the actual PM cache request.

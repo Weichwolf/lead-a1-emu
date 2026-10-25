@@ -45,8 +45,10 @@ the saved SPI vector from unchanged PX, pop the native arithmetic frame and
 reach PC8c005 with SYSCTL read/effective4 and no pending response/effect.
 The ordinary109318-cell oracle per cadence remains checked. This is the
 result under the selected response input, not physical timing qualification.
-The further read-only VISA frontend check and atomic native-to-VISA
-Address guard at8c005 are described in sharc-visa.txt; no VISA word executes.
+The further read-only VISA frontend check is described in sharc-visa.txt.
+The clocked continuation now executes the real native JUMP and first VISA
+CALL, reaching1c0528 with its actual frame (sharc-fetch-visa.txt). This
+does not qualify the full common call or application startup.
 
 Primary constraints are PGRrev2.4 4-5/8 (F1/F2/Decode/Address/Execute),4-84
 Table4-31 (partial stall) and7-23/24 (forwarding future reads after writes).

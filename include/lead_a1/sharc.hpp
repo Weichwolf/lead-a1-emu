@@ -220,7 +220,8 @@ private:
                                       std::optional<bool> branch_taken = std::nullopt,
                                       SharcLoopClock loop_clock = SharcLoopClock::functional,
                                       const SharcDagAddress *dag = nullptr,
-                                      const SharcVisaInstruction *visa = nullptr);
+                                      const SharcVisaInstruction *visa = nullptr,
+                                      bool clocked = false);
   SharcMemory &memory_;
   SharcState state_;
   SharcControl *control_;

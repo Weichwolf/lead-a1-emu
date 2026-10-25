@@ -1,0 +1,46 @@
+Clocked native/VISA instruction transport
+
+PGRrev2.4 4-5..9 selects instruction mode by program address. The bound
+SharcFetch sequencer accepts internal NW native and SW VISA addresses;
+standalone explicit CADIS transport remains native. Fetch cursors advance
+by one NW or three SW per accepted F1. An IAB fetch stall holds the issued
+request/cursor while Decode/Address/Execute progress; it is distinct from
+the existing cache/control partial stalls.
+
+VISA F2 captures three actual executable SW cells, using SharcVisaBuffer's
+five-word IAB and separate three-word delay. Decode consumes one complete
+instruction using its actual length. The delay's occupancy at clock entry
+determines whether F2 may complete; freeing delay during Decode permits
+the held read on the following clock. This reproduces the literal F1
+schedule in Table4-3: new requests on clocks1,2,3,4,7,10, then every third clock.
+All48-bit input uses the ordinary five-stage schedule of Table4-2. Cross-block burst
+arbitration remains explicit, not inferred from linear-flow timing.
+
+Only Decode materializes a VISA instruction. It retains raw encoding,
+short-word address and length beside the normalized semantic operation.
+Address captures branch decisions using existing condition interlocks;
+Execute receives the actual encoding/length and retires through ordinary
+CPU/memory/device transactions. Ready bytes are never reread from RAM.
+Failures retain CPU, transport and IAB; snapshots validate both encodings,
+cursor continuity, delay occupancy and aborted requests.
+
+Immediate JUMP/CALL/RTS may cross native/VISA address spaces. Address
+discards the old IAB epoch and cancels its speculative short-word request;
+the target first enters F1 with branch Execute. Wrong-path bytes do not
+undergo semantic Decode. CALL return frames use actual short-word lengths.
+Native delayed slots retain their native behavior. VISA delayed branches,
+loops/RTI/IDLE, PM/cache/deferred-response combinations and block arbitration
+still need qualification. These are emulator gaps, not accepted instrument
+limitations or permission to change firmware.
+
+Owned tests transcribe Tables4-2/3, check mixed16/32/48-bit execution,
+native/VISA CALL/RTS and real frames, full-IAB return, immutable RAM capture,
+DAG partial stalls, restored full buffers, failed Execute/retry and malformed
+state. The original deferred-response fixtures also exercise the native
+JUMP at8c005 and first actual VISA CALL, reaching common entry1c0528. The
+candidate external response phase and full clocked common call/application
+startup remain unqualified. The separate instruction-order common-call/
+peripheral reference in sharc-visa-execution.txt remains distinct.
+
+  cmake --build --preset strict --target lead-a1-sharc-fetch-visa-test lead-a1-original-sharc-test
+  ctest --preset strict -R '^(sharc_clocked_visa_fetch|original_sharc_deferred_f2|original_sharc_visa_instructions)$' --output-on-failure
