@@ -47,7 +47,12 @@ void consume(SharcSpiState &state) {
 std::optional<SharcMemoryRequest> SharcSpi::dma_word_request() const {
   const auto &next = state();
   constexpr std::uint32_t enabled = 1;
-  if ((next.control & enabled) == 0 || next.serial.remaining == 0) { return {}; }
+  constexpr std::uint32_t mode_mask = 3;
+  constexpr std::uint32_t dma_mode = 2;
+  if ((next.port_control & mode_mask) != dma_mode || (next.control & enabled) == 0 ||
+      next.serial.remaining == 0) {
+    return {};
+  }
   if (next.burst_remaining == 0 && dma_request() == 0) { return {}; }
   if (next.occupied == 0) { throw std::logic_error("SHARC SPI active group has no FIFO word"); }
   return SharcMemoryRequest{.access = {.address = next.serial.next_word},

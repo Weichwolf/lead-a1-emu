@@ -12,6 +12,8 @@
 
 namespace lead_a1 {
 
+inline constexpr std::uint32_t sharc_spi_boot_control = 0x4d22;
+
 struct SharcSpiState {
   SharcBootState serial;
   std::uint16_t modifier{1};
@@ -24,11 +26,19 @@ struct SharcSpiState {
   bool interrupt_pending{};
   // Remaining words in a started, explicitly arbitrated RX FIFO group.
   unsigned int burst_remaining{};
+  std::uint32_t port_control{sharc_spi_boot_control};
+  std::optional<std::uint32_t> receive_latch;
+  std::optional<std::uint32_t> transmit;
+  std::optional<std::uint32_t> transmit_latch;
+  std::optional<std::uint32_t> transmit_shift;
+  unsigned int transmit_bit{};
+  bool transmit_underflow{};
   bool operator==(const SharcSpiState &) const = default;
 };
 
 // Programmable receive DMA following the explicit 214xx SPI boot reference.
-// SPICTL remains 0x4d22. Map only IOP words0x1080..0x1084 to this device.
+// This facade maps DMA words0x1080..0x1084. SharcSpiPort maps the complete
+// control/DMA aperture to this same state; see its functional reference contract.
 // Serial edges and memory arbitration grants are separate owner events. One
 // thread; neither event may overlap an instruction transaction. No time elapses
 // on MMIO reads. Other SPI modes, register blocks and chaining remain guarded.
@@ -37,7 +47,8 @@ public:
   explicit SharcSpi(const SharcBootState &completed_boot);
   [[nodiscard]] const SharcSpiState &state() const;
 
-  [[nodiscard]] static std::optional<bool> miso() { return {}; }
+  [[nodiscard]] std::optional<bool> miso() const;
+  [[nodiscard]] bool interrupt_request() const;
 
   void observe(SharcMemory &memory, SharcBootLines lines);
   [[nodiscard]] unsigned int dma_request() const;
@@ -57,6 +68,9 @@ public:
   void abort_instruction() noexcept override;
 
 private:
+  friend class SharcSpiPort;
+  [[nodiscard]] std::uint64_t port_read(MemoryAccess access);
+  void port_write(MemoryAccess access, std::uint64_t value);
   [[nodiscard]] SharcSpiState &working();
   void external_event(const SharcMemory &memory) const;
   SharcSpiState current_;

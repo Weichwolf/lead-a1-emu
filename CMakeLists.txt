@@ -92,6 +92,7 @@ add_library(lead_a1_sharc STATIC
   src/sharc/peripherals/sharc_power.cpp
   src/sharc/peripherals/sharc_spi.cpp
   src/sharc/peripherals/sharc_spi_bus.cpp
+  src/sharc/peripherals/sharc_spi_port.cpp
   src/sharc/pipeline/sharc_fetch.cpp
   src/sharc/pipeline/sharc_fetch_arithmetic.cpp
   src/sharc/pipeline/sharc_fetch_branch.cpp
@@ -126,6 +127,12 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-spi-port-bus-test test/sharc_spi_port_bus_test.cpp)
+  target_link_libraries(lead-a1-sharc-spi-port-bus-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_spi_posted_control_buffers COMMAND lead-a1-sharc-spi-port-bus-test)
+  add_executable(lead-a1-sharc-spi-port-test test/sharc_spi_port_test.cpp)
+  target_link_libraries(lead-a1-sharc-spi-port-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_spi_control_buffers COMMAND lead-a1-sharc-spi-port-test)
   add_executable(lead-a1-sharc-dpi-bus-test test/sharc_dpi_bus_test.cpp)
   target_link_libraries(lead-a1-sharc-dpi-bus-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_dpi_posted_io COMMAND lead-a1-sharc-dpi-bus-test)
@@ -588,6 +595,8 @@ if(BUILD_TESTING)
     DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
       lead-a1-sharc-fetch-test
       lead-a1-sharc-fetch-iop-test
+      lead-a1-sharc-spi-port-bus-test
+      lead-a1-sharc-spi-port-test
       lead-a1-sharc-dpi-test
       lead-a1-sharc-dpi-bus-test
       lead-a1-sharc-fetch-visa-test

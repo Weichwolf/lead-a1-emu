@@ -445,6 +445,16 @@ ID  State    Evidence / remaining work
              delivery is masked (sharc-spi.txt). Other SPI modes/registers,
              raw IISPI readback, chaining/flush and autonomous interrupt routing
              remain open; explicit P1I entry/RTI has the separate contract above.
+             A shared functional SPI control/buffer aperture preserves that
+             same DMA/serial state. Selected enabled32-bit mode3 slave RX-core
+             and RX-DMA configurations, actual MISO/TXSPI shifting, SENDZ,
+             receive-latch/GM behavior, direction-selected errors and held
+             receive/error requests have owned literal serial/transaction tests.
+             Actual fetched CPU/IOP mode and TX/RX operations, changed-source
+             capture, failed target delivery and no-time retry are checked.
+             SPI enable/effect timing, other formats, status/W1C/shadow/flush,
+             complete IRQ/board ownership and original timed SPI binding remain
+             open (sharc-spi-port.txt).
              General DAG/circular/broadcast/SIMD transfers, remaining arithmetic/float/
              other computation/VISA and timing remain open. No automatic ready
              signal or silently successful programmable-port stub.

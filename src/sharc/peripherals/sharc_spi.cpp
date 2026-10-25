@@ -10,6 +10,7 @@
 #include <exception>
 #include <ios>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 
@@ -36,7 +37,10 @@ void validate(MemoryAccess access) {
 }
 
 void pump_receive(SharcSpiState &state) {
-  if ((state.control & enabled) == 0 || !state.receive || state.occupied == state.fifo.size()) {
+  constexpr std::uint32_t dma_mode = 2;
+  constexpr std::uint32_t mode_mask = 3;
+  if ((state.port_control & mode_mask) != dma_mode || (state.control & enabled) == 0 ||
+      !state.receive || state.occupied == state.fifo.size()) {
     return;
   }
   state.fifo[state.occupied] = *state.receive;
@@ -47,14 +51,38 @@ void pump_receive(SharcSpiState &state) {
 void receive_word(SharcSpiState &state) {
   pump_receive(state);
   if (state.receive) {
-    state.overflow = true; // SPICTL.GM=0: discard the newly completed word.
-    if ((state.control & error_interrupt) != 0) { state.interrupt_pending = true; }
-  } else {
+    state.overflow = true; // GM selects retention or replacement below.
+    if ((state.control & (error_interrupt | receive_dma)) == (error_interrupt | receive_dma)) {
+      state.interrupt_pending = true;
+    }
+  }
+  constexpr std::uint32_t get_more = 8;
+  if (!state.receive || (state.port_control & get_more) != 0) {
     state.receive = state.serial.shift;
+    state.receive_latch = state.serial.shift;
     pump_receive(state);
   }
   state.serial.shift = 0;
   state.serial.bits = 0;
+}
+
+void transmit_bit(SharcSpiState &state) {
+  if (state.serial.bits == 0) {
+    if (state.transmit) {
+      state.transmit_shift = state.transmit;
+      state.transmit_latch = state.transmit;
+      state.transmit.reset();
+    } else {
+      constexpr std::uint32_t send_zero = 4;
+      state.transmit_shift = (state.port_control & send_zero) != 0 ? std::optional<std::uint32_t>{0}
+                                                                   : state.transmit_latch;
+      state.transmit_underflow = true;
+      if ((state.control & (error_interrupt | receive_dma)) == error_interrupt) {
+        state.interrupt_pending = true;
+      }
+    }
+  }
+  state.transmit_bit = state.serial.bits;
 }
 
 void parameter_write(SharcSpiState &state, MemoryAccess access, std::uint32_t value) {
@@ -79,12 +107,17 @@ std::uint32_t status(const SharcSpiState &state) {
   constexpr std::uint32_t fifo_partial = 0x2000;
   constexpr std::uint32_t fifo_full = 0x3000;
   constexpr std::uint32_t overflow_error = 0x4200;
+  constexpr std::uint32_t underflow_error = 0x4400;
   auto result = state.control;
   if ((state.control & enabled) != 0 && state.serial.remaining != 0) { result |= busy; }
   if (state.occupied != 0) {
     result |= state.occupied == state.fifo.size() ? fifo_full : fifo_partial;
   }
-  if (state.overflow) { result |= overflow_error; }
+  if ((state.control & receive_dma) != 0) {
+    if (state.overflow) { result |= overflow_error; }
+  } else if (state.transmit_underflow) {
+    result |= underflow_error;
+  }
   return result;
 }
 
@@ -153,6 +186,8 @@ void SharcSpi::observe(SharcMemory &memory, SharcBootLines lines) try {
       if (*lines.mosi) { next.serial.shift |= std::uint32_t{1} << next.serial.bits; }
       ++next.serial.bits;
       if (next.serial.bits == word_bits) { receive_word(next); }
+    } else {
+      transmit_bit(next);
     }
   }
   current_ = next;
@@ -167,7 +202,10 @@ void SharcSpi::observe(SharcMemory &memory, SharcBootLines lines) try {
 
 unsigned int SharcSpi::dma_request() const {
   const auto &next = state();
-  if ((next.control & enabled) == 0 || next.serial.remaining == 0 || next.burst_remaining != 0) {
+  constexpr std::uint32_t mode_mask = 3;
+  constexpr std::uint32_t dma_mode = 2;
+  if ((next.port_control & mode_mask) != dma_mode || (next.control & enabled) == 0 ||
+      next.serial.remaining == 0 || next.burst_remaining != 0) {
     return 0;
   }
   constexpr unsigned int group = 4;
@@ -233,8 +271,14 @@ void SharcSpi::write(MemoryAccess access, std::uint64_t value) {
         ((value & enabled) != 0 && (value & receive_dma) == 0)) {
       throw std::runtime_error("SHARC SPI DMA transmit/chaining/flush/control not implemented");
     }
+    constexpr std::uint32_t mode_mask = 3;
+    constexpr std::uint32_t dma_mode = 2;
+    if ((value & enabled) != 0 && (next.port_control & mode_mask) != dma_mode) {
+      throw std::runtime_error("SHARC DMA enable outside SPI DMA mode not qualified");
+    }
     next.control = static_cast<std::uint32_t>(value);
-    if (next.overflow && (next.control & error_interrupt) != 0) { next.interrupt_pending = true; }
+    const bool error = (next.control & receive_dma) != 0 ? next.overflow : next.transmit_underflow;
+    if (error && (next.control & error_interrupt) != 0) { next.interrupt_pending = true; }
     pump_receive(next);
   }
   working() = next;

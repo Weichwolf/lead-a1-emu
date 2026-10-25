@@ -225,7 +225,7 @@ void serial_rejections() {
   require(spi.state().serial.bits == 1 && spi.state().serial.shift == 1);
   rejected([&] { spi.observe(memory, {.selected = false, .clock = true, .mosi = {}}); },
            "within runtime word");
-  require(spi.state().serial.bits == 1 && !lead_a1::SharcSpi::miso());
+  require(spi.state().serial.bits == 1 && !spi.miso());
 }
 
 void enable_stored_error() {
