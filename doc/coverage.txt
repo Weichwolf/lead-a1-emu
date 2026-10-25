@@ -94,7 +94,10 @@ ID  State    Evidence / remaining work
              unready mapped bridge request. Supported delayed core/SYSCTL
              effects still mature. Read retirement shares its response clock;
              write acceptance retains its own clock. Due delivery failures
-             require no-time retry, not another hold. Mode/branch/cache/loop/IRQ
+             require no-time retry, not another hold. Native counter-loop
+             callees validate paired native/fetched loop and CALL frames;
+             full CPU/transport holds retain captured callee Address redirects.
+             Other mode/branch/cache/loop/IRQ
              compositions and independent prefetch/DMA arbitration during holds
              remain gaps (sharc-iop-bridge.txt). Disjoint address views share one
              bridge queue/clock/response across DAI and DPI; no second timing
@@ -760,6 +763,14 @@ ID  State    Evidence / remaining work
              request/target on failure, then rebind repaired owned inputs and
              deliver exactly once. DAG/complementary load destinations remain
              guarded pending independent pipeline composition checks.
+             Another28 native four-/six-body loop cases compose real delayed/
+             ordinary CALLs, nested callees and all4/5-write7/8-read bounds.
+             Literal access PCs/counts/values, CALL frames, stack depths,
+             pre-pop and iteration results accompany28 independent restores
+             during actual read waits. Missing native/fetch counterparts,
+             mismatched counters, real loop-body IOP and unresolved count1
+             four-body startup reject without target effects. Other loop,
+             arithmetic/cache/IRQ and physical timing compositions remain open.
              original_sharc_clocked_iop separately continues the actual common
              RTS through the second CALL and95 further original instructions.
              PMCTL1 and all routing/PP_CTL traffic share one posted bridge;

@@ -62,7 +62,13 @@ The owner advances devices separately; read retirement shares its final
 response clock, while a spaced write still uses its own acceptance clock.
 A failed due transfer needs retry_due, not another core hold. Snapshots retain
 existing CPU, fetch and bridge state without a new hidden wait counter.
-Mode/branch/cache/loop/interrupt compositions outside this subset reject.
+Native counter-loop callees outside the active body also support these holds.
+The existing native/fetched loop and CALL-frame guards validate the paired
+owners. An already captured callee Address branch may retain its Decode mask;
+the complete transport and core stay fixed until the real advance/retirement.
+Loop-body IOP, count1 four-body startup with unresolved architectural stack,
+arithmetic loops, active delay slots and other mode/cache/IRQ compositions
+remain guarded. This does not qualify all loop or branch IOP timing.
 
 Open: exact physical phase selection for4/5 and7/8, independent prefetch/DMA
 arbitration during IOP holds, general five-stage peripheral scheduling,
@@ -92,6 +98,14 @@ replacements avoid reliance on the unresolved Type17b sign-extension rule.
 Another112 cases reject unknown source bits or bank selection without changing
 CPU/fetch/control/request/target state, then repair the owned fixture and
 rebind the actual CPU/fetch to post and deliver exactly one original value.
+Another28 cases compose four-/six-instruction DO loops, actual delayed/ordinary
+CALLs, nested callees, all4/5-write7/8-read bounds and counts1/2/3/5 (excluding
+unresolved count1 four-body startup). Literal PCs, return frames, stack depths,
+pre-pop states, iteration totals, target values and access counts are checked.
+Every hold retains the entire CPU/transport. Each case also restores separate
+RAM/CPU/fetch/bridge/target owners during the first read wait and continues
+through actual retirement. Missing loop counterparts and mismatched counters
+reject without target effects; real body IOP and count1 startup still reject.
 
 The optional original reference uses explicit5/8-clock inputs for ten actual
 PBEN2/PBEN3/CLK2/FS2 groups and PP_CTL setup (64 instructions) after its

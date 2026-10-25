@@ -7,6 +7,7 @@
 #include "sharc/peripherals/sharc_control.hpp"
 #include "sharc/pipeline/sharc_fetch.hpp"
 #include "sharc/pipeline/sharc_fetch_internal.hpp"
+#include "sharc/pipeline/sharc_fetch_long.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -19,11 +20,28 @@
 namespace lead_a1 {
 namespace {
 
+bool count_loop_context(const SharcState &core, const SharcFetchState &fetch) {
+  if (!core.count_loop) { return !fetch.flow || !fetch.flow->long_loop; }
+  if (!fetch.flow || !fetch.flow->long_loop || !fetch.flow->long_loop->counter || !core.depth ||
+      core.count_loop->control) {
+    return false;
+  }
+  const auto &native = *core.count_loop;
+  const auto floor = native.saved_depth + (native.frame_live ? 1U : 0U);
+  // Only a callee outside the loop body: no iteration or pre-pop retires on
+  // these extra clocks. The ordinary CPU step still validates its CALL frames.
+  if ((core.pc >= native.body && core.pc <= native.end) || *core.depth <= floor) { return false; }
+  detail::sharc_fetch_long_guard(core, fetch);
+  return true;
+}
+
 void context_guard(const SharcState &core, const SharcFetchState &fetch) {
-  if (core.branch || core.count_loop || core.arithmetic_loop || core.interrupt || core.idle_pc ||
-      core.pending[detail::sharc_mode1] || fetch.lookup || fetch.fill || fetch.pending_fetch2 ||
-      (fetch.flow &&
-       (fetch.flow->loop || fetch.flow->long_loop || fetch.flow->discard_decode != 0))) {
+  // A callee's captured Address branch may already suppress Decode. A full
+  // IOP hold retains that decision and its mask until the next real advance.
+  if (core.branch || !count_loop_context(core, fetch) || core.arithmetic_loop || core.interrupt ||
+      core.idle_pc || core.pending[detail::sharc_mode1] || fetch.lookup || fetch.fill ||
+      fetch.pending_fetch2 ||
+      (fetch.flow && (fetch.flow->loop || (fetch.flow->discard_decode != 0 && !core.count_loop)))) {
     throw std::runtime_error(
         "SHARC IOP hold with mode/branch/cache/loop/IRQ context not qualified");
   }

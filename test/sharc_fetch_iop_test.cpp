@@ -665,10 +665,245 @@ void unknown_sources_and_banks() {
   require(cases == expected_cases);
 }
 
+struct LoopChoice {
+  unsigned int length;
+  unsigned int count;
+  unsigned int writes;
+  unsigned int reads;
+};
+
+constexpr unsigned int helper_offset = 32;
+constexpr unsigned int nested_offset = 48;
+
+void loop_callee_program(Fixture &fixture, LoopChoice choice) {
+  constexpr std::uint64_t immediate_do = 0x0c0000000000;
+  constexpr std::uint64_t call = 0x06be00000000;
+  constexpr std::uint64_t delayed = 0x4000000;
+  constexpr std::uint64_t rts = 0x0a3e00000000;
+  constexpr std::uint64_t increment_r1 = 0x013e00029110;
+  constexpr unsigned int count_shift = 24;
+  constexpr unsigned int modifier14 = 0x2e;
+  constexpr unsigned int ustat3 = 0x7e;
+  constexpr unsigned int ustat4 = 0x7f;
+  fixture.code(
+      {.offset = 0,
+       .opcode = immediate_do | (std::uint64_t{choice.count} << count_shift) | choice.length});
+  fixture.code({.offset = 1,
+                .opcode = call | (choice.length == 4 ? delayed : 0) | (native + helper_offset)});
+  fixture.code({.offset = choice.length, .opcode = increment_r1});
+  fixture.code({.offset = helper_offset, .opcode = move(Kind::write, modifier14)});
+  fixture.code({.offset = helper_offset + 1, .opcode = move(Kind::read, ustat4)});
+  fixture.code({.offset = helper_offset + 2, .opcode = call | (native + nested_offset)});
+  fixture.code({.offset = helper_offset + 3, .opcode = rts});
+  fixture.code({.offset = nested_offset, .opcode = move(Kind::write, ustat4, address + 1)});
+  fixture.code({.offset = nested_offset + 1, .opcode = move(Kind::read, ustat3, address + 1)});
+  fixture.code({.offset = nested_offset + 2, .opcode = rts});
+}
+
+void check_callee(const Fixture &fixture, LoopChoice choice, unsigned int accesses) {
+  const auto &core = fixture.cpu.state();
+  const auto &transport = fixture.fetch.state();
+  require(core.count_loop && transport.flow && transport.flow->long_loop);
+  constexpr std::array<unsigned int, 4> offsets{
+      helper_offset, helper_offset + 1, nested_offset, nested_offset + 1};
+  const auto slot = accesses % offsets.size();
+  const auto access = fixture.fetch.peripheral_access(fixture.cpu);
+  require(access && access->pc == native + offsets[slot] && access->address == address + slot / 2 &&
+          access->operation == (slot % 2 == 0 ? Kind::write : Kind::read));
+  const auto iteration = accesses / offsets.size();
+  const auto floor = choice.length == 4 && iteration == choice.count - 1 ? 0U : 1U;
+  const auto &loop = present(core.count_loop);
+  require(loop.remaining == choice.count - iteration && loop.frame_live == (floor != 0) &&
+          core.depth == floor + (slot < 2 ? 1U : 2U));
+  constexpr std::uint32_t call_frame = 0x1000000;
+  constexpr std::uint32_t special_frame = 0x2000000;
+  const auto return_pc = native + (choice.length == 4 ? 4U : 2U);
+  require(core.pc_stack[floor] == (call_frame | return_pc | (floor == 0 ? special_frame : 0U)));
+  if (slot >= 2) {
+    require(core.pc_stack[floor + 1] == (call_frame | (native + helper_offset + 3)));
+  }
+}
+
+void rejected_callee_bindings(Fixture &fixture) {
+  const auto core = fixture.cpu.state();
+  const auto transport = fixture.fetch.state();
+  const auto bus = fixture.bus.snapshot();
+  auto raw = transport;
+  present(raw.flow).long_loop.reset();
+  lead_a1::SharcFetch without_loop(fixture.memory, raw);
+  rejected([&] { static_cast<void>(without_loop.peripheral_access(fixture.cpu)); },
+           "mode/branch/cache/loop/IRQ context not qualified");
+  auto unlooped = core;
+  unlooped.count_loop.reset();
+  unlooped.loops_empty = true;
+  lead_a1::Sharc without_counter(fixture.memory, unlooped, &fixture.control);
+  rejected([&] { static_cast<void>(fixture.fetch.peripheral_access(without_counter)); },
+           "mode/branch/cache/loop/IRQ context not qualified");
+  auto mismatched = core;
+  ++present(mismatched.count_loop).total;
+  lead_a1::Sharc other_count(fixture.memory, mismatched, &fixture.control);
+  rejected([&] { static_cast<void>(fixture.fetch.peripheral_access(other_count)); },
+           "long-loop/native counter mismatch");
+  require(fixture.cpu.state() == core && fixture.fetch.state() == transport &&
+          fixture.bus.snapshot() == bus && fixture.target.current.writes == 0 &&
+          fixture.target.current.reads == 0);
+}
+
+void retire_callee_iop(Fixture &fixture, LoopChoice choice, unsigned int accesses) {
+  check_callee(fixture, choice, accesses);
+  if (accesses == 0) { rejected_callee_bindings(fixture); }
+  const auto core = fixture.cpu.state();
+  const auto transport = fixture.fetch.state();
+  const bool read = (accesses & 1) != 0;
+  fixture.issue(read ? choice.reads : choice.writes);
+  std::optional<Fixture> copy;
+  while (!fixture.bus.ready()) {
+    if (!read) { fixture.fetch.wait_iop(fixture.cpu, fixture.bus); }
+    fixture.bus.tick();
+    if (read && !fixture.bus.ready()) { fixture.fetch.wait_iop(fixture.cpu, fixture.bus); }
+    require(fixture.cpu.state() == core && fixture.fetch.state() == transport);
+    if (copy) {
+      auto &other = present(copy);
+      other.bus.tick();
+      if (!other.bus.ready()) { other.fetch.wait_iop(other.cpu, other.bus); }
+      require(other.cpu.state() == fixture.cpu.state() &&
+              other.fetch.state() == fixture.fetch.state() &&
+              other.bus.snapshot() == fixture.bus.snapshot());
+    } else if (read && accesses == 1 && !fixture.bus.ready()) {
+      auto &other =
+          copy.emplace(false, fixture.bus.snapshot(), fixture.cpu.state(), fixture.fetch.state());
+      loop_callee_program(other, choice);
+      other.target.current = fixture.target.current;
+      require(other.control.snapshot() == fixture.control.snapshot());
+    }
+  }
+  static_cast<void>(fixture.cpu.step(fixture.fetch));
+  if (copy) {
+    auto &other = present(copy);
+    static_cast<void>(other.cpu.step(other.fetch));
+    require(other.cpu.state() == fixture.cpu.state() &&
+            other.fetch.state() == fixture.fetch.state() &&
+            other.bus.snapshot() == fixture.bus.snapshot() &&
+            other.target.current.words == fixture.target.current.words &&
+            other.target.current.writes == fixture.target.current.writes &&
+            other.target.current.reads == fixture.target.current.reads);
+  }
+  if (!read) { fixture.bus.tick(); }
+}
+
+bool callee_tick(Fixture &fixture, LoopChoice choice, unsigned int accesses) {
+  const auto event = fixture.fetch.advance_sequenced(fixture.cpu);
+  require(!event.compute_stall && !event.control_stall && !event.dag_stall);
+  if (!fixture.fetch.state().execute) {
+    fixture.bus.tick();
+    return false;
+  }
+  if (fixture.fetch.peripheral_access(fixture.cpu)) {
+    retire_callee_iop(fixture, choice, accesses);
+    return true;
+  }
+  static_cast<void>(fixture.cpu.step(fixture.fetch));
+  fixture.bus.tick();
+  return false;
+}
+
+void loop_callee_case(LoopChoice choice) {
+  constexpr SourceChoice source{.reg = 0x2e,
+                                .bank_bit = 5,
+                                .alternate = false,
+                                .short_mode = false,
+                                .write_cycles = 5,
+                                .read_cycles = 8};
+  auto state = source_initial(source);
+  state.data[0][1] = {.known = full40};
+  Fixture fixture(false, {}, state, sequenced(native));
+  loop_callee_program(fixture, choice);
+  unsigned int accesses{};
+  unsigned int clocks{};
+  constexpr unsigned int limit = 1024;
+  while (fixture.cpu.state().pc != native + choice.length + 1 && clocks < limit) {
+    if (callee_tick(fixture, choice, accesses)) { ++accesses; }
+    ++clocks;
+  }
+  const auto flow = fixture.fetch.state().flow;
+  require(fixture.cpu.state().pc == native + choice.length + 1 && !fixture.cpu.state().count_loop &&
+          fixture.cpu.state().depth == 0 && value(fixture.cpu, 1) == choice.count && flow &&
+          !flow->long_loop);
+  require(accesses == 4 * choice.count && fixture.target.current.writes == 2 * choice.count &&
+          fixture.target.current.reads == 2 * choice.count &&
+          fixture.target.current.words[0] == first_value &&
+          fixture.target.current.words[1] == first_value && fixture.bus.state().write_count == 0);
+}
+
+void loop_callee_matrix() {
+  unsigned int cases{};
+  for (const unsigned int length : {4U, 6U}) {
+    for (const unsigned int count : {1U, 2U, 3U, 5U}) {
+      if (length == 4 && count == 1) { continue; }
+      for (const unsigned int writes : {4U, 5U}) {
+        for (const unsigned int reads : {7U, 8U}) {
+          loop_callee_case({.length = length, .count = count, .writes = writes, .reads = reads});
+          ++cases;
+        }
+      }
+    }
+  }
+  constexpr unsigned int expected_cases = 28;
+  require(cases == expected_cases);
+}
+
+void guarded_loop_body_io() {
+  constexpr std::uint64_t immediate_do_two = 0x0c0002000000;
+  for (const unsigned int length : {4U, 6U}) {
+    Fixture fixture;
+    fixture.code({.offset = 0, .opcode = immediate_do_two | length});
+    fixture.code({.offset = 1, .opcode = move(Kind::read, 0)});
+    fixture.next();
+    static_cast<void>(fixture.cpu.step(fixture.fetch));
+    fixture.bus.tick();
+    fixture.next();
+    const auto core = fixture.cpu.state();
+    const auto transport = fixture.fetch.state();
+    const auto bus = fixture.bus.snapshot();
+    rejected([&fixture] { static_cast<void>(fixture.fetch.peripheral_access(fixture.cpu)); },
+             "mode/branch/cache/loop/IRQ context not qualified");
+    require(fixture.cpu.state() == core && fixture.fetch.state() == transport &&
+            fixture.bus.snapshot() == bus && fixture.target.current.reads == 0);
+  }
+}
+
+void guarded_count_one_startup() {
+  Fixture fixture;
+  loop_callee_program(fixture, {.length = 4, .count = 1, .writes = 5, .reads = 8});
+  constexpr unsigned int limit = 32;
+  unsigned int clocks{};
+  while (clocks < limit) {
+    static_cast<void>(fixture.fetch.advance_sequenced(fixture.cpu));
+    if (fixture.fetch.state().execute) {
+      if (fixture.cpu.state().pc == native + helper_offset) { break; }
+      static_cast<void>(fixture.cpu.step(fixture.fetch));
+    }
+    fixture.bus.tick();
+    ++clocks;
+  }
+  const auto core = fixture.cpu.state();
+  const auto transport = fixture.fetch.state();
+  const auto bus = fixture.bus.snapshot();
+  require(core.pc == native + helper_offset && present(core.count_loop).control && !core.depth);
+  rejected([&fixture] { static_cast<void>(fixture.fetch.peripheral_access(fixture.cpu)); },
+           "mode/branch/cache/loop/IRQ context not qualified");
+  require(fixture.cpu.state() == core && fixture.fetch.state() == transport &&
+          fixture.bus.snapshot() == bus && fixture.target.current.reads == 0 &&
+          fixture.target.current.writes == 0);
+}
+
 }
 
 int main() {
   try {
+    loop_callee_matrix();
+    guarded_loop_body_io();
+    guarded_count_one_startup();
     all_sources();
     unknown_sources_and_banks();
     isolated_read_and_retained_input();
