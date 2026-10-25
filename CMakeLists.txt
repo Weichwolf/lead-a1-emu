@@ -50,6 +50,7 @@ target_sources(lead_a1_sharc PRIVATE src/sharc_visa_decode.cpp src/sharc_visa_ex
 target_sources(lead_a1_sharc PRIVATE src/sharc_power.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_dai_enable.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_dai_timing.cpp)
+target_sources(lead_a1_sharc PRIVATE src/sharc_pdap.cpp src/sharc_pdap_input.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_iop_bridge.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_iop_port.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_float.cpp src/sharc_float_compute.cpp src/sharc_fetch_multiplier.cpp)
@@ -59,6 +60,9 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-pdap-test test/sharc_pdap_test.cpp)
+  target_link_libraries(lead-a1-sharc-pdap-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_pdap_acquisition_fifo COMMAND lead-a1-sharc-pdap-test)
   add_executable(lead-a1-sharc-dai-timing-test test/sharc_dai_timing_test.cpp)
   target_link_libraries(lead-a1-sharc-dai-timing-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_dai_clock_frame_routing COMMAND lead-a1-sharc-dai-timing-test)
@@ -493,6 +497,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-power-test
       lead-a1-sharc-dai-enable-test
       lead-a1-sharc-dai-timing-test
+      lead-a1-sharc-pdap-test
       lead-a1-sharc-iop-bridge-test
       lead-a1-sharc-loop-idle-test
       lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test lead-a1-sharc-float-test lead-a1-sharc-float-multiply-test lead-a1-sharc-compare-test lead-a1-sharc-multiplier-branch-test lead-a1-sharc-float-fixed-stall-test lead-a1-sharc-idle-branch-test

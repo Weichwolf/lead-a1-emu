@@ -69,12 +69,13 @@ The optional original reference retains its native/common-clock/power and
 CLK2/FS2 groups using actual reads, literal masks and distinct stores. Raw
 words become3de57bde/3de5fbde: IDP0 clock/frame select PB11/PB12 respectively.
 Both signals remain unknown; no external levels are supplied. All ten prior
-writes have matured before the next actual unsupported IDP_PP_CTL read at24b1,
-at original PCs1c5c36/1c5bbe/1c07fd/1c06c9. Explicit5/8-clock inputs give178
-bridge clocks including that failed read. CPU/IAB/SYSCTL/SPI remain unchanged.
+writes mature before the original PP_CTL setup in sharc-pdap.txt. That actual
+read/two SETs/store now establish800ff000 without enabling global IDP or
+inventing data. The next unsupported access is SRU2_PIN0 at1c10, after193
+bridge clocks with explicit5/8 inputs. CPU/IAB/SYSCTL/SPI remain unchanged.
 
 The static SRU-only projection omits intervening non-SRU operations; the next
-DPI group is not the next actual instruction. IDP_PP_CTL precedes SRU2_PIN0.
+DPI group follows the four intervening IDP_PP_CTL instructions.
 The owner exposes disjoint DAI/DPI views of one bridge in preparation for
 those original DPI accesses; no DPI register/data or successful operation
 is fabricated. This is an instruction-order reference, not physical timing.

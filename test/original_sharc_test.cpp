@@ -9,6 +9,7 @@
 #include "lead_a1/sharc_fetch.hpp"
 #include "lead_a1/sharc_iop_bridge.hpp"
 #include "lead_a1/sharc_memory.hpp"
+#include "lead_a1/sharc_pdap.hpp"
 #include "lead_a1/sharc_power.hpp"
 #include "lead_a1/sharc_spi.hpp"
 #include "lead_a1/sharc_visa.hpp"
@@ -389,6 +390,7 @@ struct HeaderDevices {
   lead_a1::SharcDaiEnable *dai{};
   lead_a1::SharcDaiTiming *clock_routes{};
   lead_a1::SharcDaiTiming *frame_routes{};
+  lead_a1::SharcPdap *pdap{};
   lead_a1::SharcIopBridge *bridge{};
 };
 
@@ -660,11 +662,13 @@ void record_visa_reference(lead_a1::SharcStep step,
 void original_routing_clock(HeaderDevices devices) {
   require(devices.power != nullptr && devices.dai != nullptr && devices.bridge != nullptr);
   require(devices.clock_routes != nullptr && devices.frame_routes != nullptr);
+  require(devices.pdap != nullptr);
   devices.clock.device.advance({.core_cycles = 1});
   devices.power->advance_half_pclk(1);
   devices.dai->advance_half_pclk(1);
   devices.clock_routes->advance_half_pclk(1);
   devices.frame_routes->advance_half_pclk(1);
+  devices.pdap->advance_cclk(1);
   devices.bridge->tick();
 }
 
@@ -765,6 +769,34 @@ void check_original_timing_routes(HeaderDevices devices) {
   require(!devices.frame_routes->output({.word = 2, .field = 3}).has_value());
 }
 
+void original_pdap_setup(lead_a1::Sharc &cpu,
+                         lead_a1::SharcVisaBuffer &buffer,
+                         HeaderDevices devices) {
+  require(devices.bridge != nullptr);
+  constexpr unsigned int instructions = 4;
+  constexpr std::uint32_t expected = 0x800ff000;
+  constexpr std::uint32_t pp_ctl = 0x24b1;
+  for (unsigned int index = 0; index < instructions; ++index) {
+    const auto step = original_routing_step(cpu, buffer, devices);
+    require(step.address_units == 3 && step.minimum_core_cycles == 1);
+  }
+  require(cpu.state().system[0] == (lead_a1::SharcKnown32{.value = expected, .known = full32}));
+  const auto bus = devices.bridge->snapshot();
+  const auto posted = bus.writes[0];
+  require(bus.write_count == 1 && posted && posted->value == expected &&
+          posted->intent.address == pp_ctl);
+}
+
+void check_original_pdap(HeaderDevices devices) {
+  require(devices.pdap != nullptr);
+  lead_a1::SharcPdapState expected;
+  constexpr std::uint32_t control = 0x800ff000;
+  expected.control[1] = control;
+  require(devices.pdap->snapshot() == expected);
+  require(!devices.pdap->fifo_read_ready());
+  require(devices.pdap->interrupts() == lead_a1::SharcPdapInterrupts{});
+}
+
 void original_visa_routing_boundary(lead_a1::SharcMemory &memory,
                                     lead_a1::Sharc &cpu,
                                     lead_a1::SharcVisaBuffer &buffer,
@@ -778,7 +810,8 @@ void original_visa_routing_boundary(lead_a1::SharcMemory &memory,
     original_routing_group(cpu, buffer, devices, group, targets[group]);
   }
   original_timing_groups(cpu, buffer, devices);
-  constexpr unsigned int prefix_words = 169;
+  original_pdap_setup(cpu, buffer, devices);
+  constexpr unsigned int prefix_words = 181;
   require(cpu.state().pc == devices.placement.second_call + prefix_words);
   fill_visa_reference(buffer);
   const auto before = cpu.state();
@@ -790,7 +823,7 @@ void original_visa_routing_boundary(lead_a1::SharcMemory &memory,
     static_cast<void>(original_routing_step(cpu, buffer, devices));
   } catch (const std::exception &error) {
     const std::string message(error.what());
-    if (message.find("word-address=0x24b1 operation=read") == std::string::npos ||
+    if (message.find("word-address=0x1c10 operation=read") == std::string::npos ||
         message.find("Unmapped SHARC IOP register") == std::string::npos) {
       throw std::runtime_error("Unexpected original IOP frontier: " + message);
     }
@@ -802,16 +835,17 @@ void original_visa_routing_boundary(lead_a1::SharcMemory &memory,
     require(routing.routes == routes);
     for (const auto &pending : routing.pending) { require(!pending); }
     const auto bus = devices.bridge->snapshot();
-    constexpr unsigned int elapsed_clocks = 178;
+    constexpr unsigned int elapsed_clocks = 193;
     require(bus.clocks == elapsed_clocks && bus.write_count == 0 && bus.read &&
             !bus.read->response && bus.request && bus.request->pc == before.pc);
     check_original_timing_routes(devices);
-    std::cout << "  Separate IOP routing prefix:60 actual instructions, ten original "
-                 "read/mask/OR/write groups; one DAI/DPI bridge; explicit5/8 timing input; "
-                 "IDP_PP_CTL remains unmapped\n";
+    check_original_pdap(devices);
+    std::cout << "  Separate IOP routing prefix:64 actual instructions, ten original "
+                 "routing groups and PDAP setup; one DAI/DPI bridge; explicit5/8 timing input; "
+                 "SRU2_PIN0 remains unmapped\n";
     return;
   }
-  throw std::runtime_error("Missing original IDP_PP_CTL read boundary");
+  throw std::runtime_error("Missing original SRU2_PIN0 read boundary");
 }
 
 void check_original_power_outputs(const lead_a1::Sharc &cpu, HeaderDevices devices) {
@@ -1259,6 +1293,7 @@ struct OriginalRouting {
   lead_a1::SharcDaiEnable dai{power};
   lead_a1::SharcDaiTiming clocks{power, lead_a1::SharcDaiTimingGroup::clock};
   lead_a1::SharcDaiTiming frames{power, lead_a1::SharcDaiTimingGroup::frame};
+  lead_a1::SharcPdap pdap{power};
   lead_a1::SharcMemory peripheral;
   std::optional<lead_a1::SharcIopBridge> bridge;
   std::optional<lead_a1::SharcIopPort> sru;
@@ -1269,12 +1304,15 @@ struct OriginalRouting {
     constexpr std::uint32_t first_pben = 0x2478;
     constexpr std::uint32_t first_clock = 0x2430;
     constexpr std::uint32_t first_frame = 0x2450;
+    constexpr std::uint32_t idp_control = 0x24b0;
+    constexpr unsigned int idp_span = 0x21;
     constexpr lead_a1::SharcIoMapping window{.first_word = 0x1c00, .words = 0x900};
     constexpr lead_a1::SharcIoMapping sru_window{.first_word = 0x2400, .words = 0x100};
     constexpr lead_a1::SharcIoMapping dpi_window{.first_word = 0x1c00, .words = 0x100};
     peripheral.map_io({.first_word = first_pben, .words = 4}, dai);
     peripheral.map_io({.first_word = first_clock, .words = 6}, clocks);
     peripheral.map_io({.first_word = first_frame, .words = 5}, frames);
+    peripheral.map_io({.first_word = idp_control, .words = idp_span}, pdap);
     auto &bound = bridge.emplace(memory, peripheral, window);
     memory.map_io(sru_window, sru.emplace(bound, sru_window));
     memory.map_io(dpi_window, dpi.emplace(bound, dpi_window));
@@ -1371,6 +1409,7 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                           .dai = &routing.dai,
                           .clock_routes = &routing.clocks,
                           .frame_routes = &routing.frames,
+                          .pdap = &routing.pdap,
                           .bridge = bus});
   check_cells(memory, expected);
   std::cout << "  Sequenced final payload cells: " << expected.size() << " matched\n";

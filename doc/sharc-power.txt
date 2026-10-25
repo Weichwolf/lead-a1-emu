@@ -59,8 +59,8 @@ payload-cell checks remain. No host PC, opcode or padding is substituted.
 
 Each of four placements at both serial cadences then enters the separate
 IOP/DAI routing reference (sharc-dai-enable.txt). It now executes the original
-PBEN2/PBEN3/CLK2/FS2 groups through real delayed transfers and stops at missing
-IDP_PP_CTL (sharc-dai-timing.txt).
+PBEN2/PBEN3/CLK2/FS2 and PP_CTL setup through real delayed transfers and stops
+at missing SRU2_PIN0 (sharc-dai-timing.txt/sharc-pdap.txt).
 This extends the instruction-order checkpoint, without completing the I/O
 initializer or qualifying the five-stage switch.
 Post-delivery PCLK lower bounds discard unknown pre-write fractional phase;

@@ -19,7 +19,7 @@
       "local_copy_bytes": 18156850,
       "local_copy_sha256": "a9534d75e8946af83d5c9e250bb7e212224786b56977d6fec90d88e178f034dc",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified; no source reused.",
-      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals; A-4 reserved readback, A-8 PMCTL1 two-PCLK effect, A-11/13 shutdown/accelerator fields, 23-11 clocks enabled by default"
+      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals; A-4 reserved readback, A-8 PMCTL1 two-PCLK effect, A-11/13 shutdown/accelerator fields, 23-11 clocks enabled by default;12-8/16 PDAP clock/hold,masking,packing/core FIFO;12-20 full32-bit PDAP payload vs SIP tags;12-23/28 overflow/threshold/enable readiness;A-174/182 control/W1S/status fields,B-17 reset"
     },
     {
       "author": "Analog Devices",
@@ -670,7 +670,7 @@
     "limits": "GroupF logical reference only; pending/overlap/gated composition guards remain where not qualified. Other groups,pin data/pads,physical phase,complete peripheral coupling and five-stage native/VISA composition remain open. No boot/audio/USB/hardware claim",
     "original_reference": {
       "scope": "Four placements,two serial cadences; instruction-order fork after existing power checkpoint; explicit5/8 CCLK inputs, no physical phase claim",
-      "additional_instructions": 60,
+      "additional_instructions": 64,
       "groups": 10,
       "pben2_targets": [
         "0x1a5405d6",
@@ -685,15 +685,16 @@
         "0x00000000"
       ],
       "immediates": "FFC0/F03F Type17b fields are signed16, not assumed zero-extended32",
-      "next_operation": "Real backend IDP_PP_CTL read at0x24b1 remains unmapped after all ten writes mature; elapsed178 bridge clocks with explicit5/8 inputs. SRU-only projection omits this intervening non-SRU operation",
+      "next_operation": "Real SRU2_PIN0 read at0x1c10 remains unmapped after all eleven prior stores mature;193 bridge clocks with explicit5/8 inputs; actual PP_CTL setup establishes800ff000 without enabling global IDP or inventing data",
       "pcs": [
-        "0x1c5c36",
-        "0x1c5bbe",
-        "0x1c07fd",
-        "0x1c06c9"
+        "0x1c5c42",
+        "0x1c5bca",
+        "0x1c0809",
+        "0x1c06d5"
       ],
       "pben_instructions": 48,
-      "timing_instructions": 12
+      "timing_instructions": 12,
+      "pdap_instructions": 4
     }
   },
   "iop_control_bridge_reference": {
@@ -767,12 +768,12 @@
       "clock_target": "0x3de57bde",
       "frame_target": "0x3de5fbde",
       "signals": "IDP0 clock/frame choose DAI_PB11/PB12; both remain unknown without explicit source levels",
-      "next_operation": "IDP_PP_CTL read at0x24b1;10 writes matured,178 bridge clocks including failed read; CPU/IAB/SYSCTL/SPI retained",
+      "next_operation": "Four actual PP_CTL instructions follow the CLK2/FS2 groups. The next failure is SRU2_PIN0 at0x1c10 after11 stores mature and193 supplied bridge clocks; CPU/IAB/SYSCTL/SPI retained",
       "pcs": [
-        "0x1c5c36",
-        "0x1c5bbe",
-        "0x1c07fd",
-        "0x1c06c9"
+        "0x1c5c42",
+        "0x1c5bca",
+        "0x1c0809",
+        "0x1c06d5"
       ]
     },
     "limits": "Instruction-order/logical routing reference only. CLK4 field2 disagreement,pending/overlap/gated paths,physical phase,all DPI/data/pad/peripheral/board coupling and five-stage native/VISA remain open. No boot/audio/USB/hardware qualification",
@@ -780,5 +781,42 @@
       "reference": "dai_enable_reference.package_header_confirmation",
       "scope": "Same directly extracted pinned sru21489.h. Numeric CLK5 shifts and CLK4 PLL field discrepancy only; header stays local and is not included in builds or reused as implementation"
     }
+  },
+  "pdap_reference": {
+    "primary": "Pinned HWRrev1.1 12-8/16,12-20,12-23/28,12-33/34,A-174/182,B-17; PGR7-7/9 separate IOP delivery and buffer hangs",
+    "registers": {
+      "IDP_CTL0": "0x24b0",
+      "IDP_PP_CTL": "0x24b1",
+      "IDP_CTL1": "0x24b2",
+      "IDP_CTL2": "0x24b3",
+      "DAI_STAT0": "0x24b8",
+      "IDP_FIFO": "0x24d0"
+    },
+    "reset_controls": [
+      "0x0",
+      "0x0",
+      "0x0000ffff",
+      "0x0"
+    ],
+    "input_contract": "Separate optional clock/HOLD and20-bit value/knowledge for DAI_PB20..1 or AMI_ADDR23..4. Selected active edges only; global IDP_EN,PDAP_EN,channel0 enable required. Unknown required input/history fails atomically. Explicit completed SCLK periods qualify post-enable readiness; no inferred source frequency or data",
+    "packing": "4x8 inputs19..12 to successive low-to-high bytes;3-way first10 bits then11 then11;2x16 successive low/high halves;1x20 left-justified with low12 zero. Full PDAP payload retains low3 bits,unlike tagged SIP data",
+    "fifo": "Eight complete words,ordered ring/core pop and debug write. HOLD preserves partial packing. Incoming full-FIFO word dropped with sticky channel0 overflow; thresholdN0..7 is occupancy>N,8..15 disable request. STAT0 reflects real count/overflow. No fake DMA activity",
+    "commands": "PP_RESET read0 discards partial only;FFCLR read0 clears FIFO preserving overflow;CLROVR read0 clears FIFO/overflow. Global disable flush completes after2 actual CCLK. Intermediate/startup/partial-reconfiguration gaps stay explicit",
+    "snapshots": "Controls,explicit two-port input history,partial samples,FIFO/overflow,startup/flush remainder; reject impossible knowledge,command bits,counts,unused storage and partial history. Staged CPU/backend FIFO mutations abort independently",
+    "owned_evidence": "Literal all4 packing results,both edges,HOLD,unknown/masked input,source selection,full/wrap/drop/threshold,commands,two-clock disable,partial and queue restore,malformed/gated/transaction paths,actual native FIFO pop failure and cached response CPU-bank failure with unchanged-instruction repair",
+    "original_reference": {
+      "additional_instructions": 4,
+      "scope": "After60 original routing instructions,all4 placements at2 cadences,explicit5/8-clock inputs",
+      "actual_control": "0x800ff000",
+      "state": "Global IDP_EN remains0,FIFO/partial/IRQs empty,input clocks/HOLD/data remain unknown; no received data/period injected",
+      "next_operation": "Unsupported actual SRU2_PIN0 read at0x1c10;11 prior stores mature,193 bridge clocks including failed read",
+      "pcs": [
+        "0x1c5c42",
+        "0x1c5bca",
+        "0x1c0809",
+        "0x1c06d5"
+      ]
+    },
+    "limits": "PDAP slice only. SIP/DMA/ping-pong,DAI_STAT1,IRQ controller,PDAP strobe,actual empty/full IOP wait coupling,BHD values,partial reconfiguration and full startup/command/clock-domain phase remain unqualified. Board producer/pad wiring,physical timing,full five-stage boot/audio/MIDI/USB/UI/update/storage/hardware acceptance remain open"
   }
 }

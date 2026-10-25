@@ -12,6 +12,10 @@ ID  State    Evidence / remaining work
              (dsp-roles.txt). Physical package and slot A-D bindings remain open.
              Candidate TI AM18xx primary documentation is pinned and corroborates
              observed RAM/peripheral bases; exact SoC/loader state is unproven.
+             Actual original PP_CTL setup now establishes800ff000 after DAI
+             clock/hold routing to pins11/12 and input enables13..20. This is a
+             logical byte-wide PDAP configuration; physical producer/wiring,
+             clock frequency and incoming words remain unresolved (sharc-pdap.txt).
              reference/sharc.json pins the shared kernel identities and analysis
              manuals; explicit 5-Mbit SHARC geometry and initial SPI-slave boot
              are documented references, not physical package/pin qualification.
@@ -88,7 +92,13 @@ ID  State    Evidence / remaining work
              optional source levels, correct distinct code27 behavior and2..3
              PCLK effects. CLK4's conflicting PLL field stays explicitly guarded.
              Full pad/IDP/SPORT/clock/board coupling remains open
-             (sharc-dai-timing.txt). Native count loops of at least five instructions
+             (sharc-dai-timing.txt). A separate PDAP receiver now captures
+             explicit known DAI/AMI inputs on selected clock edges, preserves
+             HOLD/partial words and implements four pack formats, an eight-word
+             FIFO, overflow/threshold requests, W1S commands and delayed disable.
+             Global/parallel/channel enables are separate. Unknown inputs,
+             SIP/DMA, unsettled startup, BHD and actual IOP wait coupling remain
+             explicit gaps (sharc-pdap.txt). Native count loops of at least five instructions
              execute ordinary CALL/RTS, nested callees and conditional polling;
              final e-3 pre-pop, PCSTK/PCSTKP reads and failed pre-pop/pending-effect
              rollback have independent tests (sharc-long-loops.txt). Other loop
@@ -662,10 +672,10 @@ ID  State    Evidence / remaining work
              core work before delivery, read capture,11..13-clock write/read
              bounds, delivery faults/retry without extra clocks, separately
              restored owners, malformed requests/state and transaction guards.
-             The original reference adds60 actual instructions through ten
-             PBEN2/PBEN3/CLK2/FS2 read/AND/OR/write groups using explicit5/8 inputs.
+             The original reference adds64 actual instructions through ten
+             PBEN2/PBEN3/CLK2/FS2 groups and PP_CTL setup using explicit5/8 inputs.
              Intermediate raw words include signed Type17b masks; the next
-             unsupported target is IDP_PP_CTL at24b1. CPU/IAB/SYSCTL/SPI remain
+             unsupported target is SRU2_PIN0 at1c10. CPU/IAB/SYSCTL/SPI remain
              unchanged on that failed delivery, after prior writes really drain.
              The earlier pending PBEN2 read is now executed with real timing;
              exact physical phase is still unqualified (sharc-iop-bridge.txt).
@@ -676,6 +686,15 @@ ID  State    Evidence / remaining work
              cross-view write spacing/draining, response ownership, rollback
              and independently restored queue/target state. Physical wiring and
              IDP/SPORT behavior are not inferred from these logical components.
+             PDAP checks use literal pack results for all four formats/both
+             edges, HOLD/unknown/masked/source inputs, partial and queue restore,
+             occupancy/overflow/threshold/wrap, commands, two-clock disable,
+             malformed/transaction/gated paths and real native FIFO read faults.
+             Actual target pop rollback and cached response survive separate
+             backend/CPU failures without double consumption. All eight original
+             PP_CTL setups establish800ff000 while global IDP remains disabled;
+             FIFO/partial/IRQs/input knowledge are not fabricated. The next
+             failure follows193 supplied bridge clocks (sharc-pdap.txt).
              No clocked VISA boot or complete application is qualified.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

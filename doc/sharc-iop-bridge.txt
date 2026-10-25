@@ -68,9 +68,10 @@ requests and snapshots. A real DAI read/mask/OR/store/read composition advances
 effect intervals before deliveries, including a half-period arrival.
 
 The optional original reference uses explicit5/8-clock inputs for ten actual
-PBEN2/PBEN3/CLK2/FS2 groups (60 instructions) after its unchanged power checkpoint.
-At the next IDP_PP_CTL read at24b1 all ten writes have matured. With these
-inputs178 bridge clocks have elapsed, including the failing eleventh read;
+PBEN2/PBEN3/CLK2/FS2 groups and PP_CTL setup (64 instructions) after its
+unchanged power checkpoint. At the next SRU2_PIN0 read at1c10 all eleven
+writes have matured. With these inputs193 bridge clocks have elapsed,
+including the failing twelfth read;
 its CPU/IAB remain unchanged and the original issuing PC is retained.
 This is instruction-order evidence with a stated local clock origin; it does
 not resolve native/VISA Address timing, unknown global phase or physical SPI
