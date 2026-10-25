@@ -155,7 +155,12 @@ ID  State    Evidence / remaining work
              JUMP/CALL/RTS (sharc-fetch-visa.txt). Actual encodings/lengths,
              variable return frames, canceled speculative bursts, DAG stalls,
              snapshots and failed retirement retain explicit expectations.
-             Complete VISA loops/cache/PM/IRQ timing remains open.
+             Clocked immediate VISA DO with one uncompressed48-bit body now
+             retains real IAB/refetch input and address units3. Literal
+             Tables4-17..20 cover counts2..5, startup/pop/drain; changed code,
+             compact tails, real post-loop RTS, snapshots and malformed
+             addresses have checks (sharc-visa-loops.txt). Count1, partial/mixed
+             entry and complete VISA loops/cache/PM/IRQ timing remain open.
              Sharc::step(IAB) now provides a separate captured VISA CPU
              instruction-order reference. Real transactions consume qualified
              compact compute/move/return/NOP forms, preserve raw encodings and
@@ -660,8 +665,13 @@ ID  State    Evidence / remaining work
              then execute the actual JUMP at8c005 and first VISA CALL through
              the clocked transport. Eight further grants retire those two
              instructions and reach common entry1c0528 with its real frame.
-             Full clocked common-call execution remains open
-             (sharc-fetch-visa.txt).
+             The common call now executes8284 further instructions in8293
+             further granted clocks, including six real loop holds,8256 NOPs
+             at the six independently expected waits,11 PMCTL accesses and
+             the original compact RTS. The complete result, including cache,
+             is compared with the instruction-order reference after delivering
+             its pending native cache fill before checkpointing
+             (sharc-fetch-visa.txt,sharc-visa-loops.txt).
              The separate original_sharc_visa_instructions reference forks
              the verified checkpoint, executes8286 actual native/VISA
              instructions and returns from the common clock call in all8

@@ -28,6 +28,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -574,13 +575,31 @@ void check_original_visa_frontend(lead_a1::SharcMemory &memory,
             << std::dec << "; no VISA instruction executed\n";
 }
 
+void settle_original_visa_fetch(lead_a1::SharcMemory &memory,
+                                lead_a1::Sharc &cpu,
+                                lead_a1::SharcFetch &fetch,
+                                SerialInput &serial,
+                                HeaderDevices devices) {
+  // Deliver the real pending native F2/Decode cache fill before copying a
+  // functional CPU reference. Its instruction-order API cannot deliver it.
+  for (unsigned int clock = 0; clock < 2; ++clock) {
+    devices.clock.accessed = false;
+    require(fetch.advance_sequenced(cpu).address_accepted && !fetch.state().execute);
+    advance_devices(memory, cpu, serial, devices);
+  }
+  const auto &transport = fetch.state();
+  require(cpu.state().pc == self_modify + 1 && !transport.lookup && !transport.fill &&
+          !transport.pending_fetch2 && transport.decode &&
+          transport.decode->address == self_modify + 1);
+}
+
 void check_original_visa_boundary(lead_a1::SharcMemory &memory,
                                   lead_a1::Sharc &cpu,
                                   lead_a1::SharcFetch &fetch,
                                   SerialInput &serial,
                                   HeaderDevices devices) {
   check_original_visa_frontend(memory, cpu, fetch, devices);
-  constexpr unsigned int clocks = 8;
+  constexpr unsigned int clocks = 6; // Two preceding real F2/Decode clocks settled the cache.
   constexpr std::uint32_t first_call = 0x1c0528;
   unsigned int retired{};
   for (unsigned int clock = 0; clock < clocks; ++clock) {
@@ -638,9 +657,9 @@ struct VisaReferenceTrace {
   std::array<unsigned int, 6> waits{};
 };
 
-void record_visa_reference(lead_a1::SharcStep step,
-                           VisaReferenceTrace &trace,
-                           ObservedClock &clock) {
+void record_visa_step(lead_a1::SharcStep step,
+                      VisaReferenceTrace &trace,
+                      const ObservedClock &clock) {
   ++trace.instructions;
   if (step.pc == self_modify + 1) {
     ++trace.native;
@@ -661,11 +680,79 @@ void record_visa_reference(lead_a1::SharcStep step,
     }
   }
   if (clock.accessed) { ++trace.clock_accesses; }
+}
+
+void record_visa_reference(lead_a1::SharcStep step,
+                           VisaReferenceTrace &trace,
+                           ObservedClock &clock) {
+  record_visa_step(step, trace, clock);
   constexpr std::uint32_t pll_bypass = 0x8000;
   clock.device.advance({.core_cycles = step.minimum_core_cycles,
                         .clkin_cycles = (clock.device.state().control & pll_bypass) != 0
                                             ? step.minimum_core_cycles
                                             : 0U});
+}
+
+void advance_clocked_visa_devices(lead_a1::SharcMemory &memory,
+                                  lead_a1::Sharc &cpu,
+                                  SerialInput &serial,
+                                  HeaderDevices devices) {
+  constexpr std::uint32_t pll_bypass = 0x8000;
+  devices.clock.device.advance(
+      {.core_cycles = 1,
+       .clkin_cycles = (devices.clock.device.state().control & pll_bypass) != 0 ? 1U : 0U});
+  serial.advance(devices.spi, memory);
+  static_cast<void>(devices.spi.service_dma(memory));
+  if (devices.spi.state().interrupt_pending) {
+    constexpr std::uint32_t primary_spi = 0x1000;
+    cpu.latch_interrupt(primary_spi);
+    devices.spi.acknowledge_interrupt();
+  }
+  require(!devices.spi.state().overflow);
+}
+
+void check_original_clocked_visa_common(lead_a1::SharcMemory &memory,
+                                        lead_a1::Sharc &cpu,
+                                        lead_a1::SharcFetch &fetch,
+                                        SerialInput &serial,
+                                        HeaderDevices devices) {
+  VisaReferenceTrace trace;
+  unsigned int clocks{};
+  unsigned int loop_stalls{};
+  constexpr unsigned int limit = 20000;
+  const auto return_pc = devices.placement.visa_entry + 3;
+  while (cpu.state().pc != return_pc && clocks < limit) {
+    devices.clock.accessed = false;
+    const auto bus = fetch.address_pm_request(cpu) ? lead_a1::SharcFetchBus::pm_data
+                                                   : lead_a1::SharcFetchBus::available;
+    const auto event = fetch.advance_sequenced(cpu, bus);
+    ++clocks;
+    if (event.loop_stall) { ++loop_stalls; }
+    require(!event.compute_stall && !event.control_stall && !event.dag_stall && !event.fetch_stall);
+    if (fetch.state().execute) {
+      const auto step = cpu.step(fetch);
+      require(step.minimum_core_cycles == 1);
+      record_visa_step(step, trace, devices.clock);
+    }
+    advance_clocked_visa_devices(memory, cpu, serial, devices);
+  }
+  constexpr unsigned int expected_instructions = 8284;
+  constexpr unsigned int expected_clocks = 8293; // Three refill clocks and six real loop holds.
+  constexpr std::array<unsigned int, 6> waits{16, 4096, 16, 4096, 16, 16};
+  require(trace.instructions == expected_instructions && trace.native == 0 && trace.compact == 1 &&
+          trace.clock_accesses == 11 && trace.waits == waits && clocks == expected_clocks &&
+          loop_stalls == waits.size() && cpu.state().pc == return_pc);
+  constexpr std::uint32_t call_frame = 0x1000000;
+  require(cpu.state().depth == 0 && cpu.state().pc_stack[0] == (call_frame | return_pc) &&
+          cpu.state().loops_empty == true && !cpu.state().count_loop && !cpu.state().branch &&
+          !cpu.state().arithmetic_loop && !cpu.state().interrupt && !memory.active());
+  const auto clock = devices.clock.device.state();
+  constexpr std::uint32_t control = 0x40012;
+  constexpr std::uint32_t dividers = 0x40000;
+  require(clock.control == control && clock.effective_dividers == dividers &&
+          !clock.pending_dividers && clock.pll_remaining == 0 && !clock.bypass_required);
+  std::cout << "  Clocked VISA common call:8284 further instructions/8293 grants, six actual wait "
+               "loops/11 PMCTL accesses; original RTS returned\n";
 }
 
 void original_routing_clock(HeaderDevices devices) {
@@ -921,10 +1008,10 @@ void original_visa_power_reference(lead_a1::SharcMemory &memory,
                "delayed PMCTL1 outputs and eight modifiers\n";
 }
 
-void original_visa_instruction_reference(lead_a1::SharcMemory &memory,
-                                         const lead_a1::Sharc &checkpoint,
-                                         const lead_a1::SharcFetch &fetch,
-                                         HeaderDevices devices) {
+lead_a1::SharcState original_visa_instruction_reference(lead_a1::SharcMemory &memory,
+                                                        const lead_a1::Sharc &checkpoint,
+                                                        const lead_a1::SharcFetch &fetch,
+                                                        HeaderDevices devices) {
   const auto native = checkpoint.state();
   const auto transport = fetch.state();
   const auto controller = devices.control.snapshot();
@@ -963,12 +1050,53 @@ void original_visa_instruction_reference(lead_a1::SharcMemory &memory,
               (lead_a1::SharcClockRatio{.numerator = external_numerator, .denominator = 5}));
   require(checkpoint.state() == native && fetch.state() == transport &&
           devices.control.snapshot() == controller);
+  const auto common = cpu.state();
   std::cout << "  Separate VISA instruction-order fork:8286 actual instructions, six original "
-               "wait loops/11 PMCTL accesses, first CALL returned; full clocked call still open\n";
+               "wait loops/11 PMCTL accesses, first CALL returned\n";
   if (!buffer) { throw std::runtime_error("Missing original VISA clock-prefix input"); }
   original_visa_power_reference(memory, cpu, *buffer, devices);
   require(checkpoint.state() == native && fetch.state() == transport &&
           devices.control.snapshot() == controller);
+  return common;
+}
+
+template <typename Known, std::size_t size>
+void changed_known(std::string_view name,
+                   const std::array<Known, size> &actual,
+                   const std::array<Known, size> &expected) {
+  for (std::size_t index = 0; index < size; ++index) {
+    if (actual[index] == expected[index]) { continue; }
+    std::cerr << name << '[' << std::dec << index << "] actual=0x" << std::hex
+              << actual[index].value << "/0x" << actual[index].known << " expected=0x"
+              << expected[index].value << "/0x" << expected[index].known << '\n';
+  }
+}
+
+void compare_common_state(const lead_a1::SharcState &actual, const lead_a1::SharcState &expected) {
+  if (actual == expected) { return; }
+  std::cerr << "Common CPU state mismatch; equal fields: pc=" << (actual.pc == expected.pc)
+            << " pending=" << (actual.pending == expected.pending)
+            << " flags=" << (actual.flag_inputs == expected.flag_inputs)
+            << " dag=" << (actual.dag == expected.dag) << " px=" << (actual.px == expected.px)
+            << " stack=" << (actual.pc_stack == expected.pc_stack)
+            << " depth=" << (actual.depth == expected.depth)
+            << " loop_empty=" << (actual.loops_empty == expected.loops_empty)
+            << " branch=" << (actual.branch == expected.branch)
+            << " count=" << (actual.count_loop == expected.count_loop)
+            << " arithmetic=" << (actual.arithmetic_loop == expected.arithmetic_loop)
+            << " cache=" << (actual.cache == expected.cache)
+            << " interrupt=" << (actual.interrupt == expected.interrupt) << " idle="
+            << (actual.idle_pc == expected.idle_pc &&
+                actual.idle_delay_word == expected.idle_delay_word)
+            << '\n';
+  changed_known("system", actual.system, expected.system);
+  changed_known("effective", actual.effective, expected.effective);
+  for (std::size_t bank = 0; bank < actual.data.size(); ++bank) {
+    if (actual.data[bank] == expected.data[bank]) { continue; }
+    std::cerr << "Data bank " << bank << '\n';
+    changed_known("R", actual.data[bank], expected.data[bank]);
+  }
+  require(actual == expected);
 }
 
 void sequenced_deferred_foreground(lead_a1::SharcMemory &memory,
@@ -1013,11 +1141,17 @@ void sequenced_deferred_foreground(lead_a1::SharcMemory &memory,
   require(controller.control == 4 && controller.effective == 4 && !controller.delayed);
   std::cout << "  Deferred F2 input:4 original foreground instructions, saved SPI vector restored, "
                "PC0x8c005; response phase is not hardware-qualified\n";
+  settle_original_visa_fetch(memory, cpu, fetch, serial, devices);
   const lead_a1::Sharc checkpoint(memory, cpu.state(), &devices.control);
   const lead_a1::SharcFetch checkpoint_fetch(memory, fetch.state());
   check_original_visa_boundary(memory, cpu, fetch, serial, devices);
+  check_original_clocked_visa_common(memory, cpu, fetch, serial, devices);
   if (devices.profile == OriginalProfile::visa_reference) {
-    original_visa_instruction_reference(memory, checkpoint, checkpoint_fetch, devices);
+    const auto clocked = cpu.state();
+    const auto common =
+        original_visa_instruction_reference(memory, checkpoint, checkpoint_fetch, devices);
+    require(cpu.state() == clocked);
+    compare_common_state(clocked, common);
   }
 }
 

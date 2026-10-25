@@ -1,0 +1,50 @@
+Clocked single-instruction VISA counter loops
+
+PGRrev2.4 4-54/55 requires uncompressed48-bit short-loop bodies. The bound
+transport now supports an immediate DO with one such body and count>=2.
+Loop metadata explicitly retains address units1(native NW) or3(VISA SW).
+Body/end/post-loop addresses and real PC frames use those units. The VISA
+entry currently requires a complete aligned body burst and no delayed burst;
+partial/mixed entry and count1 remain explicit emulator gaps.
+
+The actual Decode body is retained across DO/startup holds. Overridden or
+aborted Decode inputs discard their captured burst without semantic parsing;
+they are not executable NOPs. A real nonsequential F2 body response starts a
+new IAB epoch using three actual executable SW reads. Subsequent Decode uses
+the newly captured bits. RAM changes therefore preserve already locked body
+copies while affecting later refetches. The normal IAB resumes for compact
+post-loop code, including fetch backpressure and immediate redirects.
+
+Tables4-17..20 determine startup, F1 counter checks, early pop and drain.
+Counts>=4 terminate at the documented F1 threshold4; counts2/3 retain their
+three aborted tail clocks. PC/loop stack pop precedes final body retirement.
+A taken immediate branch immediately after a VISA loop may select its target
+while the last body executes, only after the loop frame has popped. Metadata
+survives until the remaining body instructions/buffered responses drain.
+
+Owned literal short-word phase/pop tables cover counts2,3,4,5. Further checks
+exercise changed RAM versus retained/refetched bodies, compact tails, real
+CALL frames/RTS followed by reserved wrong-path bytes, restored held state,
+malformed spans and rejected count1/compact body entry. Address bounds are
+checked before addition, including malformed native UINT_MAX state. Existing
+native loop and VISA fetch regressions remain independent expectations.
+
+Both candidate original profiles continue from the actual JUMP/first CALL
+into common entry1c0528. Its8284 further instructions take8293 further grants:
+three refill clocks and six real loop holds. Six observed NOP counts remain
+16/4096/16/4096/16/16, with11 actual PMCTL accesses and the actual compact RTS
+back to entry+3. The instruction-order reference receives its checkpoint only
+after the native F2/Decode cache fill has completed; it cannot deliver that
+transport input itself. The resulting complete CPU states, including cache,
+are compared. No firmware instruction, PC or readback is substituted.
+
+The selected loader response and CLKIN reference remain explicit fixture
+inputs. These clocks do not qualify physical Nord timing or a complete boot.
+Count1, partial/mixed loop entry, register/multi-body/arithmetic loops and
+PM/cache/IRQ compositions still need their actual paths implemented. Original
+firmware is known to work; these are emulator gaps, not accepted limitations.
+Full instrument/audio/MIDI/USB/UI/storage/update/recovery/hardware acceptance
+remains mandatory and incomplete.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_clocked_visa_counter_loops|sharc_clocked_visa_fetch|sharc_fetch_single_loops|original_sharc_deferred_f2|original_sharc_visa_instructions)$' --output-on-failure

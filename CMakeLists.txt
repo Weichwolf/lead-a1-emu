@@ -48,6 +48,7 @@ target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_memory.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_visa.cpp src/sharc_visa_length.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_visa_decode.cpp src/sharc_visa_execute.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_visa.cpp)
+target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_visa_loop.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_power.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_dai_enable.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_dai_timing.cpp)
@@ -61,6 +62,9 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-fetch-visa-loop-test test/sharc_fetch_visa_loop_test.cpp)
+  target_link_libraries(lead-a1-sharc-fetch-visa-loop-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_clocked_visa_counter_loops COMMAND lead-a1-sharc-fetch-visa-loop-test)
   add_executable(lead-a1-sharc-fetch-visa-test test/sharc_fetch_visa_test.cpp)
   target_link_libraries(lead-a1-sharc-fetch-visa-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_clocked_visa_fetch COMMAND lead-a1-sharc-fetch-visa-test)
@@ -482,6 +486,7 @@ if(BUILD_TESTING)
     DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
       lead-a1-sharc-fetch-test
       lead-a1-sharc-fetch-visa-test
+      lead-a1-sharc-fetch-visa-loop-test
       lead-a1-sharc-fetch-cache-test
       lead-a1-sharc-fetch-flow-test
       lead-a1-sharc-branch-pipeline-test

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_fetch.hpp"
+#include "lead_a1/sharc_visa.hpp"
 #include "sharc_fetch_internal.hpp"
 #include "sharc_internal.hpp"
 
@@ -43,6 +44,10 @@ void other_control(const SharcState &cpu, const SharcFetchWord &word) {
   constexpr unsigned int register_loop = 13;
   constexpr unsigned int arithmetic_loop = 14;
   constexpr std::uint64_t idle = 0x008000000000;
+  if (word.visa && type == immediate_loop && word.visa->words == 3 &&
+      (word.opcode & sharc_pc_mask) == 3) {
+    return; // The loop transport separately checks the actual buffered body.
+  }
   if (word.visa && ((type >= first_other_control && type <= last_other_control && type != 10) ||
                     word.opcode == idle)) {
     throw std::runtime_error("SHARC clocked VISA loop/indirect/RTI timing not qualified");
@@ -146,7 +151,6 @@ bool sharc_fetch_flow(const SharcState &cpu,
   if (suppressed) { next.decode.reset(); }
   updated.discard_decode >>= 1;
   next.flow = updated;
-  sharc_fetch_loop_flow(cpu, previous, next);
   return suppressed;
 } catch (const std::exception &error) {
 

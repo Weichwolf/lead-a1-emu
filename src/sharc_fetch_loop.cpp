@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_fetch.hpp"
+#include "lead_a1/sharc_visa.hpp"
 #include "sharc_dag_internal.hpp"
 #include "sharc_fetch_internal.hpp"
 #include "sharc_fetch_long.hpp"
@@ -33,22 +34,24 @@ void begin(const SharcState &cpu, const SharcFetchState &previous, SharcFetchSta
   // Keep the actual F2 word; its operands wait until it really enters Decode.
   const auto held = next.decode ? next.decode : previous.fetch2;
   const auto total = (word.opcode >> counter_shift) & counter_mask;
-  if ((word.opcode & sharc_pc_mask) != 1 || total == 1) {
+  const auto units = word.visa ? word.visa->words : 1U;
+  if ((word.opcode & sharc_pc_mask) != units || total == 1) {
     throw std::runtime_error("SHARC sequenced loop length/count-one timing not qualified");
   }
   if (cpu.branch || cpu.count_loop || previous.flow->discard_decode != 0 ||
-      next.flow->discard_decode != 0 || !held || held->address != word.address + 1 ||
-      !body_supported(held->opcode)) {
+      next.flow->discard_decode != 0 || !held || held->address != word.address + units ||
+      !body_supported(held->opcode) || (word.visa && (!held->visa || held->visa->words != 3))) {
     throw std::runtime_error("SHARC sequenced loop setup/body context not qualified");
   }
-  sharc_fetch_address(word.address + 2);
+  sharc_fetch_program_address(word.address + (units * 2));
   const auto iterations = total == 0 ? full_counter : total;
   next.flow->loop = SharcFetchLoop{.setup = word.address,
-                                   .body = word.address + 1,
+                                   .body = word.address + units,
                                    .total = iterations,
                                    .fetch_remaining = iterations,
-                                   .held = held};
-  next.flow->next = word.address + 1;
+                                   .held = held,
+                                   .units = units};
+  next.flow->next = word.address + units;
 }
 
 void issue(SharcFetchState &next, SharcFetchLoop &loop) {
@@ -75,7 +78,7 @@ void counter(SharcFetchFlow &flow, SharcFetchLoop &loop, std::optional<std::uint
   if (loop.fetch_remaining == threshold) {
     loop.terminal = true;
     loop.pop = SharcFetchLoopPop::due;
-    flow.next = loop.body + 1;
+    flow.next = loop.body + loop.units;
   } else {
     --loop.fetch_remaining;
     flow.next = loop.body;

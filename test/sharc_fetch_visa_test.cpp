@@ -379,7 +379,8 @@ void retained_failed_execute() {
 
 void explicit_boundaries() {
   constexpr std::array<std::uint64_t, 2> operations{0x0c0002000003, 0x06be041800a0};
-  constexpr std::array reasons{"clocked VISA loop/indirect/RTI", "clocked VISA delayed branch"};
+  constexpr std::array reasons{"VISA single-body input alignment/length",
+                               "clocked VISA delayed branch"};
   for (unsigned int index = 0; index < operations.size(); ++index) {
     Fixture fixture;
     wide(fixture.memory, {.address = base, .opcode = operations[index]});

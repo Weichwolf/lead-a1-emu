@@ -14,6 +14,11 @@ void sharc_fetch_validate(const SharcFetchState &state);
 void sharc_fetch_address(std::uint32_t address);
 void sharc_fetch_program_address(std::uint32_t address);
 void sharc_fetch_visa_validate(const SharcFetchState &state);
+void sharc_fetch_visa_loop_entry(const SharcFetchState &previous, const SharcFetchState &next);
+[[nodiscard]] bool sharc_fetch_visa_loop_skip(const SharcFetchState &previous,
+                                              const std::optional<SharcFetchWord> &address);
+void sharc_fetch_visa_loop_response(const SharcFetchState &previous, SharcFetchState &next);
+[[nodiscard]] bool sharc_fetch_visa_loop_request(const SharcFetchState &state);
 [[nodiscard]] SharcFetchEvent sharc_fetch_visa_clock(SharcMemory &memory,
                                                      const SharcState &cpu,
                                                      const SharcFetchState &previous,

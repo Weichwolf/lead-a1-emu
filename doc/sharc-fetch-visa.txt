@@ -28,8 +28,9 @@ Immediate JUMP/CALL/RTS may cross native/VISA address spaces. Address
 discards the old IAB epoch and cancels its speculative short-word request;
 the target first enters F1 with branch Execute. Wrong-path bytes do not
 undergo semantic Decode. CALL return frames use actual short-word lengths.
-Native delayed slots retain their native behavior. VISA delayed branches,
-loops/RTI/IDLE, PM/cache/deferred-response combinations and block arbitration
+Native delayed slots retain their native behavior. Clocked single-body VISA
+counter loops have the separate sharc-visa-loops.txt contract. VISA delayed
+branches, other loops/RTI/IDLE, PM/cache/deferred-response combinations and block arbitration
 still need qualification. These are emulator gaps, not accepted instrument
 limitations or permission to change firmware.
 
@@ -38,8 +39,9 @@ native/VISA CALL/RTS and real frames, full-IAB return, immutable RAM capture,
 DAG partial stalls, restored full buffers, failed Execute/retry and malformed
 state. The original deferred-response fixtures also exercise the native
 JUMP at8c005 and first actual VISA CALL, reaching common entry1c0528. The
-candidate external response phase and full clocked common call/application
-startup remain unqualified. The separate instruction-order common-call/
+common call now returns through its actual RTS after8284 further
+instructions/8293 grants (sharc-visa-loops.txt). The candidate external
+response phase, physical timing and complete application startup remain unqualified. The separate instruction-order common-call/
 peripheral reference in sharc-visa-execution.txt remains distinct.
 
   cmake --build --preset strict --target lead-a1-sharc-fetch-visa-test lead-a1-original-sharc-test

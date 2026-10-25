@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_fetch.hpp"
+#include "lead_a1/sharc_visa.hpp"
 #include "sharc_fetch_internal.hpp"
 #include "sharc_fetch_long.hpp"
 #include "sharc_internal.hpp"
@@ -35,7 +36,8 @@ SharcLoopClock sharc_fetch_loop_retirement(const SharcState &cpu, SharcFetchStat
     if (!cpu.depth || loop.phase != SharcFetchLoopPhase::hold) {
       throw std::runtime_error("SHARC loop native DO retirement phase mismatch");
     }
-    if ((word->opcode >> class_shift) != immediate_loop || (word->opcode & address_mask) != 1 ||
+    if ((word->opcode >> class_shift) != immediate_loop ||
+        (word->opcode & address_mask) != loop.units ||
         loop.total != (count == 0 ? full_count : count)) {
       throw std::runtime_error("SHARC retained DO disagrees with loop metadata");
     }
@@ -64,6 +66,10 @@ void sharc_fetch_loop_finish(SharcFetchState &transport) noexcept {
   for (const auto &word :
        {transport.fetch2, transport.decode, transport.address, transport.execute}) {
     if (word && word->address == loop.body) { return; }
+  }
+  if (transport.visa && ((transport.visa->decode == loop.body && transport.visa->count != 0) ||
+                         (transport.visa->delay && transport.visa->delay->address == loop.body))) {
+    return;
   }
   transport.flow->loop.reset();
 }

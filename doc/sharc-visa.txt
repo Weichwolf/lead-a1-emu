@@ -46,8 +46,10 @@ second targets differ per placement (reference/sharc.json). All8 fixtures
 compare those factual fields without changing native CPU/fetch/control state.
 The candidate clocked transport now executes the actual native JUMP and first
 VISA CALL in eight further granted clocks, reaching common entry1c0528
-with the real return frame (sharc-fetch-visa.txt). The full clocked common
-call, application startup and physical response phase remain unqualified.
+with the real return frame (sharc-fetch-visa.txt). The clocked common call
+now executes its8284 further instructions in8293 grants and returns via the
+original RTS (sharc-visa-loops.txt). Application startup and the physical
+response phase remain unqualified.
 Original program bytes stay local. The separate captured CPU instruction-order
 API and original clock-prefix fork are qualified in sharc-visa-execution.txt;
 they do not supply missing clocked runtime behavior.

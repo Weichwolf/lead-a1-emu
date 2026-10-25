@@ -63,6 +63,7 @@ struct SharcFetchLoop {
   std::optional<SharcFetchWord> held{std::nullopt};
   std::optional<unsigned int> saved_depth{std::nullopt};
   bool terminal{};
+  unsigned int units{1}; // Native NW or uncompressed VISA SW instruction span.
   bool operator==(const SharcFetchLoop &) const = default;
 };
 
@@ -135,7 +136,7 @@ struct SharcFetchEvent {
   bool operator==(const SharcFetchEvent &) const = default;
 };
 
-// Native internal instruction-bus transport, PGR4-5/8. F1 addresses come from
+// Internal native/VISA instruction transport, PGR4-5/9. F1 addresses come from
 // the owner or the optional bounded sequencer. The owner grants clocks;
 // standalone CADIS=1 and bound cache clocks have separate inputs. Complete
 // DAG/control interlocks and loop/IRQ/IDLE redirects remain guarded or open.
@@ -167,8 +168,8 @@ public:
                                         std::optional<std::uint32_t> next_address,
                                         SharcFetchBus bus = SharcFetchBus::available,
                                         SharcFetchRead read = SharcFetchRead::immediate);
-  // Optional native sequencer: initialize state.flow.next to the entry address.
-  // Generates sequential F1 and native direct JUMP/CALL/RTS targets, with
+  // Optional sequencer: initialize state.flow.next to the entry address.
+  // Generates sequential F1 and qualified native/VISA JUMP/CALL/RTS targets, with
   // real delayed slots and suppressed speculative Decode inputs (PGR4-20/21).
   // The owner still grants clocks, supplies PM requests and retires Execute.
   [[nodiscard]] SharcFetchEvent advance_sequenced(Sharc &cpu,

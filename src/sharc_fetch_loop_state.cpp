@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_fetch.hpp"
+#include "lead_a1/sharc_visa.hpp"
 #include "sharc_dag_internal.hpp"
 #include "sharc_fetch_internal.hpp"
 #include "sharc_fetch_long.hpp"
+#include "sharc_visa_internal.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -25,7 +27,8 @@ void loop_word(const SharcFetchWord &word, const SharcFetchState &transport, boo
     throw std::invalid_argument("Invalid SHARC inherited loop body encoding");
   }
   if (word.loop_body &&
-      (!loop || word.address != loop->body || word.branch || word.pm_data.value_or(false))) {
+      (!loop || word.address != loop->body || word.branch || word.pm_data.value_or(false) ||
+       (loop->units == 3 && (!word.visa || word.visa->words != 3)))) {
     throw std::invalid_argument("Invalid SHARC inherited loop body word");
   }
   if (word.loop_pop &&
@@ -34,11 +37,36 @@ void loop_word(const SharcFetchWord &word, const SharcFetchState &transport, boo
   }
 }
 
+void addresses(const SharcFetchLoop &loop) {
+  if ((loop.units != 1 && loop.units != 3) || sharc_visa_address(loop.setup) != (loop.units == 3)) {
+    throw std::invalid_argument("Invalid SHARC loop address units");
+  }
+  if (loop.units == 3) {
+    if (!sharc_visa_address(loop.setup) || !sharc_visa_address(loop.body)) {
+      throw std::invalid_argument("Invalid VISA loop address");
+    }
+    if (!sharc_visa_address(loop.body + loop.units)) {
+      throw std::invalid_argument("Invalid VISA loop following address");
+    }
+  } else {
+    sharc_fetch_address(loop.setup);
+    sharc_fetch_address(loop.body);
+    sharc_fetch_address(loop.body + loop.units);
+  }
+}
+
+bool tail_redirect(const SharcFetchState &transport, const SharcFetchLoop &loop) {
+  return transport.flow && transport.flow->discard_decode == 3 && loop.units == 3 &&
+         loop.pop == SharcFetchLoopPop::done && loop.issued == loop.total &&
+         loop.retired + 1 == loop.total && transport.execute && transport.execute->loop_body &&
+         transport.execute->address == loop.body && transport.address &&
+         transport.address->address == loop.body + loop.units && transport.address->branch &&
+         transport.address->branch->taken;
+}
+
 void metadata(const SharcFetchLoop &loop) {
-  sharc_fetch_address(loop.setup);
-  sharc_fetch_address(loop.body);
-  sharc_fetch_address(loop.body + 1);
-  if (loop.body != loop.setup + 1 || loop.total < 2 ||
+  addresses(loop);
+  if (loop.body != loop.setup + loop.units || loop.total < 2 ||
       (loop.total > immediate_max && loop.total != full_counter) || loop.fetch_remaining == 0 ||
       loop.fetch_remaining > loop.total || loop.issued > loop.total || loop.retired > loop.issued ||
       loop.phase > SharcFetchLoopPhase::stream || loop.pop > SharcFetchLoopPop::done ||
@@ -55,6 +83,11 @@ void metadata(const SharcFetchLoop &loop) {
     const auto word = *loop.held;
     constexpr unsigned int class_shift = 40;
     const auto type = word.opcode >> class_shift;
+    if (word.visa.has_value() != (loop.units == 3) ||
+        (word.visa && (word.visa->words != 3 || word.visa->address != word.address ||
+                       sharc_visa_decode(*word.visa) != word.opcode))) {
+      throw std::invalid_argument("Invalid retained SHARC loop instruction span");
+    }
     if (word.address != loop.body || word.pm_data || word.branch || word.loop_body ||
         word.loop_pop || word.dag ||
         (word.opcode != 0 && type != 1 && type != 2 && !sharc_dag_loop_body(word.opcode))) {
@@ -118,7 +151,7 @@ void context(const SharcState &cpu, const SharcFetchLoop &loop) {
     throw std::runtime_error("SHARC sequenced loop stack mismatch");
   }
   if (loop.retired == loop.total) {
-    if (cpu.count_loop || live || cpu.pc != loop.body + 1) {
+    if (cpu.count_loop || live || cpu.pc != loop.body + loop.units) {
       throw std::runtime_error("SHARC sequenced loop drain mismatch");
     }
     return;
@@ -167,8 +200,9 @@ void sharc_fetch_loop_guard(const SharcState &cpu, const SharcFetchState &transp
     }
     return;
   }
-  if (!transport.flow || cpu.branch || transport.flow->discard_decode != 0 || transport.lookup ||
-      transport.fill) {
+  if (!transport.flow || cpu.branch ||
+      (transport.flow->discard_decode != 0 && !tail_redirect(transport, *loop)) ||
+      transport.lookup || transport.fill) {
     throw std::runtime_error("SHARC loop with branch/cache phases not qualified");
   }
   for (const auto &pending : cpu.pending) {

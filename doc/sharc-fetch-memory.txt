@@ -47,8 +47,9 @@ The ordinary109318-cell oracle per cadence remains checked. This is the
 result under the selected response input, not physical timing qualification.
 The further read-only VISA frontend check is described in sharc-visa.txt.
 The clocked continuation now executes the real native JUMP and first VISA
-CALL, reaching1c0528 with its actual frame (sharc-fetch-visa.txt). This
-does not qualify the full common call or application startup.
+CALL, reaching1c0528 with its actual frame (sharc-fetch-visa.txt). The
+subsequent clocked common call returns through actual counter loops/RTS
+(sharc-visa-loops.txt); complete application startup remains open.
 
 Primary constraints are PGRrev2.4 4-5/8 (F1/F2/Decode/Address/Execute),4-84
 Table4-31 (partial stall) and7-23/24 (forwarding future reads after writes).

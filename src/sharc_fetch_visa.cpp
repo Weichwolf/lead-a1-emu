@@ -22,9 +22,9 @@ void clock_guard(const SharcState &cpu,
                  const SharcFetchState &state,
                  SharcFetchBus bus,
                  SharcFetchRead read) {
-  if (!state.flow || state.flow->loop || state.flow->long_loop || state.lookup || state.fill ||
-      cpu.arithmetic_loop || state.pending_fetch2 || bus != SharcFetchBus::available ||
-      read != SharcFetchRead::immediate) {
+  if (!state.flow || (state.flow->loop && state.flow->loop->units != 3) || state.flow->long_loop ||
+      state.lookup || state.fill || cpu.arithmetic_loop || state.pending_fetch2 ||
+      bus != SharcFetchBus::available || read != SharcFetchRead::immediate) {
     throw std::runtime_error("SHARC VISA cache/PM/deferred/loop fetch timing not qualified");
   }
 }
@@ -73,6 +73,7 @@ void capture(SharcMemory &memory,
     return;
   }
   if (redirected) { return; }
+  sharc_fetch_visa_loop_response(previous, next);
   if (!next.visa || next.visa->fetch != previous.fetch1) {
     throw std::runtime_error("SHARC VISA F2 request does not match its IAB epoch");
   }
@@ -96,7 +97,7 @@ void sharc_fetch_visa_validate(const SharcFetchState &state) {
     throw std::invalid_argument("Invalid SHARC aborted VISA fetch request");
   }
   if (short_request(state.fetch1) && !state.visa_fetch_aborted &&
-      (!state.visa || state.visa->fetch != state.fetch1)) {
+      (!state.visa || state.visa->fetch != state.fetch1) && !sharc_fetch_visa_loop_request(state)) {
     throw std::invalid_argument("Invalid SHARC inherited VISA F1/IAB cursor");
   }
   if (state.fetch2 && (state.fetch2->visa || sharc_visa_address(state.fetch2->address))) {
@@ -151,12 +152,18 @@ SharcFetchEvent sharc_fetch_visa_clock(SharcMemory &memory,
       next.visa = SharcVisaState{.decode = *address, .fetch = *address};
     }
     if (previous.visa && !next.decode) {
-      SharcVisaBuffer buffer(memory, *previous.visa);
-      next.decode = decode(buffer, suppressed);
-      next.visa = buffer.state();
+      if (sharc_fetch_visa_loop_skip(previous, next.address)) {
+        next.visa = SharcVisaState{.decode = previous.visa->fetch, .fetch = previous.visa->fetch};
+      } else {
+        SharcVisaBuffer buffer(memory, *previous.visa);
+        next.decode = decode(buffer, suppressed);
+        next.visa = buffer.state();
+      }
       if (dag_wait(cpu, previous, next)) { return {.stalled = true, .dag_stall = true}; }
     }
   }
+  sharc_fetch_visa_loop_entry(previous, next);
+  sharc_fetch_loop_flow(cpu, previous, next);
   capture(memory, previous, next, held, redirected);
   return event;
 }

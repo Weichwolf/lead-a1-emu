@@ -177,7 +177,10 @@ SharcFetchEvent clock_transport(SharcMemory &memory,
   }
   const auto event =
       normal_clock(memory, cache, previous, next, cpu.effective[4], next_address, bus, read);
-  if (sequenced) { static_cast<void>(detail::sharc_fetch_flow(cpu, previous, next)); }
+  if (sequenced) {
+    static_cast<void>(detail::sharc_fetch_flow(cpu, previous, next));
+    detail::sharc_fetch_loop_flow(cpu, previous, next);
+  }
   return event;
 }
 
