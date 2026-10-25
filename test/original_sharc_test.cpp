@@ -6,6 +6,7 @@
 #include "sharc/peripherals/sharc_boot.hpp"
 #include "sharc/peripherals/sharc_clock.hpp"
 #include "sharc/peripherals/sharc_control.hpp"
+#include "sharc/peripherals/sharc_dai_data.hpp"
 #include "sharc/peripherals/sharc_dai_enable.hpp"
 #include "sharc/peripherals/sharc_dai_pin.hpp"
 #include "sharc/peripherals/sharc_dai_timing.hpp"
@@ -394,6 +395,7 @@ struct HeaderDevices {
   lead_a1::SharcPower *power{};
   lead_a1::SharcDaiEnable *dai{};
   lead_a1::SharcDaiPin *pin_routes{};
+  lead_a1::SharcDaiData *data_routes{};
   lead_a1::SharcDaiTiming *clock_routes{};
   lead_a1::SharcDaiTiming *frame_routes{};
   lead_a1::SharcPdap *pdap{};
@@ -415,10 +417,11 @@ void advance_bound_peripherals(HeaderDevices devices) {
   require(devices.bridge != nullptr && devices.power != nullptr && devices.dai != nullptr &&
           devices.clock_routes != nullptr && devices.frame_routes != nullptr &&
           devices.pdap != nullptr && devices.dpi_pin != nullptr && devices.dpi_enable != nullptr &&
-          devices.pin_routes != nullptr);
+          devices.pin_routes != nullptr && devices.data_routes != nullptr);
   devices.power->advance_half_pclk(1);
   devices.dai->advance_half_pclk(1);
   devices.pin_routes->advance_half_pclk(1);
+  devices.data_routes->advance_half_pclk(1);
   devices.clock_routes->advance_half_pclk(1);
   devices.frame_routes->advance_half_pclk(1);
   devices.pdap->advance_cclk(1);
@@ -1173,9 +1176,11 @@ struct OriginalRmw {
   std::uint32_t cleared;
   std::uint32_t result;
   bool verify_spi_checkpoint{};
+  bool verify_pin_checkpoint{};
 };
 
 void check_post_spi_outputs(HeaderDevices devices);
+void check_post_pin_outputs(HeaderDevices devices);
 
 void original_post_spi_group(lead_a1::SharcMemory &memory,
                              lead_a1::Sharc &cpu,
@@ -1201,6 +1206,7 @@ void original_post_spi_group(lead_a1::SharcMemory &memory,
     const auto step = original_application_retire(memory, cpu, fetch, serial, devices);
     require(step.pc == pc && step.address_units == group.widths[index]);
     if (index == 0 && group.verify_spi_checkpoint) { check_post_spi_outputs(devices); }
+    if (index == 0 && group.verify_pin_checkpoint) { check_post_pin_outputs(devices); }
     require(cpu.state().data[0][0] ==
             (lead_a1::SharcKnown40{.value = std::uint64_t{r0[index]} << 8, .known = full40}));
     require(cpu.state().data[0][1] ==
@@ -1238,17 +1244,15 @@ void check_post_spi_outputs(HeaderDevices devices) {
   require(!timing.pending[0] && timing.routes[0] == (clocks ? clock_result : clock_reset));
 }
 
-void original_data_boundary(lead_a1::SharcMemory &memory,
-                            lead_a1::Sharc &cpu,
-                            lead_a1::SharcFetch &fetch,
-                            SerialInput &serial,
-                            HeaderDevices devices) {
+void original_sport_boundary(lead_a1::SharcMemory &memory,
+                             lead_a1::Sharc &cpu,
+                             lead_a1::SharcFetch &fetch,
+                             SerialInput &serial,
+                             HeaderDevices devices) {
   original_application_prepare(memory, cpu, fetch, serial, devices);
   const bool clocks = uses_clock_initializer(devices.placement);
-  constexpr std::uint32_t first_data = 0x2440;
-  constexpr std::uint32_t second_data = 0x2441;
-  const auto data_word = clocks ? first_data : second_data;
-  const auto pc = devices.placement.second_call + (clocks ? 383U : 302U);
+  constexpr std::uint32_t data_word = 0xc1a;
+  const auto pc = devices.placement.second_call + (clocks ? 601U : 651U);
   const auto access = fetch.peripheral_access(cpu);
   require(access == (lead_a1::SharcFetchIopAccess{
                         .pc = pc, .address = data_word, .operation = lead_a1::AccessKind::read}));
@@ -1403,18 +1407,8 @@ constexpr std::array<OriginalRmw, 6> pin_other_groups{{
      .result = 0x1348d300},
 }};
 
-void original_pin_boundary(lead_a1::SharcMemory &memory,
-                           lead_a1::Sharc &cpu,
-                           lead_a1::SharcFetch &fetch,
-                           SerialInput &serial,
-                           HeaderDevices devices) {
+void check_post_pin_outputs(HeaderDevices devices) {
   const bool clocks = uses_clock_initializer(devices.placement);
-  const auto groups = clocks ? std::span<const OriginalRmw>(pin_clock_groups)
-                             : std::span<const OriginalRmw>(pin_other_groups);
-  for (const auto &group : groups) {
-    original_post_spi_group(memory, cpu, fetch, serial, devices, group);
-  }
-  original_data_boundary(memory, cpu, fetch, serial, devices);
   const auto pins = devices.pin_routes->snapshot();
   const auto enables = devices.dai->snapshot();
   const auto frames = devices.frame_routes->snapshot();
@@ -1435,11 +1429,427 @@ void original_pin_boundary(lead_a1::SharcMemory &memory,
           enables.routes[0] == (clocks ? enable_clock_result : enable_other_result) &&
           enables.routes[1] == (clocks ? enable1_reset : enable1_other_result));
   require(!frames.pending[0] && frames.routes[0] == (clocks ? frame_clock_result : frame_reset));
+}
+
+constexpr std::array<OriginalRmw, 17> data_clock_groups{{
+    {.offset = 383,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2440,
+     .initial = 0x8144040,
+     .mask = 0xfffc0fff,
+     .selected = 0x0,
+     .cleared = 0x8140040,
+     .result = 0x8140040,
+     .verify_pin_checkpoint = true},
+    {.offset = 396,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0xe0412c0,
+     .mask = 0xfffff03f,
+     .selected = 0x0,
+     .cleared = 0xe041000,
+     .result = 0xe041000},
+    {.offset = 408,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2440,
+     .initial = 0x8140040,
+     .mask = 0xff03ffff,
+     .selected = 0x40000,
+     .cleared = 0x8000040,
+     .result = 0x8040040},
+    {.offset = 422,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2479,
+     .initial = 0x1348d30f,
+     .mask = 0xff03ffff,
+     .selected = 0x40000,
+     .cleared = 0x1300d30f,
+     .result = 0x1304d30f},
+    {.offset = 436,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2462,
+     .initial = 0x3668c98,
+     .mask = 0xffffff80,
+     .selected = 0x14,
+     .cleared = 0x3668c80,
+     .result = 0x3668c94},
+    {.offset = 448,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2479,
+     .initial = 0x1304d30f,
+     .mask = 0xc0ffffff,
+     .selected = 0x1000000,
+     .cleared = 0x4d30f,
+     .result = 0x104d30f},
+    {.offset = 462,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2462,
+     .initial = 0x3668c94,
+     .mask = 0xffffc07f,
+     .selected = 0xa80,
+     .cleared = 0x3668014,
+     .result = 0x3668a94},
+    {.offset = 474,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2478,
+     .initial = 0xe041000,
+     .mask = 0xc0ffffff,
+     .selected = 0x1000000,
+     .cleared = 0x41000,
+     .result = 0x1041000},
+    {.offset = 488,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2461,
+     .initial = 0x4e84b96,
+     .mask = 0xffffff80,
+     .selected = 0x18,
+     .cleared = 0x4e84b80,
+     .result = 0x4e84b98},
+    {.offset = 500,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2479,
+     .initial = 0x104d30f,
+     .mask = 0xffffffc0,
+     .selected = 0x1,
+     .cleared = 0x104d300,
+     .result = 0x104d301},
+    {.offset = 512,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2461,
+     .initial = 0x4e84b98,
+     .mask = 0xffffc07f,
+     .selected = 0xc80,
+     .cleared = 0x4e84018,
+     .result = 0x4e84c98},
+    {.offset = 524,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2430,
+     .initial = 0x252ef7bd,
+     .mask = 0xffff83ff,
+     .selected = 0x7000,
+     .cleared = 0x252e83bd,
+     .result = 0x252ef3bd},
+    {.offset = 536,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2479,
+     .initial = 0x104d301,
+     .mask = 0xfffff03f,
+     .selected = 0x40,
+     .cleared = 0x104d001,
+     .result = 0x104d041},
+    {.offset = 548,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2461,
+     .initial = 0x4e84c98,
+     .mask = 0xffe03fff,
+     .selected = 0xe0000,
+     .cleared = 0x4e00c98,
+     .result = 0x4ee0c98},
+    {.offset = 562,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2450,
+     .initial = 0x273ef7bd,
+     .mask = 0xffff83ff,
+     .selected = 0x7000,
+     .cleared = 0x273e83bd,
+     .result = 0x273ef3bd},
+    {.offset = 574,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2479,
+     .initial = 0x104d041,
+     .mask = 0xfffc0fff,
+     .selected = 0x1000,
+     .cleared = 0x1040041,
+     .result = 0x1041041},
+    {.offset = 587,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2461,
+     .initial = 0x4ee0c98,
+     .mask = 0xf01fffff,
+     .selected = 0x7400000,
+     .cleared = 0xe0c98,
+     .result = 0x74e0c98},
+}};
+
+constexpr std::array<OriginalRmw, 27> data_other_groups{{
+    {.offset = 302,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2441,
+     .initial = 0xf38b289,
+     .mask = 0xfffff03f,
+     .selected = 0x140,
+     .cleared = 0xf38b009,
+     .result = 0xf38b149,
+     .verify_pin_checkpoint = true},
+    {.offset = 314,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2479,
+     .initial = 0x1348d300,
+     .mask = 0xff03ffff,
+     .selected = 0x0,
+     .cleared = 0x1300d300,
+     .result = 0x1300d300},
+    {.offset = 327,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2440,
+     .initial = 0x8144040,
+     .mask = 0xfffc0fff,
+     .selected = 0x8000,
+     .cleared = 0x8140040,
+     .result = 0x8148040},
+    {.offset = 341,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2479,
+     .initial = 0x1300d300,
+     .mask = 0xc0ffffff,
+     .selected = 0x0,
+     .cleared = 0xd300,
+     .result = 0xd300},
+    {.offset = 354,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2440,
+     .initial = 0x8148040,
+     .mask = 0xff03ffff,
+     .selected = 0x240000,
+     .cleared = 0x8008040,
+     .result = 0x8248040},
+    {.offset = 368,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0x1248041,
+     .mask = 0xfffc0fff,
+     .selected = 0x0,
+     .cleared = 0x1240041,
+     .result = 0x1240041},
+    {.offset = 381,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2430,
+     .initial = 0x252630c2,
+     .mask = 0xffffffe0,
+     .selected = 0x2,
+     .cleared = 0x252630c0,
+     .result = 0x252630c2},
+    {.offset = 393,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0x1240041,
+     .mask = 0xfffc0fff,
+     .selected = 0x0,
+     .cleared = 0x1240041,
+     .result = 0x1240041},
+    {.offset = 406,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2430,
+     .initial = 0x252630c2,
+     .mask = 0xffff83ff,
+     .selected = 0x800,
+     .cleared = 0x252600c2,
+     .result = 0x252608c2},
+    {.offset = 418,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0x1240041,
+     .mask = 0xfffc0fff,
+     .selected = 0x0,
+     .cleared = 0x1240041,
+     .result = 0x1240041},
+    {.offset = 431,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2430,
+     .initial = 0x252608c2,
+     .mask = 0xfffffc1f,
+     .selected = 0x40,
+     .cleared = 0x25260802,
+     .result = 0x25260842},
+    {.offset = 443,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0x1240041,
+     .mask = 0xfffc0fff,
+     .selected = 0x0,
+     .cleared = 0x1240041,
+     .result = 0x1240041},
+    {.offset = 456,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2430,
+     .initial = 0x25260842,
+     .mask = 0xfff07fff,
+     .selected = 0x10000,
+     .cleared = 0x25200842,
+     .result = 0x25210842},
+    {.offset = 470,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0x1240041,
+     .mask = 0xff03ffff,
+     .selected = 0x0,
+     .cleared = 0x1000041,
+     .result = 0x1000041},
+    {.offset = 483,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2450,
+     .initial = 0x2736b4e3,
+     .mask = 0xffffffe0,
+     .selected = 0x3,
+     .cleared = 0x2736b4e0,
+     .result = 0x2736b4e3},
+    {.offset = 495,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0x1000041,
+     .mask = 0xff03ffff,
+     .selected = 0x0,
+     .cleared = 0x1000041,
+     .result = 0x1000041},
+    {.offset = 508,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2450,
+     .initial = 0x2736b4e3,
+     .mask = 0xffff83ff,
+     .selected = 0xc00,
+     .cleared = 0x273680e3,
+     .result = 0x27368ce3},
+    {.offset = 520,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0x1000041,
+     .mask = 0xff03ffff,
+     .selected = 0x0,
+     .cleared = 0x1000041,
+     .result = 0x1000041},
+    {.offset = 533,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2450,
+     .initial = 0x27368ce3,
+     .mask = 0xfffffc1f,
+     .selected = 0x60,
+     .cleared = 0x27368c03,
+     .result = 0x27368c63},
+    {.offset = 545,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0x1000041,
+     .mask = 0xff03ffff,
+     .selected = 0x0,
+     .cleared = 0x1000041,
+     .result = 0x1000041},
+    {.offset = 558,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2450,
+     .initial = 0x27368c63,
+     .mask = 0xfff07fff,
+     .selected = 0x18000,
+     .cleared = 0x27300c63,
+     .result = 0x27318c63},
+    {.offset = 572,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0x1000041,
+     .mask = 0xfffc0fff,
+     .selected = 0x0,
+     .cleared = 0x1000041,
+     .result = 0x1000041},
+    {.offset = 585,
+     .widths = {3, 2, 1, 2, 1, 3},
+     .address = 0x2479,
+     .initial = 0xd300,
+     .mask = 0xfffff03f,
+     .selected = 0x40,
+     .cleared = 0xd000,
+     .result = 0xd040},
+    {.offset = 597,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2461,
+     .initial = 0x4e84b98,
+     .mask = 0xffe03fff,
+     .selected = 0x8000,
+     .cleared = 0x4e00b98,
+     .result = 0x4e08b98},
+    {.offset = 611,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2478,
+     .initial = 0x1000041,
+     .mask = 0xff03ffff,
+     .selected = 0x0,
+     .cleared = 0x1000041,
+     .result = 0x1000041},
+    {.offset = 624,
+     .widths = {3, 3, 1, 2, 1, 3},
+     .address = 0x2479,
+     .initial = 0xd040,
+     .mask = 0xfffc0fff,
+     .selected = 0x1000,
+     .cleared = 0x40,
+     .result = 0x1040},
+    {.offset = 637,
+     .widths = {3, 3, 1, 3, 1, 3},
+     .address = 0x2461,
+     .initial = 0x4e08b98,
+     .mask = 0xf01fffff,
+     .selected = 0x600000,
+     .cleared = 0x8b98,
+     .result = 0x608b98},
+}};
+
+void check_post_data_outputs(HeaderDevices devices) {
+  const bool clocks = uses_clock_initializer(devices.placement);
+  const auto pins = devices.pin_routes->snapshot();
+  const auto enables = devices.dai->snapshot();
+  const auto frames = devices.frame_routes->snapshot();
+  const auto timing = devices.clock_routes->snapshot();
+  constexpr std::array<std::uint32_t, 3> clock_pins{0x076e4a94, 0x074e0c98, 0x03668a94};
+  constexpr std::array<std::uint32_t, 3> other_pins{0x04c80a94, 0x00608b98, 0x03668c98};
+  const auto expected = clocks ? clock_pins : other_pins;
+  for (unsigned int index = 0; index < expected.size(); ++index) {
+    require(!pins.pending[index] && pins.routes[index] == expected[index]);
+  }
+  constexpr std::uint32_t clock_enable0 = 0x01041000;
+  constexpr std::uint32_t other_enable0 = 0x01000041;
+  constexpr std::uint32_t clock_enable1 = 0x01041041;
+  constexpr std::uint32_t other_enable1 = 0x00001040;
+  constexpr std::uint32_t clock_frame = 0x273ef3bd;
+  constexpr std::uint32_t other_frame = 0x27318c63;
+  constexpr std::uint32_t clock_clock = 0x252ef3bd;
+  constexpr std::uint32_t other_clock = 0x25210842;
+  require(!enables.pending[0] && !enables.pending[1] &&
+          enables.routes[0] == (clocks ? clock_enable0 : other_enable0) &&
+          enables.routes[1] == (clocks ? clock_enable1 : other_enable1));
+  require(!frames.pending[0] && frames.routes[0] == (clocks ? clock_frame : other_frame));
+  require(!timing.pending[0] && timing.routes[0] == (clocks ? clock_clock : other_clock));
+}
+
+void original_pin_boundary(lead_a1::SharcMemory &memory,
+                           lead_a1::Sharc &cpu,
+                           lead_a1::SharcFetch &fetch,
+                           SerialInput &serial,
+                           HeaderDevices devices) {
+  const bool clocks = uses_clock_initializer(devices.placement);
+  const auto pins = clocks ? std::span<const OriginalRmw>(pin_clock_groups)
+                           : std::span<const OriginalRmw>(pin_other_groups);
+  for (const auto &group : pins) {
+    original_post_spi_group(memory, cpu, fetch, serial, devices, group);
+  }
+  const auto data = clocks ? std::span<const OriginalRmw>(data_clock_groups)
+                           : std::span<const OriginalRmw>(data_other_groups);
+  for (const auto &group : data) {
+    original_post_spi_group(memory, cpu, fetch, serial, devices, group);
+  }
+  original_sport_boundary(memory, cpu, fetch, serial, devices);
+  check_post_data_outputs(devices);
+  const auto routed = devices.data_routes->snapshot();
+  constexpr std::uint32_t first_clock_data = 0x08040040;
+  constexpr std::uint32_t first_other_data = 0x08248040;
+  constexpr std::uint32_t second_clock_data = 0x0f38b289;
+  constexpr std::uint32_t second_other_data = 0x0f38b149;
+  require(!routed.pending[0] && !routed.pending[1] &&
+          routed.routes[0] == (clocks ? first_clock_data : first_other_data) &&
+          routed.routes[1] == (clocks ? second_clock_data : second_other_data));
   constexpr unsigned int earlier_clock = 128;
   constexpr unsigned int earlier_other = 104;
-  const auto instructions = (clocks ? earlier_clock : earlier_other) + (6 * groups.size());
+  const auto instructions =
+      (clocks ? earlier_clock : earlier_other) + (6 * (pins.size() + data.size()));
   std::cout << "  Clocked application:" << instructions
-            << " actual instructions; DAI pin routing; DAT0/1 read remains unbound\n";
+            << " actual instructions; DAI serial-data routing; SPCTLN0 read remains unbound\n";
 }
 
 void original_post_spi_routing(lead_a1::SharcMemory &memory,
@@ -2089,6 +2499,7 @@ struct OriginalRouting {
   lead_a1::SharcPower power;
   lead_a1::SharcDaiEnable dai{power};
   lead_a1::SharcDaiPin pins{power};
+  lead_a1::SharcDaiData data{power};
   lead_a1::SharcDaiTiming clocks{power, lead_a1::SharcDaiTimingGroup::clock};
   lead_a1::SharcDaiTiming frames{power, lead_a1::SharcDaiTimingGroup::frame};
   lead_a1::SharcPdap pdap{power};
@@ -2102,6 +2513,7 @@ struct OriginalRouting {
   std::optional<lead_a1::SharcSpiPort> spi;
   std::optional<lead_a1::SharcIopPort> spi_core;
   std::optional<lead_a1::SharcIopPort> spi_dma;
+  std::optional<lead_a1::SharcIopPort> sport;
 
   lead_a1::SharcIopBridge *
   map(lead_a1::SharcMemory &memory, OriginalProfile profile, lead_a1::SharcSpi &serial) {
@@ -2118,7 +2530,7 @@ struct OriginalRouting {
     constexpr unsigned int idp_span = 0x21;
     const lead_a1::SharcIoMapping window =
         profile == OriginalProfile::clocked_iop
-            ? lead_a1::SharcIoMapping{.first_word = 0x1000, .words = 0x1500}
+            ? lead_a1::SharcIoMapping{.first_word = 0xc00, .words = 0x1900}
             : lead_a1::SharcIoMapping{.first_word = 0x1c00, .words = 0x900};
     constexpr lead_a1::SharcIoMapping sru_window{.first_word = 0x2400, .words = 0x100};
     constexpr lead_a1::SharcIoMapping dpi_window{.first_word = 0x1c00, .words = 0x100};
@@ -2140,6 +2552,11 @@ struct OriginalRouting {
       peripheral.map_io(power_window, power);
       constexpr std::uint32_t dai_pin0 = 0x2460;
       peripheral.map_io({.first_word = dai_pin0, .words = 5}, pins);
+      constexpr std::uint32_t dai_data0 = 0x2440;
+      peripheral.map_io({.first_word = dai_data0, .words = 7}, data);
+      // HWR B-4..6: address view only. The missing SPORT backend must fail.
+      constexpr lead_a1::SharcIoMapping sport_window{.first_word = 0xc00, .words = 0x68};
+      memory.map_io(sport_window, sport.emplace(bound, sport_window));
       constexpr std::uint32_t dpi_pin0 = 0x1c10;
       constexpr std::uint32_t dpi_pben0 = 0x1c20;
       peripheral.map_io({.first_word = dpi_pin0, .words = 3}, dpi_pin);
@@ -2238,6 +2655,7 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                           .power = &routing.power,
                           .dai = &routing.dai,
                           .pin_routes = &routing.pins,
+                          .data_routes = &routing.data,
                           .clock_routes = &routing.clocks,
                           .frame_routes = &routing.frames,
                           .pdap = &routing.pdap,

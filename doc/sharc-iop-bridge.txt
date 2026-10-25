@@ -186,13 +186,18 @@ CLK0/PBEN0 expectations are checked after the first actual PIN0 read drains
 them, before the new groups change those routes. Type17b mask arithmetic
 retains the same explicit qualification above.
 
-The resulting176/140-instruction application prefixes stop on the actual next
-GroupB data read: DAT0/2440 at second-CALL+383 for transport0, DAT1/2441 at+302
-for transport1. The unmapped backend failure retains CPU/IAB and the exact
-due read PC/address/operation with no response. Earlier writes have genuinely
-drained/matured; final pin/frame/enable words have literal expectations and
-SPI still retains control0/port4d14/cursor92180. No data value or successful
-access is fabricated. This is incomplete application startup.
+The176/140-instruction checkpoints now enter GroupB DAT0/2440 at second-
+CALL+383 for transport0, DAT1/2441 at+302 for transport1 (sharc-dai-data.txt).
+The first actual read drains previous writes and checks all prior pin/frame/
+enable expectations before subsequent RMWs change them. Seventeen/twenty-seven
+further six-instruction groups retain independent original PC/width/operand
+and conditional Type17b arithmetic expectations. No input signal is invented.
+The278/302-instruction prefixes next read SPCTLN0/c1a at+601/+651. HWR B-4..6
+establishes this SPORT register; its address view shares the same bridge
+queue/clock and has no backend. The actual due read fails with unchanged
+CPU/IAB/exact request and no response, after earlier writes drain/mature.
+Final data/pin/frame/clock/enable words and retained SPI0/4d14/cursor92180 have
+literal expectations. This is incomplete application startup.
 Earlier native PMCTL/core-IOP timing, independent prefetch/DMA holds, physical
 phase, SPI enable/flush timing and full board coupling remain separate gaps.
 

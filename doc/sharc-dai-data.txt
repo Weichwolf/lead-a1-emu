@@ -1,0 +1,58 @@
+DAI Group B serial-data routing reference
+
+SharcDaiData maps IOP2440..2446. DAT0..5 contain five6-bit selectors each;
+DAT6 contains four, with its upper8 bits reserved. There are34 destinations:
+DAT0 SPORT0A/B,1A/B,2A; DAT1 SPORT2B,3A/B,4A/B; DAT2 SPORT5A/B,SRC0/1/2DAT_IP;
+DAT3 SRC3DAT_IP,SRC0/1/2/3TDM_OP; DAT4 DIT_DAT,IDP0..3;
+DAT5 IDP4..7,DIR_I; DAT6 SPORT6A/B,7A/B. Names denote input signals, not
+sample buffers or inferred audio-channel assignments.
+
+Primary HWRrev1.1 A-129..134/TableA-77/FiguresA-67..73 and B-14 establish
+fields, addresses and seven raw reset words. Source codes00..28,2c..30 are
+46 optional dynamic inputs;3e/3f select LOW/HIGH. Codes29..2b and31..3d
+are unsupported. The pinned official VisualDSP5.1.2 sru21489.h corroborates
+Group B codes and DAT6 shifts0/6/12/18. Clock/frame sources absent from
+Group B must not become serial-data inputs. Reference identities are in
+reference/sharc.json and reference/visualdsp.json; no manufacturer bytes
+or implementation are published.
+
+Missing live source levels remain unknown. Changing a selected input changes
+the routed level without rewriting a selector. Reserved raw bits are preserved
+without inferred effects. Routing does not invent SPORT transmit samples,
+serial clocks, DMA, SPDIF/SRC behavior, pin-buffer feedback or physical wiring.
+The owner must connect observed source signals explicitly.
+
+HWR10-33 specifies delivered DAI effects after2..3 PCLK. Before2 PCLK old
+outputs remain; during2..3 the old/new possibilities are retained; after3 the
+new selection is guaranteed. Equal known live inputs stay known during the
+interval. Half-period ages, independent words and missing inputs survive
+snapshots. Clock/source updates use fixed arrays without allocation.
+
+Transactions stage delivered writes independently of committed outputs;
+abort discards them. Source/clock/snapshot events reject active transactions.
+Malformed selectors, pending ages and reserved source slots reject. Reads or
+overlapping writes during pending effects and stopped-clock composition remain
+explicit model gaps, not claims that silicon rejects these operations.
+
+Owned expectations enumerate48 valid codes and1632 source/destination choices
+with low/high/unknown levels. Seven literal reset words/default routes,
+reserved codes at every destination, DAT6's absent fifth field, raw reserved
+bits, literal effect phases, live equal/unequal sources, fractional restores,
+large advances, transactions and gated failure/repair have independent checks.
+Fetched native stores/readbacks cover all4/5-write7/8-read combinations,
+source capture before later full32 CPU changes, both DAT0/DAT6 and real late
+target failure with rollback and retry_due at the same elapsed clock.
+
+The original clocked owner shares this backend and ages effects before new
+bridge delivery. The first DAT0/DAT1 read preserves the earlier pin/frame/
+enable checkpoint before later groups change it. Seventeen/twenty-seven
+further RMW groups check actual PC/width/R0/R1/post-value against independent
+original fields and explicit reset arithmetic. Compact Type17b upper16 mask
+extension remains an unproven model assumption (sharc-visa-execution.txt).
+The278/302-instruction application prefixes next reach SPCTLN0/0xc1a at
+second-CALL+601/+651. Its address view shares the existing queue; the absent
+SPORT backend fails on the real due read without a response, after previous
+writes drain/mature. This is incomplete startup, not working audio.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_dai_(serial_data_routing|data_posted_io)|original_sharc_clocked_iop|native_build)$' --output-on-failure

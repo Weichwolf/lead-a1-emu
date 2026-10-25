@@ -122,7 +122,12 @@ ID  State    Evidence / remaining work
              isolation and separate high/low/HiZ/unresolved drive composition
              have owned checks. Pad feedback, source/peripheral/board coupling,
              stopped-clock and unsettled readback remain explicit gaps
-             (sharc-dai-pin.txt). A separate PDAP receiver now captures
+             (sharc-dai-pin.txt). GroupB serial-data routing now maps seven
+             words/34 destinations from46 optional inputs plus constants, with
+             the four-field DAT6 boundary and2..3-PCLK effects. Source signals,
+             SPORT samples/clocks and physical pad feedback remain separate;
+             complete peripheral coupling is pending (sharc-dai-data.txt).
+             A separate PDAP receiver now captures
              explicit known DAI/AMI inputs on selected clock edges, preserves
              HOLD/partial words and implements four pack formats, an eight-word
              FIFO, overflow/threshold requests, W1S commands and delayed disable.
@@ -595,8 +600,8 @@ ID  State    Evidence / remaining work
              The separate clocked IOP profile now preserves actual native
              posted SPI setup, all ordinary records/final-cell checks and384
              vector words through original P1I/RTI/native-VISA transition.
-             Its application reference reaches176/140 original instructions
-             and the real unbound SRU_DAT0/1 read at2440/2441; no full cold boot or
+             Its application reference reaches278/302 original instructions
+             and the real unbound SPCTLN0 read atc1a; no full cold boot or
              manual-function acceptance follows (sharc-iop-bridge.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
 5   pending  No firmware audio, audio serial/DMA model, host audio or timing evidence.
@@ -816,11 +821,11 @@ ID  State    Evidence / remaining work
              PIN0 read, before later RMWs change them. Eight/six further RMW
              groups check every PC/width/R0/R1 and posted value against original
              fields and explicit family inputs. All8 placements/cadences reach
-             176/140 application instructions. The next genuine unmapped
-             DAT0/2440 (+383) or DAT1/2441 (+302) read retains CPU/IAB/exact due
-             request without a response, after prior writes drain/mature.
-             Literal final pin/frame/enable state and retained SPI4d14/cursor
-             92180 are checked. No data value is invented. Complete startup, native PMCTL/core-IOP timing,
+             the earlier176/140 application checkpoints. The actual next
+             DAT0/2440 (+383) or DAT1/2441 (+302) read drains prior writes and
+             checks literal pin/frame/enable state before GroupB continues
+             below. SPI4d14/cursor92180 remain checked. No data value is invented.
+             Complete startup, native PMCTL/core-IOP timing,
              internal RAM-port/DMA arbitration, physical F2/phase and board
              coupling remain gaps (sharc-iop-bridge.txt).
              DAI pin checks independently enumerate81 valid selectors and1782
@@ -836,6 +841,24 @@ ID  State    Evidence / remaining work
              drive masks. Real fetched native4/5-write7/8-read compositions and
              late actual target faults/retry preserve source capture and state
              (sharc-dpi.txt).
+             GroupB data routing now maps seven2440..2446 words/34 destinations,
+             with46 optional dynamic sources plus LOW/HIGH, six-bit fields and
+             DAT6's four-field boundary. Seven resets,48 independently listed
+             codes/1632 destination choices, reserved holes/raw bits, live
+             unknown/equal inputs,2..3-PCLK effects, fractional independent
+             restores, transactions and real fetched4/5-write7/8-read fault/
+             no-time retry paths have owned tests (sharc-dai-data.txt).
+             The first actual DAT0/1 read now preserves prior176/140 pin/frame/
+             enable checkpoints before17/27 further RMW groups change them.
+             Actual PC/width/R0/R1/post-value checks use independent original
+             fields and explicitly conditional Type17b mask arithmetic. All8
+             placements/cadences reach278/302 application instructions. The
+             genuine next SPCTLN0/c1a read at second-CALL+601/+651 retains
+             CPU/IAB/exact due request without response. The SPORT address view
+             shares one queue/clock but has no backend. Earlier writes drain/
+             mature; final data/pin/enable/frame/clock and original SPI state
+             retain literal expectations. SPORT/audio/source/board coupling,
+             full boot and physical timing remain open.
              No clocked VISA boot or complete application is
              qualified.
              original_sharc_images freshly verifies bundle/sections/kernels and

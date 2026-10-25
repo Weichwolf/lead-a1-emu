@@ -48,5 +48,6 @@ payload/control assertions. The separate original_sharc_clocked_iop profile
 now shares this same boot instance through actual posted native-loader and
 application accesses (sharc-iop-bridge.txt). Its ordinary payload/vector/
 P1I/RTI checks and application SPI0/4d14 stores precede the DAI pin/frame/
-enable RMWs and remaining unbound SRU_DAT0/1 read at2440/2441. Core IOP delivery does not qualify the distinct SPI enable/
-flush effects above, complete startup or physical board behavior.
+enable/data RMWs and remaining unbound SPCTLN0/c1a read. Core IOP delivery
+does not qualify the distinct SPI enable/flush effects above, complete
+startup or physical board behavior.

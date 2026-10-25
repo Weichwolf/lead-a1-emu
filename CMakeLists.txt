@@ -84,6 +84,7 @@ add_library(lead_a1_sharc STATIC
   src/sharc/peripherals/sharc_boot.cpp
   src/sharc/peripherals/sharc_clock.cpp
   src/sharc/peripherals/sharc_control.cpp
+  src/sharc/peripherals/sharc_dai_data.cpp
   src/sharc/peripherals/sharc_dai_enable.cpp
   src/sharc/peripherals/sharc_dai_pin.cpp
   src/sharc/peripherals/sharc_dai_timing.cpp
@@ -128,6 +129,12 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-dai-data-test test/sharc_dai_data_test.cpp)
+  target_link_libraries(lead-a1-sharc-dai-data-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_dai_serial_data_routing COMMAND lead-a1-sharc-dai-data-test)
+  add_executable(lead-a1-sharc-dai-data-bus-test test/sharc_dai_data_bus_test.cpp)
+  target_link_libraries(lead-a1-sharc-dai-data-bus-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_dai_data_posted_io COMMAND lead-a1-sharc-dai-data-bus-test)
   add_executable(lead-a1-sharc-dai-pin-bus-test test/sharc_dai_pin_bus_test.cpp)
   target_link_libraries(lead-a1-sharc-dai-pin-bus-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_dai_pin_posted_io COMMAND lead-a1-sharc-dai-pin-bus-test)
@@ -600,6 +607,8 @@ if(BUILD_TESTING)
   add_custom_target(quality
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
     DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
+      lead-a1-sharc-dai-data-test
+      lead-a1-sharc-dai-data-bus-test
       lead-a1-sharc-dai-pin-test
       lead-a1-sharc-dai-pin-bus-test
       lead-a1-sharc-fetch-test

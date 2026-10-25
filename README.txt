@@ -15,27 +15,17 @@ Image parsing, safe LZO decoding, verified references, strict build gates and th
 snapshot viewer work. Complete CPU/board/DSP boot, MIDI, audio and a parameter-state producer
 remain pending. The UI starts with unknown values and waits for snapshots.
 See doc/arm-reference.txt, doc/arm-exceptions.txt and doc/aintc.txt.
-Native SHARC references execute original loader streams through the finalizer
-prefix. A separate fetched initialization fixture executes all four original
-RAM-clear loops and loads all ordinary short-/normal-word records through
-actual counter-loop CALLs and serial/DMA transfers. It parses the terminal
-header and prepares the finalizer through CPU8c08e, before branch/loop entry;
-count1 CALL architectural-stack arbitration remains explicitly unknown
-(doc/sharc-dag-loop.txt, doc/sharc-fetch-long-loops.txt,
-doc/sharc-fetch-four-loops.txt, doc/sharc-fetch-count1.txt,
-doc/sharc-fetch-finalizer.txt). Fetched arithmetic loops have explicit
-termination/flush references. Original loop-entry IDLE, final vector DMA and
-P1I/RTI now execute through restored8c003. The actual first self-modifying
-PM/SYSCTL store retires; the next quiet SYSCTL width clock remains guarded
-(doc/sharc-fetch-arithmetic.txt, doc/sharc-arithmetic-cache.txt).
-The prepared Type15a immediate-indexed PX operation has a separate native and
-captured-address reference (doc/sharc-immediate-indexed.txt); original execution
-of the rewritten instruction remains unqualified.
-P1I/RTI, ordinary delayed branches and unlooped fetched DB/IDLE wake
-have bounded references; self-modifying loop/fetch visibility, general loop IDLE and VISA
-still block DSP application boot. See doc/sharc-stream-reference.txt and
-doc/sharc-delayed-idle.txt for execution boundaries, and doc/dsp-roles.txt for synthesis/routing
-observations.
+Native SHARC references load all ordinary records of four original DSP streams
+at two explicit serial cadences, with independent payload-cell checks. The
+clocked IOP profile additionally executes final vector DMA, original P1I/RTI,
+native/VISA transition and common clock initialization. It reaches278/302
+application instructions through actual SPI and DAI clock/frame/pin/enable/
+data setup, then fails visibly at the unimplemented SPORT0 SPCTLN0 register.
+These explicit reference inputs do not establish a complete cold boot, physical
+processor/slot wiring, MHz or playable audio. Other profiles retain independent
+execution boundaries. See doc/sharc-iop-bridge.txt, doc/sharc-dai-data.txt and
+doc/dsp-roles.txt. Compact Type17b sign extension remains an explicitly
+unproven model assumption; vendor-simulator/hardware qualification is pending.
 
 Build and checks (Linux, regular user)
 Requires LLVM 19 (clang++, clang-tidy, clang-format, sanitizer runtimes),

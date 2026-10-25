@@ -47,8 +47,9 @@ CPU/fetch/queue/target, and retry_due delivers at the same elapsed clock.
 
 The original clocked IOP owner now includes this backend and advances its
 half-PCLK intervals before new bus deliveries. Its extended application
-reference checks actual pin/frame/enable RMW groups and the next unmapped
-DAI Group B data register. Complete startup, SPORT/PCG/source coupling,
+reference checks actual pin/frame/enable RMW groups before Group B data
+routing continues to the next unbound SPORT register (sharc-dai-data.txt).
+Complete startup, SPORT/PCG/source coupling,
 physical comparisons, host MIDI/audio/USB and parameter readback remain open.
 
   cmake --build --preset strict
