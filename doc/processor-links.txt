@@ -1,0 +1,92 @@
+Explicit MCU GPIO / SHARC FLAG connections
+
+ProcessorLinks joins caller-supplied logical GPIO-bank/pin and DSP-slot/FLAG
+endpoints. There is no built-in Nord pinout, processor count, pull resistor,
+pinmux, synchronizer delay or instruction-frequency ratio. The caller owns
+the devices and supplies established sampling boundaries on one emulation
+thread. Physical routing and timing remain unqualified.
+
+Each point-to-point wire resolves committed GPIO output-enable/latch state,
+effective SHARC FLAG direction/latch state and an explicit external driver.
+HIGH/LOW require an actual unopposed known drive. Floating, unresolved and
+conflicting drives produce unknown samples, never guessed LOW or stale HIGH.
+External drivers have equal logical strength; they do not model weak pull resistors.
+Per-driver HIGH/LOW/unresolved masks remain available in the last sampled
+resolution. Every endpoint must be unique; unsupported fanout/multiple-net
+configurations reject instead of silently dropping a connection.
+
+sample() checks every device's instruction ownership and validates every
+proposed sample before changing any input, edge status or published resolution.
+The existing unknown GPIO edge-baseline/new-level guard remains in force.
+No callback, allocation or guest execution occurs during publication. A failure
+preserves all devices and the last published link state; retry needs no fake
+guest instruction. Unconnected input bits retain their owner-supplied knowledge.
+
+external() stages a driver; it publishes nothing until sample(). snapshot()
+records the immutable topology, staged external drives and most recent sampled
+levels, not a claim that those old levels track later unsampled guest writes.
+Independent restoration requires matching GPIO/core/memory snapshots as well.
+Reserved drive tags and inconsistent resolution/topology snapshots reject.
+Gpio::check_sample and Sharc::check_flag_inputs expose the same side-effect-free
+validation used by their ordinary sample methods; no alternative write path
+bypasses the guards.
+
+Owned tests enumerate the 48 GPIO/DSP/external drive combinations against an
+independent resolution table. They retain known-low versus unknown, conflicting
+drivers, unconnected samples, multiple participants, malformed snapshots and
+foreign-instruction rollback. Independent restores retain pending IRQ bits;
+after actual W1C acknowledgement, unchanged HIGH samples do not relatch them.
+An assembled owned ARM program preloads a GPIO
+latch, enables its driver, reads the actual readiness input and asserts release.
+Real SHARC FLAGS direction/SET/CLR/TST and following NOPs provide status and
+consume release. Missing readiness reads reject; repaired reads consume the
+actual resolved value. This tests logical coupling, not physical Nord timing.
+
+Original uploader reference
+
+Unmodified OS 1.36 CODE has uploader entries c01348b8/c00051cc and first
+readiness LDRH PCs c0134948/c000525c. Private factual handoff6401062330 and
+our independent hash-checked original-field inspection agree on bank 3:
+CLEAR4 then1; inputs3/1, outputs2/0; transport1 kernel before status-mask 8.
+The register identities are DIR 01e2603a,SET 01e26042,CLEAR 01e26046,INPUT 01e2604a.
+These are software identities, not measured package pins. Raw FLAGS mask 4 is
+core FLG1's level in the PGR reference, not automatically a physical "FLAG2".
+
+The optional uploader cases execute real allocation/GPIO/SPI calls and all 768
+kernel halfwords before the first unknown readiness read. The failed original
+LDRH preserves ARM/GPIO/SPI state and consumes no manufactured reply. The same
+received kernel executes its clock setup and 171758-instruction readiness prefix,
+including all original RAM-clear oracles. A named software-wiring candidate
+connects bank 3 pin2 to that transport's core FLAG0 and pin3 to core FLAG1.
+The source is the kernel's actual known HIGH output; the original MCU then
+executes its real LDRH/TST/BEQ and reaches the first remainder-send setup.
+
+Static continuation contract (not executed by these uploader cases)
+Independent PC-relative literal decoding of both hash-checked CODE sections
+agrees with reference/sharc-source-equivalence.json. Counts are 32-bit words;
+the original uploader sends 384 kernel words, then count-384 from source+1536.
+
+  Part Transport Full source  Count  Remainder source Count-384
+  0    1         c02ab0f8     28447  c02ab6f8         28063
+  0    0         c02c6d78     28528  c02c7378         28144
+  1    1         c00701d8      1659  c00707d8          1275
+  1    0         c0071bc8      2869  c00721c8          2485
+
+Transport 1's remainder precedes transport 0's kernel. The next readiness reads
+are c0134998/c00052ac (bank 3 mask 2 HIGH), then transport 0's remainder follows.
+Final reads wait for mask 2 LOW at c01349cc/c00052e0 and mask 8 LOW at
+c01349d8/c00052ec. Only then do actual SET halfword stores release mask 4
+followed by mask 1 at c01349f0/4 and c0005304/8. These instruction/operand facts
+constrain future coupled execution; no current test claims those later phases.
+
+Only this fixture supplies explicit known-low inputs on unconnected bank 3 pads
+(mask fff3). The production link supplies none. ARM currently requires every
+requested GPIO-read bit to be known, even if later code masks it; the fixture
+does not establish Nord pull levels or partial-bit ARM propagation. ARM is held
+at its diagnosed missing-input boundary while the kernel runs. Sampling begins
+after the producer becomes known. There is no claim of continuous parallel
+uploader execution, completed streams, FLAG-clear/release, physical timing,
+cold boot, synth/audio or acceptance under objective.txt.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(processor_gpio_sharc_links|gpio_mmio_cpu|sharc_flags|original_arm_spi_uploader_[01])$' --output-on-failure

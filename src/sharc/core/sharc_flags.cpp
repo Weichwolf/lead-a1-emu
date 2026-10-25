@@ -60,11 +60,15 @@ void sharc_flags_write(SharcState &state, SharcKnown32 value, std::uint32_t mask
 
 }
 
-void Sharc::flag_inputs(SharcKnown32 samples) {
+void Sharc::check_flag_inputs(SharcKnown32 samples) const {
   if (memory_.active()) {
     throw std::logic_error("SHARC FLAG sampling during a memory transaction");
   }
   detail::sharc_validate_flag_inputs(samples);
+}
+
+void Sharc::flag_inputs(SharcKnown32 samples) {
+  check_flag_inputs(samples);
   state_.flag_inputs = samples;
 }
 

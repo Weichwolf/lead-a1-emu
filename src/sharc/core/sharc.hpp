@@ -190,6 +190,7 @@ public:
   [[nodiscard]] const SharcState &state() const { return state_; }
 
   // Explicit core-FLAG signals, not pin mux/wiring or automatic output feedback.
+  void check_flag_inputs(SharcKnown32 samples) const;
   void flag_inputs(SharcKnown32 samples);
   [[nodiscard]] SharcFlagDrive flag_drives() const;
 

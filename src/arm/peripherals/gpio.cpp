@@ -221,17 +221,22 @@ std::array<bool, gpio_banks> Gpio::interrupts() const {
   return result;
 }
 
-void Gpio::sample(unsigned int bank, GpioSample levels) {
+void Gpio::check_sample(unsigned int bank, GpioSample levels) const {
   if (pending_) { throw std::logic_error("GPIO sample during active instruction"); }
   if (bank >= gpio_banks || pin_mask(current_, bank) == 0) {
     throw std::invalid_argument("Invalid GPIO sample bank");
   }
   validate_sample(levels, pin_mask(current_, bank));
-  auto &target = current_.banks[bank];
+  const auto &target = current_.banks[bank];
   const auto armed = target.rising | target.falling;
   if ((armed & ~(target.input.known & levels.known)) != 0) {
     throw std::runtime_error("Unknown GPIO edge baseline or new sample");
   }
+}
+
+void Gpio::sample(unsigned int bank, GpioSample levels) {
+  check_sample(bank, levels);
+  auto &target = current_.banks[bank];
   const auto rising = ~target.input.value & levels.value & target.rising;
   const auto falling = target.input.value & ~levels.value & target.falling;
   target.pending |= static_cast<std::uint16_t>(rising | falling);

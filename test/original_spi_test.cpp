@@ -3,6 +3,7 @@
 #include "arm/core/arm_system.hpp"
 #include "arm/peripherals/gpio.hpp"
 #include "arm/peripherals/spi.hpp"
+#include "board/processor_links.hpp"
 #include "common/memory.hpp"
 #include "sharc/core/sharc.hpp"
 #include "sharc/memory/sharc_memory.hpp"
@@ -63,6 +64,13 @@ constexpr unsigned int gpio_pins = 144;
 constexpr std::uint32_t serial_pins = 0xe01;
 constexpr std::uint32_t delay_fields = 0x01010000;
 constexpr std::uint32_t gpio_clear = 0x44;
+constexpr std::uint32_t dsp_reset = 0x8c000;
+constexpr std::uint32_t dsp_ready_return = 0x8c008;
+constexpr std::uint32_t uploader_status = 0xb80000df;
+constexpr std::uint32_t uploader_clear = 0x46;
+constexpr std::uint32_t dsp_sysctl = 0x30024;
+constexpr std::uint16_t uploader_unconnected = 0xfff3;
+constexpr std::uint16_t all_gpio_bits = 0xffff;
 
 struct Placement {
   std::uint32_t controller;
@@ -1111,18 +1119,11 @@ void runtime_header(Fixture &fixture,
   runtime_code_record(fixture, cpu, spec, input);
 }
 
-void clock_setup(Fixture &fixture, const std::filesystem::path &spec, HeaderInput input) {
-  constexpr std::uint32_t pmctl = 0x2000;
-  constexpr std::uint32_t entry = 0x8c000;
+void kernel_clock_setup(Fixture &fixture, lead_a1::Sharc &cpu) {
   constexpr std::uint32_t flags_entry = 0x8c0b2;
   constexpr unsigned int instruction_limit = 20000;
   constexpr unsigned int instruction_count = 8291;
   constexpr std::uint32_t bypass = 0x8000;
-  fixture.dsp_memory.map_io({.first_word = pmctl, .words = 1}, fixture.clock);
-  constexpr std::uint32_t sysctl = 0x30024;
-  fixture.dsp_memory.map_io({.first_word = sysctl, .words = 1}, fixture.control);
-  lead_a1::Sharc cpu(
-      fixture.dsp_memory, lead_a1::Sharc::reset_reference_214xx(entry), &fixture.control.device);
   while (cpu.state().pc != flags_entry && fixture.dsp_steps < instruction_limit) {
     const auto events = fixture.clock.events.size();
     const auto step = cpu.step();
@@ -1151,6 +1152,18 @@ void clock_setup(Fixture &fixture, const std::filesystem::path &spec, HeaderInpu
   constexpr std::uint32_t ep_numerator = 36;
   require(
       (rates.external == lead_a1::SharcClockRatio{.numerator = ep_numerator, .denominator = 5}));
+}
+
+void clock_setup(Fixture &fixture, const std::filesystem::path &spec, HeaderInput input) {
+  constexpr std::uint32_t pmctl = 0x2000;
+  constexpr std::uint32_t entry = 0x8c000;
+  fixture.dsp_memory.map_io({.first_word = pmctl, .words = 1}, fixture.clock);
+  constexpr std::uint32_t sysctl = 0x30024;
+  fixture.dsp_memory.map_io({.first_word = sysctl, .words = 1}, fixture.control);
+  lead_a1::Sharc cpu(
+      fixture.dsp_memory, lead_a1::Sharc::reset_reference_214xx(entry), &fixture.control.device);
+  kernel_clock_setup(fixture, cpu);
+  const auto clock = fixture.clock.device.state();
   flag_setup(fixture, cpu);
   clear_ram(fixture, cpu);
   loader_frontier(fixture, cpu);
@@ -1229,7 +1242,119 @@ void kernel_transfer(std::span<const std::byte> image,
                "writes; cooperative vector DMA armed, deferred branch frontier\n";
 }
 
-enum class SpiCheckMode : std::uint8_t { all, controllers, kernel };
+void uploader_kernel_words(const Fixture &fixture, unsigned int part) {
+  constexpr std::array<std::uint32_t, 2> source{0x2ab0f8, 0x701d8};
+  constexpr unsigned int halfwords = 768;
+  constexpr std::uint32_t next_word = 0x92180;
+  require(fixture.dsp && fixture.dsp->entry() == dsp_reset &&
+          fixture.dsp->state().next_word == next_word && fixture.dsp->state().remaining == 0 &&
+          !fixture.dsp->state().selected && fixture.transmitted.size() == halfwords);
+  for (unsigned int index = 0; index < halfwords; ++index) {
+    const auto expected = reference_word(fixture, code + source[part] + (index * 2), 2);
+    require(fixture.transmitted[index] == expected);
+  }
+}
+
+lead_a1::ArmState uploader_wait(Fixture &fixture, lead_a1::Arm &cpu, std::uint32_t poll) {
+  constexpr unsigned int limit = 200000;
+  unsigned int steps{};
+  while (cpu.state().registers[15] != poll && steps < limit) {
+    require(!cpu.step().exception);
+    fixture.progress();
+    ++steps;
+  }
+  require(steps < limit && cpu.state().registers[15] == poll);
+  const auto before = cpu.state();
+  const auto gpio = fixture.gpio.device.state();
+  const auto spi = fixture.spi0.device.state();
+  const auto events = fixture.gpio.events.size();
+  try {
+    static_cast<void>(cpu.step());
+  } catch (const std::exception &error) {
+    const std::string reason(error.what());
+    require(reason.find("Unknown GPIO synchronized input pins") != std::string::npos &&
+            reason.find("1e2604a") != std::string::npos && cpu.state() == before &&
+            fixture.gpio.device.state() == gpio && fixture.spi0.device.state() == spi &&
+            fixture.gpio.events.size() == events);
+    fixture.memory.begin_instruction(); // A failed guest read must have closed its transaction.
+    fixture.memory.abort_instruction();
+    return before;
+  }
+  throw std::runtime_error("Original uploader accepted unknown readiness input");
+}
+
+void original_uploader_handshake(std::span<const std::byte> image,
+                                 const std::filesystem::path &spec,
+                                 unsigned int part) {
+  constexpr std::array<std::uint32_t, 2> entries{0xc01348b8, 0xc00051cc};
+  constexpr std::array<std::uint32_t, 2> polls{0xc0134948, 0xc000525c};
+  Fixture fixture(image, placements[part]);
+  const auto endpoint = factory(fixture, spec, placements[part], false);
+  fixture.dsp.emplace(lead_a1::SharcSpiBoot::slave_reference_214xx());
+  fixture.dsp_channel = 1;
+  fixture.dsp_memory.map_2148x_5mbit_ram();
+  fixture.gpio.events.clear();
+  fixture.transmitted.clear();
+  lead_a1::ArmState initial;
+  initial.cpsr = uploader_status;
+  constexpr std::uint32_t marker = 0x11223300;
+  for (unsigned int reg = 0; reg < 13; ++reg) { initial.registers[reg] = marker + reg; }
+  initial.registers[0] = endpoint;
+  initial.registers[13] = stack;
+  initial.registers[14] = sentinel;
+  initial.registers[15] = entries[part];
+  lead_a1::Arm arm(fixture.memory, spec, initial, profile());
+  const auto waiting = uploader_wait(fixture, arm, polls[part]);
+  uploader_kernel_words(fixture, part);
+  constexpr std::uint32_t input = 0x01e2604a;
+  constexpr std::uint16_t direction = 0xfffa;
+  require(waiting.registers[2] == input &&
+          fixture.gpio.device.state().banks[3].direction == direction &&
+          fixture.gpio.device.state().banks[3].output == 0 && waiting.registers[5] == endpoint);
+  std::vector<std::uint64_t> clears;
+  for (const auto &event : fixture.gpio.events) {
+    if (event.write && event.offset == uploader_clear) {
+      require(event.width == 2);
+      clears.push_back(event.value);
+    }
+  }
+  require(clears == std::vector<std::uint64_t>{4, 1});
+  fixture.dsp_memory.map_io({.first_word = 0x2000, .words = 1}, fixture.clock);
+  fixture.dsp_memory.map_io({.first_word = dsp_sysctl, .words = 1}, fixture.control);
+  lead_a1::Sharc dsp(fixture.dsp_memory,
+                     lead_a1::Sharc::reset_reference_214xx(dsp_reset),
+                     &fixture.control.device);
+  kernel_clock_setup(fixture, dsp);
+  flag_setup(fixture, dsp);
+  clear_ram(fixture, dsp);
+  // Explicit software-handshake candidate, not a measured Nord pinout or clock.
+  const std::array dsps{&dsp};
+  lead_a1::ProcessorLinks links(
+      fixture.gpio.device,
+      dsps,
+      std::vector<lead_a1::ProcessorWire>{{.bank = 3, .pin = 2, .dsp = 0, .flag = 0},
+                                          {.bank = 3, .pin = 3, .dsp = 0, .flag = 1}});
+  // Unconnected pads have explicit owned test inputs; the two wires supply their own levels.
+  fixture.gpio.device.sample(3, {.known = uploader_unconnected});
+  links.sample();
+  require(dsp.state().flag_inputs == (lead_a1::SharcKnown32{.value = 2, .known = 3}) &&
+          fixture.gpio.device.state().banks[3].input ==
+              (lead_a1::GpioSample{.value = 8, .known = all_gpio_bits}));
+  for (unsigned int instruction = 0; instruction < 3; ++instruction) {
+    require(!arm.step().exception);
+    fixture.progress();
+    links.sample();
+  }
+  require(arm.state().registers[15] == polls[part] + 12 && arm.state().registers[1] == 8 &&
+          (arm.state().cpsr & 0x40000000) == 0 && dsp.state().pc == dsp_ready_return);
+  uploader_kernel_words(fixture, part);
+  std::cout
+      << "Part " << part << ": original uploader initialized bank3, sent all768 kernel halfwords, "
+      << "then original DSP171758-instruction readiness reached actual MCU LDRH/TST/backedge; "
+         "candidate logical wires, no full uploader or physical timing claim\n";
+}
+
+enum class SpiCheckMode : std::uint8_t { all, controllers, kernel, uploader };
 
 struct SpiCheck {
   SpiCheckMode mode{SpiCheckMode::all};
@@ -1250,12 +1375,15 @@ SpiCheck check_mode(int argc, char **argv) {
   if (argc == 5 && std::string_view(argv[3]) == "--controllers") {
     return {.mode = SpiCheckMode::controllers, .selected = {.part = check_index(argv[4])}};
   }
+  if (argc == 5 && std::string_view(argv[3]) == "--uploader") {
+    return {.mode = SpiCheckMode::uploader, .selected = {.part = check_index(argv[4])}};
+  }
   if (argc == 6 && std::string_view(argv[3]) == "--kernel") {
     return {.mode = SpiCheckMode::kernel,
             .selected = {.part = check_index(argv[4]), .channel = check_index(argv[5])}};
   }
   throw std::runtime_error("Usage: original-spi-test spec images "
-                           "[--controllers part | --kernel part channel]");
+                           "[--controllers part | --kernel part channel | --uploader part]");
 }
 
 }
@@ -1268,6 +1396,10 @@ int main(int argc, char **argv) {
       const auto placement = placements[part];
       const auto image =
           read_image(std::filesystem::path(argv[2]) / (std::to_string(part) + "-CODE.bin"));
+      if (check.mode == SpiCheckMode::uploader || check.mode == SpiCheckMode::all) {
+        original_uploader_handshake(image, argv[1], part);
+        if (check.mode == SpiCheckMode::uploader) { continue; }
+      }
       if (check.mode != SpiCheckMode::kernel) {
         Fixture fixture(image, placement);
         controllers(fixture, argv[1], placement);

@@ -18,11 +18,16 @@ See doc/arm-reference.txt, doc/arm-exceptions.txt and doc/aintc.txt.
 Native SHARC references load all ordinary records of four original DSP streams
 at two explicit serial cadences, with independent payload-cell checks. The
 clocked IOP profile additionally executes final vector DMA, original P1I/RTI,
-native/VISA transition and common clock initialization. It reaches422/442
+native/VISA transition and common clock initialization. It reaches422/446
 application instructions through SPI, DAI clock/frame/pin/enable/data and SPORT
-control/DMA, PCG/PICR, IDP, DCPR and transport0 SPORT2/FLAGS setup. Its next
-FLAG0 wait has unknown input; transport1 LIRPTL remains unsupported
-(doc/sharc-mode-holds.txt).
+control/DMA, PCG/PICR, IDP, DCPR, transport0 SPORT2 and both transports' FLAG
+setup, including transport1 LIRPTL/MODE1. Both next FLAG0 waits have unknown
+input (doc/sharc-lirptl.txt).
+Separate original MCU-uploader references execute the first kernel transfer and
+consume its genuine readiness output through explicit candidate GPIO/FLAG wires.
+They use owned unconnected-pad inputs and pause MCU execution while DSP readiness
+is established; continuous full upload and physical wiring remain unqualified
+(doc/processor-links.txt).
 These explicit reference inputs do not establish a complete cold boot, physical
 processor/slot wiring, MHz or playable audio. Other profiles retain independent
 execution boundaries. See doc/sharc-iop-bridge.txt, doc/sharc-dai-data.txt and

@@ -27,6 +27,8 @@ class OriginalCheckSelectionTests(unittest.TestCase):
         "boot": [["boot", "images"]],
         "spi-controls-0": [["spi", "spec", "images", "--controllers", "0"]],
         "spi-controls-1": [["spi", "spec", "images", "--controllers", "1"]],
+        "spi-uploader-0": [["spi", "spec", "images", "--uploader", "0"]],
+        "spi-uploader-1": [["spi", "spec", "images", "--uploader", "1"]],
         "spi-kernel-0-0": [["spi", "spec", "images", "--kernel", "0", "0"]],
         "spi-kernel-0-1": [["spi", "spec", "images", "--kernel", "0", "1"]],
         "spi-kernel-1-0": [["spi", "spec", "images", "--kernel", "1", "0"]],

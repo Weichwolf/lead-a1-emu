@@ -59,9 +59,10 @@ acknowledging it. Enabling INTERR with an existing overflow also requests an
 interrupt. Sharc::latch_interrupt explicitly latches maskable IRPTL bits
 even if IMASK or MODE1.IRPTEN disables delivery; pending software latch effects
 retain a newly arriving event. This is separate from the peripheral event
-acknowledgement. Enabled interrupt entry/RTI and secondary LIRPTL remain open
-and fail at the existing execution guard. Held error-line reassertion requires
-the future SPISTAT/interrupt-service model. The primary default route is P1I,
+acknowledgement. Qualified nonnested interrupt entry/RTI and programmable
+LIRPTL routes are described in sharc-interrupts.txt and sharc-lirptl.txt;
+complete nesting/source composition remains open. Held error-line reassertion
+requires the future SPISTAT/interrupt-service model. The primary default route is P1I,
 IRPTL bit12, not an implicit assignment of a Nord transport to a package.
 
 Primary sources: ADI ADSP-214xx HWR rev1.1,3-5..7,3-28,16-20..22,16-26..32,
@@ -105,5 +106,8 @@ qualified physical bus schedule. Both actual uploader entries segment each
 stream at384 words and poll GPIO bank3 inputs before sending the remainder;
 their complete concurrent handshake, physical FLAG/pad wiring and timing are
 still open. No host memcpy, firmware patch or fake ready response is used.
+The separate original-uploader reference in processor-links.txt additionally
+executes the first kernel transfer and readiness branch with explicit candidate
+wires and owned unconnected-pad inputs. It does not complete this concurrent path.
 Complete boot, application audio and hardware equivalence remain separate
 acceptance requirements.

@@ -12,6 +12,7 @@ src/common/             Shared memory/device interfaces.
 src/firmware/           Container and image decoding.
 src/arm/core/           ARM execution, data/cache/MMU/system state.
 src/arm/peripherals/    AINTC, GPIO and SPI.
+src/board/              Explicit cross-processor signal connections.
 src/sharc/board/        Bound peripheral DMA scheduling.
 src/sharc/core/         SHARC instruction execution and architectural state.
 src/sharc/memory/       Memory views, arbitration and IOP bridge.
@@ -48,7 +49,8 @@ Quality commands
 Builds are offline and do not need originals or private GitHub access.
 Original checks verify bundle/section/kernel identities for every selected
 native group. CTest registers each native program independently; SPI has two
-controller cases and all four part/transport kernel cases. Each retains its
+controller cases, two first-uploader-handshake cases and all four part/transport
+kernel cases. Each retains its
 complete assertions, guest instruction bounds and normal per-test time bound.
 The original script's aggregate native interface remains available for manual
 runs. Synthetic checks require no manufacturer inputs.

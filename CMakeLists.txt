@@ -138,10 +138,30 @@ add_library(lead_a1_sharc STATIC
 target_include_directories(lead_a1_sharc PUBLIC src)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
 
+add_library(lead_a1_board STATIC src/board/processor_links.cpp)
+target_include_directories(lead_a1_board PUBLIC src)
+target_link_libraries(lead_a1_board PUBLIC lead_a1_arm lead_a1_sharc)
+
 add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/processor-link-cases.bin"
+    COMMAND "${LEAD_A1_LLVM_MC}" --triple=armv5-none-eabi --mcpu=arm926ej-s
+      --filetype=obj "${CMAKE_CURRENT_SOURCE_DIR}/test/processor_link_cases.S"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/generated/processor-link-cases.o"
+    COMMAND "${LEAD_A1_LLVM_OBJCOPY}" -O binary -j .text
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/processor-link-cases.o"
+      "${CMAKE_CURRENT_BINARY_DIR}/generated/processor-link-cases.bin"
+    DEPENDS test/processor_link_cases.S VERBATIM)
+  add_custom_target(lead-a1-processor-link-cases
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/processor-link-cases.bin")
+  add_executable(lead-a1-processor-links-test test/processor_links_test.cpp)
+  target_link_libraries(lead-a1-processor-links-test PRIVATE lead_a1_board)
+  add_dependencies(lead-a1-processor-links-test lead-a1-processor-link-cases)
+  add_test(NAME processor_gpio_sharc_links COMMAND lead-a1-processor-links-test
+    "${CMAKE_CURRENT_BINARY_DIR}/share/ARM5_le.sla"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/processor-link-cases.bin")
   add_executable(lead-a1-sharc-dma-fabric-test test/sharc_dma_fabric_test.cpp)
   target_link_libraries(lead-a1-sharc-dma-fabric-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_dma_real_producer_fabric COMMAND lead-a1-sharc-dma-fabric-test)
@@ -392,7 +412,7 @@ if(BUILD_TESTING)
   add_executable(lead-a1-spi-test test/spi_test.cpp)
   target_link_libraries(lead-a1-spi-test PRIVATE lead_a1_arm)
   add_executable(lead-a1-original-spi-test test/original_spi_test.cpp)
-  target_link_libraries(lead-a1-original-spi-test PRIVATE lead_a1_arm lead_a1_sharc)
+  target_link_libraries(lead-a1-original-spi-test PRIVATE lead_a1_board)
   add_executable(lead-a1-original-sharc-test test/original_sharc_test.cpp)
   target_link_libraries(lead-a1-original-sharc-test PRIVATE lead_a1_sharc)
   add_test(NAME spi_serial COMMAND lead-a1-spi-test)
@@ -611,6 +631,7 @@ if(BUILD_TESTING)
   lead_a1_add_original_check(original_arm_gpio gpio)
   foreach(part RANGE 0 1)
     lead_a1_add_original_check("original_arm_spi_controls_${part}" "spi-controls-${part}")
+    lead_a1_add_original_check("original_arm_spi_uploader_${part}" "spi-uploader-${part}")
     foreach(channel RANGE 0 1)
       lead_a1_add_original_check("original_arm_spi_kernel_${part}_${channel}"
         "spi-kernel-${part}-${channel}")
@@ -659,6 +680,7 @@ if(BUILD_TESTING)
   add_custom_target(quality
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
     DEPENDS lead-a1-sharc-dma-fabric-test lead-a1-sharc-dma-arbiter-test lead-a1-sharc-idp-dma-bus-test lead-a1-sharc-idp-dma-test lead-a1-sharc-pcg-bus-test lead-a1-sharc-pcg-test lead-a1-sharc-picr-test lead-a1-sharc-picr-bus-test format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
+      lead-a1-processor-links-test
       lead-a1-sharc-lirptl-test
       lead-a1-sharc-sport-test
       lead-a1-sharc-sport-bus-test

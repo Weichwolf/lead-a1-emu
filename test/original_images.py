@@ -12,6 +12,8 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 SPI_CASES = {
+    "spi-uploader-0": ("--uploader", "0"),
+    "spi-uploader-1": ("--uploader", "1"),
     "spi-controls-0": ("--controllers", "0"),
     "spi-controls-1": ("--controllers", "1"),
     "spi-kernel-0-0": ("--kernel", "0", "0"),

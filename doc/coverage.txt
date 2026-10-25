@@ -19,6 +19,11 @@ ID  State    Evidence / remaining work
              reference/sharc.json pins the shared kernel identities and analysis
              manuals; explicit 5-Mbit SHARC geometry and initial SPI-slave boot
              are documented references, not physical package/pin qualification.
+             Original MCU uploader fields and executed accesses establish logical
+             bank3 inputs3/1 and outputs2/0. The first readiness handshake works
+             with an explicit software-wiring candidate; physical FLAG mapping,
+             other pad levels and continuous clock relationships remain unproven
+             (processor-links.txt).
 2   partial  Native SLEIGH ARM-state reference, explicit known/unknown RAM and
              instruction rollback. Independent arithmetic/condition/load/store/
              BX/mutation/status/bank tests pass, including all ARM conditions and
@@ -54,6 +59,11 @@ ID  State    Evidence / remaining work
              Transactional GPIO latch/direction/known pad samples, edge status,
              bank requests and byte/halfword/word register lanes have independent
              bus/ARM tests (gpio.txt). Physical wiring and timing remain open.
+             A separate board component resolves caller-supplied GPIO/SHARC FLAG
+             wires from actual output drivers. Floating/conflicting/unresolved
+             nets stay unknown; all proposed input/edge changes validate before
+             atomic publication. No Nord pinout, unconnected-pad default or
+             propagation clock is supplied (processor-links.txt).
              SPI master serial edges, formats/parity, TX/RX pipeline occupancy,
              register lanes, status/data acknowledgments and IRQ priorities have
              independent serial/bus/ARM tests (spi.txt). Explicit clock events
@@ -590,6 +600,16 @@ ID  State    Evidence / remaining work
              Both original SPI controller/format/factory/heap/GPIO paths and
              block transport execute against explicit clocked internal loopback
              and buffer backpressure (spi.txt); no external DSP/clock claim.
+             Both actual MCU uploaders execute allocation, bank3 direction/latch
+             setup and all768 first-kernel halfwords, then reject the original
+             unknown readiness LDRH without effects. The received original kernel
+             executes its171758-instruction readiness prefix. Its actual FLAG1
+             output, an explicit software-wiring candidate and owned unconnected
+             pad inputs permit the real MCU LDRH/TST/BEQ to leave the first wait.
+             MCU pauses at the missing-input boundary while DSP executes; this
+             proves neither continuous scheduling, physical pins/pulls nor the
+             remainder upload, second DSP, final release or cold boot
+             (processor-links.txt).
              Under explicit candidate boot/wiring/clock inputs, both original ARM
              block writers additionally load all 256 SHARC kernel words from
              each of the four original placements over 768 real 16-bit transfers.
@@ -693,6 +713,13 @@ ID  State    Evidence / remaining work
              native LZO/SLEIGH/zlib instrumentation/object hooks and hardening
              checked. Complete CPU/boot/MIDI/audio/update, fuzz harnesses and
              performance remain pending.
+             Processor-link checks independently enumerate48 drive combinations,
+             retain unrelated samples and check contention/unknown clearing,
+             active-transaction and late edge-sample rollback, independent
+             restores and actual owned ARM/SHARC readiness/release instructions.
+             Two separately registered original uploader references additionally
+             check the real first-kernel transfer and first readiness branch;
+             they retain the limitations above (processor-links.txt).
              Programmable IRQ checks independently list all19 routes and171
              ordered priority pairs,38 mask/IDLE cases and ten restored fetched
              secondary handlers. Thirty enabled mask changes, inherited pending
@@ -1059,6 +1086,13 @@ ID  State    Evidence / remaining work
              readiness/release sequence. They do not prove physical FLAG wiring,
              package roles or timing. No FLAG0 input is forced and no private
              implementation is imported (sharc-dma-arbitration.txt).
+             Independent pinned-original field inspection and executed uploader
+             entry/poll PCs corroborate bank3 DIR/SET/CLEAR/INPUT accesses. The
+             four PC-relative source/count/remainder operand groups independently
+             match pinned stream metadata; later handshake phases remain static.
+             The conditional first-handshake reference uses newly written emulator
+             code and explicit candidate wires, not private reconstruction code
+             or measured physical connections (processor-links.txt).
 10  pending  No hardware comparison, timing measurement or flashing performed.
 
 Quality and UI checks validate only the named bootstrap behavior. Unknown values
