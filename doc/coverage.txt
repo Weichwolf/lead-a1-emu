@@ -68,7 +68,13 @@ ID  State    Evidence / remaining work
              retained without inventing LP0. Unknown reset/read timing, overlap,
              snapshots and late-delivery rollback have owned checks; the
              core/IOP bridge and complete peripheral coupling remain open
-             (sharc-power.txt). Native count loops of at least five instructions
+             (sharc-power.txt). A separate DAI GroupF reference now routes20
+             pin enables from48 constant/optional sources and four documented
+             nonzero reset words. The2..3-PCLK interval preserves unknown
+             old/new outcomes. This logical component has owned transaction,
+             source, clock and snapshot checks; complete SRU groups, pad/data
+             wiring and pending IOP read/write timing remain open
+             (sharc-dai-enable.txt). Native count loops of at least five instructions
              execute ordinary CALL/RTS, nested callees and conditional polling;
              final e-3 pre-pop, PCSTK/PCSTKP reads and failed pre-pop/pending-effect
              rollback have independent tests (sharc-long-loops.txt). Other loop
@@ -638,6 +644,13 @@ ID  State    Evidence / remaining work
              outputs, eight M values and unchanged ordinary payload are checked.
              Each preserves the next failing original SRU_PBEN2 read at247a,
              including CPU/IAB/power/clock/SYSCTL/SPI rollback (sharc-power.txt).
+             Separate DAI owned tests cover all48 selectors/20 outputs,46 live
+             input sources, constant/unknown levels and interval/restore/fault
+             cases. A local four-placement/cadence2 diagnostic executes six
+             further real instructions through the first SRU_PBEN2 write,
+             retaining the immediate pending-read boundary. This is not an
+             expanded public original profile; the known-working firmware
+             requires correcting IOP bridge/readback timing (sharc-dai-enable.txt).
              No clocked VISA boot or complete application is qualified.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

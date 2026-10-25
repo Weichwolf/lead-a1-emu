@@ -1,0 +1,62 @@
+DAI Group F enable-routing reference
+
+SharcDaiEnable maps only IOP2478..247b (SRU_PBEN0..3). HWRrev1.1 B-15
+provides the four nonzero reset words. A-147..150 defines five six-bit source
+selectors per word for20 pin-buffer-enable destinations. Encodings0/1 are
+logical constants;2..47 select six MISCA,32 SPORT clock/FS/DA/DB and eight
+SPORT TDV sources. Each dynamic source is an explicit optional Boolean input;
+missing inputs remain unknown. No pad voltage, pin feedback or board wiring
+is inferred. Other SRU groups and pin-data/status registers remain unmapped.
+
+Read/write delivery and output effects are separate from CPU scheduling.
+Delivered writes capture a complete target word without changing existing
+outputs. HWR10-33 gives an effect interval of2..3 PCLK periods: below2 the
+old route remains, at2 both old/new possibilities are retained, and at3 the
+new route is guaranteed. A known level survives the middle interval only if
+both possibilities agree. Live source changes use the selected routing; they
+do not create configuration clocks. Reserved31/30 stay stored independently
+of the five fields. Reserved source selectors reject.
+
+The owner supplies complete PCLK intervals. DAI/DPI fundamental PCLK/4,
+configuration-effect latency and the core/IOP bridge are separate constraints;
+this bounded interface selects no undocumented global phase. A stopped PMCTL1
+DAI clock explicitly rejects accesses/output evaluation/advance pending a
+qualified gated-routing composition. Overlapping same-word writes and guest
+readback while a change is pending remain explicit timing guards, not claims
+that silicon rejects the original operations. These gaps must be corrected
+in the emulator before full instrument acceptance.
+
+MemoryDevice transactions stage all target/routing state. Idle snapshots retain
+all four routes, pending targets/elapsed intervals and46 optional source inputs.
+Restore validates every selected source and pending interval. External source/
+clock events and snapshots reject an active instruction; committed outputs do
+not expose tentative writes. Native memory/core faults retain address/operation/
+PC context. Normal signal/clock updates use fixed state and do not allocate.
+
+Owned tests independently list four reset words and20 default source identities,
+exercise all46 dynamic inputs and all48 selector encodings across all20 outputs,
+check low/high/unknown signals, unequal and equal middle-interval outcomes,
+reserved readback, independent word ages, intermediate restore, malformed
+inputs, stopped-clock guards and transaction ownership. A real native IOP store
+receives an owned late-delivery fault after staging the actual router. CPU and
+router roll back; the unchanged instruction succeeds after bus-fault repair.
+No decoder result is its own expected value and no random/fuzz input is used.
+
+A separate local four-stream/cadence2 diagnostic extends the published power
+checkpoint by six real instructions (lengths3/3/1/2/1/3). It reads the actual
+SRU_PBEN2 reset word1a5545d6 and captures target1a5405d6, selecting LOW for
+pin13. The immediately following same-word read then hits the pending-read
+boundary at1c5bc1/1c5b49/1c0788/1c0654. CPU/IAB/power/router/SYSCTL/memory
+state is retained. This is a diagnostic, not an expanded public eight-case
+qualification or a completed initializer. The normal original regression
+still has the published power-prefix contract in sharc-power.txt.
+
+PGRrev2.4 7-7/8 gives4..5 CCLK write delivery,7..8 CCLK peripheral reads and
+11..13 CCLK atomic write/read timing. The instruction-order diagnostic has no
+such bridge; its failing original access requires correcting timing/readback
+assumptions or missing inputs, never changing firmware or accepting this guard
+as a working instrument. The five-stage native/VISA switch remains open.
+Full boot/host/audio/UI/storage/update/hardware acceptance remains unchanged.
+
+  cmake --build --preset strict --target lead-a1-sharc-dai-enable-test format-check
+  ctest --preset strict -R '^sharc_dai_pin_enable_routing$' --output-on-failure
