@@ -53,16 +53,19 @@ ringB=A+80. Actual IDP_CTL0/CTL1 programming follows. All PCs/widths/results/
 post-values are checked against original fields/PGR encodings, not recorded
 emulator output, and independently corroborated by factual handoff6400242285.
 
-Transport0/1 reach405/431 application instructions and fail at actual posted
-IDP_CTL1/24b2=10101 delivery, offsets+921/+987. Later IDP_DMA_I0A/2408 and
-I0B/2418 writes remain queued. I0B at+933/+999 really retires before prior
-CTL1 delivery fails; CPU/fetch after retirement and all three posted writes
-remain, with no outstanding core request. Four original programs at two
-serial cadences retain all earlier payload/vector/SPI/SPORT/DAI checks.
-No SPORT SCLK, IDP samples, audio, full boot or hardware result is invented.
+Transport0/1 reach414/440 application instructions. All19 IDP setup
+instructions now execute through real control/parameter owners: I0A/I0B,
+M0=1,PC0=80, fresh CTL0 read/SETa0/write (sharc-idp-dma.txt). The actual
++933/+999 indexB retirement still checks three queued writes before their
+real delivery. The next SYSCTL read/SET80 yields4->84 in USTAT1; the original
++961/+1027 write fails because peripheral DMA priority rotation is not yet
+modeled. CPU/fetch, bus, receiver and controller remain unchanged on failure.
+Four original programs at two serial cadences retain all earlier payload/
+vector/SPI/SPORT/DAI checks. No SCLK, IDP data/grant, audio, boot or physical
+result is invented.
 
-Next implement IDP DMA/ping-pong, PCG source/board clock coupling and full
-interrupt coupling. The complete objective.txt acceptance remains required.
+Next implement actual DCPR peripheral-group arbitration, source/board clock
+coupling and full interrupt coupling. Complete objective.txt remains required.
 
   cmake --build --preset strict
   ctest --preset strict -R '^(sharc_(programmable_interrupt_routing|picr_posted_control)|original_sharc_clocked_iop)$' --output-on-failure

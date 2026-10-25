@@ -135,8 +135,16 @@ ID  State    Evidence / remaining work
              HOLD/partial words and implements four pack formats, an eight-word
              FIFO, overflow/threshold requests, W1S commands and delayed disable.
              Global/parallel/channel enables are separate. Unknown inputs,
-             SIP/DMA, unsettled startup, BHD and actual IOP wait coupling remain
-             explicit gaps (sharc-pdap.txt). Native count loops of at least five instructions
+             SIP, unsettled startup, BHD and full IOP wait coupling remain
+             explicit gaps (sharc-pdap.txt). With explicitly bound RAM the same
+             receiver now supports actual PDAP/channel0 FIFO-to-RAM DMA over
+             exact IOD0 grants. Eight parameter sets have19-bit indices, signed
+             6-bit modify and16-bit live/reload counts. Standard/ping-pong
+             phases, explicit zero-count65536, pause/resume, successful-write
+             completion and independently restored FIFO/RAM/bus state have
+             owned tests. SIP sourcing, shared peripheral-group arbitration,
+             DAI/core IRQ and physical start/status timing remain open
+             (sharc-idp-dma.txt). Native count loops of at least five instructions
              execute ordinary CALL/RTS, nested callees and conditional polling;
              final e-3 pre-pop, PCSTK/PCSTKP reads and failed pre-pop/pending-effect
              rollback have independent tests (sharc-long-loops.txt). Other loop
@@ -628,9 +636,9 @@ ID  State    Evidence / remaining work
              The separate clocked IOP profile now preserves actual native
              posted SPI setup, all ordinary records/final-cell checks and384
              vector words through original P1I/RTI/native-VISA transition.
-             Its application reference reaches405/431 original instructions,
-             including actual SPORT control/DMA,PCG/PICR and secondary-mode
-             setup, then fails at real IDP_CTL1/24b2 DMA-enable delivery. No source
+             Its application reference reaches414/440 original instructions,
+             including actual SPORT/PCG/PICR/secondary-mode and complete IDP
+             parameter/enable setup, then fails at SYSCTL.DCPR write. No source
              SCLK/serial data,
              full cold boot or manual-function acceptance (sharc-sport.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
@@ -895,24 +903,26 @@ ID  State    Evidence / remaining work
              PC/width/register/post-value expectations. All24 actual TCBs and
              cyclic partners match factual original/static expectations;
              odd normal-word indices and separate buffers remain unchanged.
-             All eight cases reach405/431 application instructions, failing
-             on real IDP_CTL1/24b2 DMA-enable delivery with retained CPU/IAB
-             and exact posted writes. Both final indexB stores retire before
-             the older CTL1 delivery fails. Prior data/pin/enable/frame/clock,
-             vector/payload and original SPI assertions remain. With no source
-             SCLK supplied, raw controls/parameters are stored but effective
-             SPORT/DMA/wire state is not fabricated. Transport0 executes its
-             actual15 remaining PCG setup instructions followed by PICR0 RMW,
-             secondary-register/mode and IDP_CTL0/CTL1 setup. Transport1 has
-             the additional original RND32 clear. Independent PC/width/value
-             expectations preserve image-specific ring bases and secondary
-             B0/I0/L0/R0/R2/R3/M8/M1. Final+933/+999 IDP indexB writes retire
-             before prior+921/+987 CTL1 delivery fails; all three queued writes
-             and post-retirement CPU/fetch are retained. PCG registers match
-             literal configuration while outputs/inputs remain UNKNOWN and
-             all generators disabled. No IDP DMA/data/IRQ is invented
-             (sharc-pcg.txt,sharc-picr.txt). Complete SPORT/audio/source/board
-             coupling, full boot and physical timing remain open (sharc-sport.txt).
+             All eight cases reach414/440 application instructions. The actual
+             complete19-instruction IDP initialization now programs both ring
+             bases, M=1, PC=80 and global CTL0=a0 through the bound receiver
+             and real posted parameter port. Final indexB retirement still
+             checks all three captured queued writes at that intermediate
+             checkpoint, then their actual deliveries succeed. Source clocks,
+             input words, RAM grants and completion IRQs are not fabricated.
+             Literal expected receiver/DMA state follows the real pending or
+             delivered global-enable write and retains unresolved startup.
+             The following SYSCTL read/SET80 establishes4->84 in USTAT1;
+             actual DCPR writes at+961/+1027 fail without changing CPU/fetch,
+             controller, receiver or bus. This is the missing peripheral-group
+             arbiter/rotation behavior, not a firmware defect. Prior data/pin/
+             enable/frame/clock,vector/payload and original SPI/SPORT/TCB
+             assertions remain. Transport0's actual PCG setup remains disabled;
+             transport1 alone retains its original RND32 clear. Image-specific
+             ring bases and secondary B0/I0/L0/R0/R2/R3/M8/M1 remain checked.
+             Complete DCPR/peripheral arbitration, SPORT/audio/source/board
+             coupling, boot and physical timing remain open
+             (sharc-idp-dma.txt,sharc-pcg.txt,sharc-picr.txt,sharc-sport.txt).
              SPORT DMA tests add50 independently listed count/stride/direction
              cases with real RAM,65536 zero-count writes, live count abort,
              buffer/shifter boundaries and separate completion events. Self
@@ -931,6 +941,14 @@ ID  State    Evidence / remaining work
              and fetched4/5-write7/8-read fault/no-time retry pass. Nonzero first
              truncated frame remains unknown; trigger/strobe and physical
              startup phase remain unqualified (sharc-pcg.txt).
+             IDP DMA tests use actual packed input edges and normal32 RAM
+             writes, literal standard/ping-pong addresses/counts/completions,
+             signed6-bit boundary/zero strides,19-bit wrap and65536 actual
+             zero-count transfers. Separate partial/FIFO/receiver/RAM/bus
+             restores, failed grant repair, live count1, DMA arming versus
+             receiver enable, unused/partial configuration, acknowledgements,
+             transactions/gates/malformed state and real fetched4/5-write7/8-
+             read late-target/no-time retry pass (sharc-idp-dma.txt).
              No clocked VISA boot or complete application is
              qualified.
              original_sharc_images freshly verifies bundle/sections/kernels and
@@ -970,6 +988,10 @@ ID  State    Evidence / remaining work
              clock/frame selectors and the command ring's static consumer.
              These are static facts, not physical clock/wiring, data or boot
              evidence; no private implementation was imported (sharc-pcg.txt).
+             All19 original IDP initialization instructions now execute in the
+             clocked reference; own pinned field scans additionally establish
+             the following SYSCTL read/SET80/write with3/3/3 short-word widths
+             in all four programs (sharc-idp-dma.txt).
 10  pending  No hardware comparison, timing measurement or flashing performed.
 
 Quality and UI checks validate only the named bootstrap behavior. Unknown values

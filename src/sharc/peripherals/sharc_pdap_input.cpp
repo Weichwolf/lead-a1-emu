@@ -104,9 +104,6 @@ void pdap_validate_input(SharcPdapInput input) {
 
 void pdap_validate_controls(const SharcPdapState &state) {
   constexpr std::uint32_t serial_channels = 0xfe;
-  if ((state.control[0] & idp_dma) != 0 || (state.control[2] & idp_ping_pong) != 0) {
-    throw std::runtime_error("PDAP DMA/ping-pong engine not implemented");
-  }
   if ((state.control[0] & idp_enable) != 0 &&
       ((state.control[1] & pdap_enable) == 0 || (state.control[2] & serial_channels) != 0)) {
     throw std::runtime_error("IDP active SIP channels not implemented by PDAP receiver");
@@ -115,6 +112,7 @@ void pdap_validate_controls(const SharcPdapState &state) {
 
 void pdap_validate(const SharcPdapState &state) {
   pdap_validate_controls(state);
+  idp_dma_validate(state);
   if ((state.control[0] & idp_clear_overflow) != 0 || (state.control[1] & pdap_reset) != 0 ||
       (state.control[2] & idp_fifo_clear) != 0) {
     throw std::invalid_argument("PDAP snapshot contains self-clearing command bits");

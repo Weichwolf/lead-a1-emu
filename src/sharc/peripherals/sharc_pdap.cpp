@@ -2,6 +2,7 @@
 #include "sharc/peripherals/sharc_pdap.hpp"
 
 #include "common/memory.hpp"
+#include "sharc/memory/sharc_memory.hpp"
 #include "sharc/peripherals/sharc_pdap_internal.hpp"
 #include "sharc/peripherals/sharc_power.hpp"
 
@@ -41,6 +42,12 @@ bool core_fifo_enabled(const SharcPdapState &state) {
 
 SharcPdap::SharcPdap(SharcPower &power, SharcPdapState initial) : power_(power), current_(initial) {
   detail::pdap_validate(current_);
+  require_dma_owner(current_);
+}
+
+SharcPdap::SharcPdap(SharcPower &power, SharcMemory &memory, SharcPdapState initial)
+    : power_(power), memory_(&memory), current_(initial) {
+  detail::pdap_validate(current_);
 }
 
 SharcPdapState SharcPdap::state() const {
@@ -56,8 +63,18 @@ SharcPdapInterrupts SharcPdap::interrupts() const {
   require_clock();
   if (current_.flush_cclk != 0) { throw std::runtime_error("PDAP disable flush still pending"); }
   const auto threshold = current_.control[0] & 15;
-  return {.threshold = threshold < current_.fifo.size() && current_.count > threshold,
-          .overflow = current_.overflow};
+  const bool dma_enabled =
+      (current_.control[0] & detail::idp_dma) != 0 && (current_.control[2] & 0xff00U) != 0;
+  std::uint8_t dma{};
+  for (unsigned int channel = 0; channel < current_.dma.size(); ++channel) {
+    if (current_.dma[channel].interrupt_pending) {
+      dma |= static_cast<std::uint8_t>(1U << channel);
+    }
+  }
+  return {.threshold =
+              !dma_enabled && threshold < current_.fifo.size() && current_.count > threshold,
+          .overflow = current_.overflow,
+          .dma = dma};
 }
 
 void SharcPdap::idle() const {
@@ -67,6 +84,13 @@ void SharcPdap::idle() const {
 void SharcPdap::require_clock() const {
   if (!power_.enabled(SharcClockGate::dai)) {
     throw std::runtime_error("PDAP with stopped DAI clock not qualified");
+  }
+}
+
+void SharcPdap::require_dma_owner(const SharcPdapState &state) const {
+  if (memory_ == nullptr && ((state.control[0] & detail::idp_dma) != 0 ||
+                             (state.control[2] & detail::idp_ping_pong) != 0)) {
+    throw std::runtime_error("PDAP DMA/ping-pong requires its bound RAM owner");
   }
 }
 
@@ -147,7 +171,9 @@ std::uint64_t SharcPdap::read(MemoryAccess access) {
   if (access.address < 16) { return state.control[access.address / 4]; }
   if (state.flush_cclk != 0) { throw std::runtime_error("PDAP disable flush still pending"); }
   if (access.address == status_offset) {
-    return (state.count << fifo_size_shift) | (state.overflow ? overflow_bit : 0U);
+    constexpr unsigned int dma_shift = 17;
+    return (state.count << fifo_size_shift) | (state.overflow ? overflow_bit : 0U) |
+           (std::uint32_t{detail::idp_dma_status(state)} << dma_shift);
   }
   if (access.address != fifo_offset) {
     throw std::out_of_range("Unimplemented PDAP/IDP register offset");
@@ -160,10 +186,7 @@ std::uint64_t SharcPdap::read(MemoryAccess access) {
     throw std::runtime_error("PDAP empty-FIFO core hang requires IOP readiness coupling");
   }
   const auto value = state.fifo[state.head];
-  state.fifo[state.head] = 0;
-  --state.count;
-  state.head =
-      state.count == 0 ? 0 : (state.head + 1) % static_cast<unsigned int>(state.fifo.size());
+  detail::pdap_pop(state);
   return value;
 }
 
@@ -178,6 +201,8 @@ void SharcPdap::control_write(unsigned int index, std::uint32_t value) {
   next.control[1] &= ~detail::pdap_reset;
   next.control[2] &= ~detail::idp_fifo_clear;
   detail::pdap_validate_controls(next);
+  require_dma_owner(next);
+  detail::idp_dma_configure(next, working());
   const bool reset = index == 1 && (value & detail::pdap_reset) != 0;
   const bool enabled = (next.control[0] & detail::idp_enable) != 0;
   const bool changed = ((previous_pp ^ next.control[1]) & detail::pdap_configuration) != 0 ||

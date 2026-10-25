@@ -56,7 +56,7 @@ read/SET40000/write, A1=00200004, B1=6, A0=B0=100. Thus A has CLKDIV4,
 phase2; B has CLKDIV6/PCLK override; both frames have DIV256. Both remain
 DISABLED at this point. It is not yet a running SPORT/audio clock source.
 The later FLAGS synchronization and actual c0000000 release remain beyond
-the current IDP DMA frontier. All eight original cases reach405/431 application
+the current SYSCTL.DCPR frontier. All eight original cases reach414/440 application
 instructions, preserving payload/vector and earlier routing/SPORT checks.
 See sharc-picr.txt and coverage.txt for the exact failed-delivery state.
 

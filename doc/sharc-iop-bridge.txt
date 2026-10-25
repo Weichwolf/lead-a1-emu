@@ -196,8 +196,10 @@ The278/302-instruction checkpoints next read SPCTLN0/c1a at+601/+651 and
 now enter the real SPORT pair backends. Native pair maps and bit fields follow HWR.
 Twelve original secondary-control groups,24 DMA groups and subsequent CS/
 SPMCTL/SPCTL setup retain independent PC/width/result/post-value expectations.
-All eight cases reach405/431 instructions, then fail on real IDP_CTL1/24b2
-DMA enable after actual PCG/PICR setup (sharc-pcg.txt,sharc-picr.txt).
+All eight cases reach414/440 instructions through actual PCG/PICR/IDP setup,
+then fail at the original SYSCTL.DCPR write (sharc-idp-dma.txt). The bound
+IDP parameter view at2400..242f shares this same posted bridge. Its real
+4/5-write7/8-read tests preserve source capture and late-fault/no-time retry.
 PCG has its own native24c0..cb owner, separate from IDP control holes. PICR
 uses the same posted bridge and actual source mux.
 All earlier checkpoints and final-cell/vector oracles remain. No source SCLK

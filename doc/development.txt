@@ -14,7 +14,7 @@ src/arm/core/           ARM execution, data/cache/MMU/system state.
 src/arm/peripherals/    AINTC, GPIO and SPI.
 src/sharc/core/         SHARC instruction execution and architectural state.
 src/sharc/memory/       Memory views, arbitration and IOP bridge.
-src/sharc/peripherals/  Boot SPI, clocks, PCG, control, DAI, PDAP and SPORT.
+src/sharc/peripherals/  Boot SPI, clocks, PCG, control, DAI, PDAP/IDP DMA, SPORT.
 src/sharc/pipeline/     Captured fetch, sequencer and pipeline holds.
 src/sharc/visa/         VISA alignment, decoding and execution reference.
 gui/                    Native GTK4 snapshot consumer, independent of cores/audio.

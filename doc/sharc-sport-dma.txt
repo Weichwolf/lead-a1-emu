@@ -75,8 +75,8 @@ short-word widths. Own pinned field scans agree. This is static code evidence,
 not executed SPORT behavior, reset readback or a Type17b extension proof.
 
 Original SPORT initialization now executes through real control/parameter
-backends, reaching405/431 instructions before IDP_CTL1 DMA enable, after
-actual PCG/PICR configuration (sharc-sport.txt,sharc-pcg.txt).
+backends, reaching414/440 instructions through actual PCG/PICR/IDP setup,
+before SYSCTL.DCPR arbitration setup (sharc-sport.txt,sharc-idp-dma.txt).
 Independent original execution checks all24 parameter groups and their actual
 TCBs/cyclic partners, preserving odd indices and distinct initial/next buffers.
 No source SCLK is supplied: programmed parameters do not create DMA grants or

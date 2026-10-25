@@ -1,0 +1,82 @@
+IDP DMA and PDAP FIFO/RAM reference
+
+SharcPdap with an explicitly bound SharcMemory owns real PDAP FIFO-to-RAM DMA.
+The unbound core-FIFO constructor rejects global DMA/ping configuration. Eight DMA
+parameter sets map through SharcIdpDmaPort at native2400..242f; control remains
+24b0..b3. The parameter view shares the receiver's instruction transaction.
+Current I, IA, M, IB, C and PC groups contain eight registers each. Reset data
+is zero; index fields retain19 bits, signed modify6, count/reload16. HWR3-4..7,
+3-24/27..28/45,12-19..25/30..32 and B-17/18 establish the family reference.
+Pinned VisualDSP21489-proc imports2148x-extended; its register widths corroborate
+PC16/M6/I19. reference/visualdsp.json pins both files. No vendor code is reused.
+Raw index readback is a low19-bit logical view, not measured silicon readback;
+RAM addresses OR the fixed80000 normal-word offset. Signed postmodify wraps
+within19 bits. Register accesses and elapsed clocks do not create input data,
+RAM grants or completion interrupts.
+
+Actual transfers require global IDP/DMA enable plus per-channel DMA selection.
+DMA arming/status uses global DMA and per-channel selection separately from
+receiver enable; toggling acquisition must not erase retained DMA. All-reset
+unused channels stay idle (HWR12-23); an explicit count0 requests65536 actual
+transfers (HWR3-28). Partially configured channels without an explicit relevant
+count reject rather than guessing whether zero is an unused or full counter.
+The unused-channel status note in A-181 conflicts with12-23; the latter is an
+explicit reference assumption here, not silicon qualification.
+Standard mode decrements live C/I on each successful RAM write, completes only
+at zero, then exposes explicit FIFO discard service for subsequent words of
+that completed channel. Ping-pong starts A, reloads C from PC and current I
+from B/A at every completed half. IA/IB/PC retain reload data. Global DMA pause
+preserves FIFO, remaining count and active half; resume does not restart A.
+Per-channel disable cancels the retained phase. Live C writes shorten the
+current interval; standard completion stops, while ping-pong still reloads.
+Other retained/live parameter or mode changes reject
+pending fuller reconfiguration qualification. Physical start/reload/status and
+same-clock sampling latency remain unqualified delivered-access references.
+
+PDAP serial-edge acquisition and core FIFO behavior remain the existing model.
+SIP acquisition is still explicitly unsupported. Only PDAP/channel0 currently
+supplies transferable DMA words; other parameter/state sets are not a serial
+receiver. dma_request() returns the actual FIFO-head normal32 write. The owner
+must serialize request/grant/service and supply the exact bound IOD0 grant.
+service_dma() preflights receiver changes, executes the real RAM operation and
+only then commits FIFO/index/count/half/completion. Failure retains all owner
+state and the unconsumed grant; error context includes channel, PC, operation,
+raw index/count and the underlying address. No allocation occurs on success.
+Memory-port grants are real; shared peripheral-group arbitration remains open.
+
+Completion events retain a per-channel pending mask separately from CPU IRQs.
+FIFO threshold interrupts are suppressed while DMA service is selected.
+DAI_STAT0 combines the existing FIFO/overflow view and selected active DMA bits.
+Acknowledgement APIs are for completed DAI latch service only. HWR2-9/10 says
+MASK reads do NOT clear latches; DAI_IRPTL_H/L reads clear their own event
+latches, while FIFO threshold clears with its condition. This resolves the
+conflicting IMASK wording in12-24; no mask-read acknowledgement is implemented.
+Full DAI latch/mask/priority/same-cycle event and core IRQ coupling remains open.
+
+Owned tests use actual packed PDAP input edges and exact RAM grant bindings.
+They cover standard completion/discard, repeated A/B/A halves, maximum positive/
+negative6-bit strides, zero stride,19-bit wrap,65536-word zero-count transfers,
+global pause/resume and live count1 abort. Independent receiver/partial-packing/
+RAM/bus restores and failed writes with separate repair retain exact data,
+counters and completion events. Register-width/transaction/malformed/gate
+checks and real fetched4/5-write7/8-read source capture/late-fault/no-time retry
+exercise the parameter view. These are logical synthetic expectations, not
+silicon timing, a vendor simulator or complete Nord startup evidence.
+
+The original clocked owner binds these real control/parameter devices to the
+same RAM/posted IOP bridge. All four original programs at two SPI cadences
+execute all19 IDP initialization instructions, including both ring indices,
+modify1, half count80 and CTL0 read/SETa0/write. Each PC/width/register/post-value
+has an independently scanned original expectation. Exact receiver/parameter/
+phase state is checked against whether the actual5-clock global-enable write
+is still pending or delivered. No input edge/word or grant is supplied, so no
+transfer/IRQ is invented. Original application prefixes reach414/440 after the
+next SYSCTL read and SET80. Actual write at+961/+1027 (SYSCTL word30024) fails
+on unsupported DCPR rotation. CPU/fetch/controller/receiver/bus retain their
+pre-instruction state. PGR A-46 identifies bit7 as peripheral DMA group priority
+rotation; this is the next emulator gap, not permission to alter firmware.
+The complete payload/vector/SPI/DAI/SPORT oracles remain; full boot/audio and
+objective.txt acceptance are still open.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_(idp_.*|pdap_.*)|original_sharc_clocked_iop)$' --output-on-failure

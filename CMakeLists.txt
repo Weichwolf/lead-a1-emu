@@ -91,6 +91,8 @@ add_library(lead_a1_sharc STATIC
   src/sharc/peripherals/sharc_dpi_routing.cpp
   src/sharc/peripherals/sharc_pdap.cpp
   src/sharc/peripherals/sharc_pdap_input.cpp
+  src/sharc/peripherals/sharc_pdap_dma.cpp
+  src/sharc/peripherals/sharc_idp_dma.cpp
   src/sharc/peripherals/sharc_pcg.cpp
   src/sharc/peripherals/sharc_pcg_signal.cpp
   src/sharc/peripherals/sharc_picr.cpp
@@ -136,6 +138,12 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-idp-dma-bus-test test/sharc_idp_dma_bus_test.cpp)
+  target_link_libraries(lead-a1-sharc-idp-dma-bus-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_idp_dma_posted_parameters COMMAND lead-a1-sharc-idp-dma-bus-test)
+  add_executable(lead-a1-sharc-idp-dma-test test/sharc_idp_dma_test.cpp)
+  target_link_libraries(lead-a1-sharc-idp-dma-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_idp_fifo_dma COMMAND lead-a1-sharc-idp-dma-test)
   add_executable(lead-a1-sharc-pcg-bus-test test/sharc_pcg_bus_test.cpp)
   target_link_libraries(lead-a1-sharc-pcg-bus-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_pcg_posted_control COMMAND lead-a1-sharc-pcg-bus-test)
@@ -637,7 +645,7 @@ add_custom_target(format-check
 if(BUILD_TESTING)
   add_custom_target(quality
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
-    DEPENDS lead-a1-sharc-pcg-bus-test lead-a1-sharc-pcg-test lead-a1-sharc-picr-test lead-a1-sharc-picr-bus-test format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
+    DEPENDS lead-a1-sharc-idp-dma-bus-test lead-a1-sharc-idp-dma-test lead-a1-sharc-pcg-bus-test lead-a1-sharc-pcg-test lead-a1-sharc-picr-test lead-a1-sharc-picr-bus-test format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
       lead-a1-sharc-sport-test
       lead-a1-sharc-sport-bus-test
       lead-a1-sharc-sport-dma-test

@@ -29,5 +29,14 @@ void pdap_validate_input(SharcPdapInput input);
 void pdap_flush(SharcPdapState &state, bool overflow);
 void pdap_push(SharcPdapState &state, std::uint32_t word);
 void pdap_sample(SharcPdapState &state, SharcPdapInput input);
+void pdap_pop(SharcPdapState &state);
+[[nodiscard]] bool idp_dma_active(const SharcIdpDmaChannel &channel);
+[[nodiscard]] bool idp_dma_selected(const SharcPdapState &state, unsigned int channel);
+[[nodiscard]] std::uint8_t idp_dma_status(const SharcPdapState &state);
+void idp_dma_validate(const SharcPdapState &state);
+void idp_dma_configure(SharcPdapState &state, const SharcPdapState &before);
+[[nodiscard]] std::uint64_t idp_dma_read(const SharcPdapState &state, MemoryAccess access);
+void idp_dma_write(SharcPdapState &state, MemoryAccess access, std::uint64_t value);
+void idp_dma_finish(SharcIdpDmaChannel &channel);
 
 }

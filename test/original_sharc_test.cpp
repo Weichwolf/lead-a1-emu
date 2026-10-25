@@ -14,6 +14,7 @@
 #include "sharc/peripherals/sharc_dai_pin.hpp"
 #include "sharc/peripherals/sharc_dai_timing.hpp"
 #include "sharc/peripherals/sharc_dpi_routing.hpp"
+#include "sharc/peripherals/sharc_idp_dma.hpp"
 #include "sharc/peripherals/sharc_pcg.hpp"
 #include "sharc/peripherals/sharc_pdap.hpp"
 #include "sharc/peripherals/sharc_picr.hpp"
@@ -1656,6 +1657,41 @@ void original_idp_index_b_store(lead_a1::SharcMemory &memory,
           last->posted_at == queue.clocks);
 }
 
+void check_original_idp_configuration(HeaderDevices devices) {
+  const auto queue = devices.bridge->snapshot();
+  constexpr std::uint32_t global_enable = 0xa0;
+  require(queue.write_count <= 1 && !queue.request && !queue.read);
+  const bool pending = queue.write_count != 0;
+  if (pending) {
+    const auto &write = queue.writes[0];
+    if (!write) { throw std::runtime_error("Missing actual IDP global enable write"); }
+    const auto offset = uses_clock_initializer(devices.placement) ? 952U : 1018U;
+    constexpr unsigned int global_control = 0x24b0;
+    require(write->intent.pc == devices.placement.second_call + offset &&
+            write->intent.address == global_control && write->value == global_enable &&
+            write->intent.operation == lead_a1::AccessKind::write &&
+            write->intent.delivery_cycles == 5 && queue.clocks < write->posted_at + 5);
+  }
+  lead_a1::SharcPdapState expected;
+  constexpr unsigned int ring_mask = 0x7ffff;
+  constexpr unsigned int half_ring = 0x80;
+  constexpr unsigned int pdap_configuration = 0x800ff000;
+  constexpr unsigned int channel_configuration = 0x10101;
+  expected.control = {pending ? 0U : global_enable, pdap_configuration, channel_configuration, 0};
+  auto &dma = expected.dma[0];
+  const auto first = original_command_ring(devices) & ring_mask;
+  const auto second = (original_command_ring(devices) + half_ring) & ring_mask;
+  dma.parameters = {pending ? 0U : first, first, 1, second, pending ? 0U : half_ring, half_ring};
+  dma.ping_count_written = true;
+  if (!pending) {
+    expected.startup_sclk = 1;
+    dma.phase = lead_a1::SharcIdpDmaPhase::ping_a;
+    dma.remaining = half_ring;
+  }
+  require(devices.pdap->snapshot() == expected && !devices.pdap->dma_request() &&
+          devices.pdap->interrupts() == lead_a1::SharcPdapInterrupts{});
+}
+
 void original_sport_failure(lead_a1::SharcMemory &memory,
                             lead_a1::Sharc &cpu,
                             lead_a1::SharcFetch &fetch,
@@ -1671,35 +1707,81 @@ void original_sport_failure(lead_a1::SharcMemory &memory,
   original_idp_initialization(memory, cpu, fetch, serial, devices);
   original_application_prepare(memory, cpu, fetch, serial, devices);
   original_idp_index_b_store(memory, cpu, fetch, serial, devices);
+  original_application_clock(memory, cpu, serial, devices);
+  constexpr unsigned int offset_difference = 66;
+  using Operation = original_sport::Operation;
+  constexpr std::array<original_sport::Step, 7> tail{
+      {{.offset = 1002, .words = 2, .reg = 0, .value = 1},
+       {.offset = 1004,
+        .words = 3,
+        .reg = 0,
+        .value = 1,
+        .operation = Operation::write,
+        .address = 0x2410},
+       {.offset = 1007, .words = 2, .reg = 0, .value = 0x80},
+       {.offset = 1009,
+        .words = 3,
+        .reg = 0,
+        .value = 0x80,
+        .operation = Operation::write,
+        .address = 0x2428},
+       {.offset = 1012,
+        .words = 3,
+        .reg = 0x70,
+        .value = 0,
+        .operation = Operation::read,
+        .address = 0x24b0},
+       {.offset = 1015, .words = 3, .reg = 0x70, .value = 0xa0},
+       {.offset = 1018,
+        .words = 3,
+        .reg = 0x70,
+        .value = 0xa0,
+        .operation = Operation::write,
+        .address = 0x24b0}}};
+  for (auto step : tail) {
+    step.offset -= clocks ? offset_difference : 0U;
+    original_sport_step(memory, cpu, fetch, serial, devices, step);
+  }
+  constexpr unsigned int control_read = 1021;
+  constexpr unsigned int control_set = 1024;
+  constexpr std::uint32_t vectors = 4;
+  constexpr std::uint32_t rotating = 0x84;
+  original_picr_ordinary(
+      memory, cpu, fetch, serial, devices, control_read - (clocks ? offset_difference : 0U), 3);
+  require(cpu.state().system[0] == (lead_a1::SharcKnown32{.value = vectors, .known = full32}));
+  original_picr_ordinary(
+      memory, cpu, fetch, serial, devices, control_set - (clocks ? offset_difference : 0U), 3);
+  require(cpu.state().system[0] == (lead_a1::SharcKnown32{.value = rotating, .known = full32}));
+  original_application_prepare(memory, cpu, fetch, serial, devices);
   const auto core = cpu.state();
   const auto pipeline = fetch.state();
-  const auto failing_pc = devices.placement.second_call + (clocks ? 921U : 987U);
-  constexpr unsigned int address = 0x24b2;
-  std::ostringstream prefix;
-  prefix << "SHARC IOP bridge pc=0x" << std::hex << failing_pc << " word-address=0x" << address
-         << " operation=write cclk=";
+  const auto queue = devices.bridge->snapshot();
+  const auto pdap = devices.pdap->snapshot();
+  const auto control = devices.control.snapshot();
+  constexpr unsigned int control_write = 1027;
+  const auto failing_pc =
+      devices.placement.second_call + control_write - (clocks ? offset_difference : 0U);
+  require(core.pc == failing_pc && !fetch.peripheral_access(cpu));
+  std::ostringstream context;
+  context << "SHARC captured execution pc=0x" << std::hex << failing_pc;
   bool stopped{};
   try {
-    original_application_clock(memory, cpu, serial, devices);
+    static_cast<void>(original_application_retire(memory, cpu, fetch, serial, devices));
   } catch (const std::runtime_error &error) {
     const std::string message(error.what());
-    if (!message.starts_with(prefix.str()) ||
-        message.find("PDAP DMA/ping-pong engine not implemented") == std::string::npos) {
+    if (!message.starts_with(context.str()) ||
+        message.find("word-address=0x30024") == std::string::npos ||
+        message.find("SHARC memory write") == std::string::npos ||
+        message.find("SHARC SYSCTL reset/arbitration/mux/reserved write not implemented") ==
+            std::string::npos) {
       throw;
     }
     stopped = true;
   }
-  const auto bus = devices.bridge->snapshot();
-  require(stopped && cpu.state() == core && fetch.state() == pipeline && !memory.active() &&
-          !devices.bridge->ready() && !devices.bridge->waiting());
-  const auto &queued = bus.writes[0];
-  if (!queued) { throw std::runtime_error("Missing original failed posted write"); }
-  require(bus.write_count == 3 && queued->intent.pc == failing_pc &&
-          queued->intent.address == address && bus.clocks == queued->posted_at + 5);
-  constexpr std::uint32_t ping_pong = 0x10101;
-  const auto next_offset = clocks ? 936U : 1002U;
-  require(!bus.request && !bus.read && queued->value == ping_pong &&
-          cpu.state().pc == devices.placement.second_call + next_offset);
+  require(stopped && cpu.state() == core && fetch.state() == pipeline &&
+          devices.bridge->snapshot() == queue && devices.pdap->snapshot() == pdap &&
+          devices.control.snapshot() == control && !memory.active());
+  check_original_idp_configuration(devices);
   lead_a1::SharcPcgState pcg_expected;
   if (clocks) { pcg_expected.registers = original_pcg::configured; }
   require(devices.pcg != nullptr && devices.pcg->snapshot() == pcg_expected);
@@ -2288,10 +2370,10 @@ void original_pin_boundary(lead_a1::SharcMemory &memory,
   constexpr unsigned int earlier_clock = 128;
   constexpr unsigned int earlier_other = 104;
   const auto instructions = (clocks ? earlier_clock : earlier_other) +
-                            (6 * (pins.size() + data.size())) + (clocks ? 127U : 129U);
+                            (6 * (pins.size() + data.size())) + (clocks ? 136U : 138U);
   std::cout << "  Clocked application:" << instructions
             << " actual instructions; SPORT/PCG/PICR initialization; "
-            << "IDP_CTL1 DMA write remains unimplemented; no serial source clock or audio\n";
+            << "IDP DMA configured; next SYSCTL access unqualified; no source clock or audio\n";
 }
 
 void original_post_spi_routing(lead_a1::SharcMemory &memory,
@@ -2944,7 +3026,8 @@ struct OriginalRouting {
   lead_a1::SharcDaiData data{power};
   lead_a1::SharcDaiTiming clocks{power, lead_a1::SharcDaiTimingGroup::clock};
   lead_a1::SharcDaiTiming frames{power, lead_a1::SharcDaiTimingGroup::frame};
-  lead_a1::SharcPdap pdap{power};
+  lead_a1::SharcPdap pdap;
+  lead_a1::SharcIdpDmaPort idp_parameters{pdap};
   lead_a1::SharcPicr priority;
   lead_a1::SharcPcg pcg{power};
   lead_a1::SharcDpiRouting dpi_pin{lead_a1::SharcDpiGroup::pin};
@@ -2961,6 +3044,8 @@ struct OriginalRouting {
   std::array<std::optional<lead_a1::SharcSport>, 8> sports;
   std::array<std::optional<lead_a1::SharcSportPair>, 4> sport_pairs;
   std::array<std::optional<lead_a1::SharcIopPort>, 4> sport_ports;
+
+  explicit OriginalRouting(lead_a1::SharcMemory &memory) : pdap(power, memory) {}
 
   std::array<lead_a1::SharcSport *, 8> sport_devices() {
     std::array<lead_a1::SharcSport *, 8> result{};
@@ -3027,6 +3112,8 @@ struct OriginalRouting {
       constexpr std::uint32_t dai_data0 = 0x2440;
       peripheral.map_io({.first_word = dai_data0, .words = 7}, data);
       map_sports(memory, bound);
+      constexpr lead_a1::SharcIoMapping idp_window{.first_word = 0x2400, .words = 48};
+      peripheral.map_io(idp_window, idp_parameters);
       constexpr lead_a1::SharcIoMapping pcg_window{.first_word = 0x24c0, .words = 12};
       peripheral.map_io(pcg_window, pcg);
       constexpr lead_a1::SharcIoMapping priority_window{.first_word = 0x2200, .words = 4};
@@ -3048,8 +3135,8 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                            Placement placement,
                            OriginalProfile profile) {
   // This fixture owns fresh RAM and PMCTL: its writes cannot seed the full stream.
-  OriginalRouting routing;
   lead_a1::SharcMemory memory;
+  OriginalRouting routing(memory);
   memory.map_2148x_5mbit_ram();
   auto boot = lead_a1::SharcSpiBoot::slave_reference_214xx();
   bootstrap(memory, boot, stream);

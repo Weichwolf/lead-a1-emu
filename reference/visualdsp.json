@@ -42,6 +42,16 @@
       "path": "214xx/include/sru21489.h",
       "bytes": 154418,
       "sha256": "6a74d65ab34b9703d4e3fea20a27b905bb097611fc20307384ac1a4e50858c76"
+    },
+    {
+      "path": "System/ArchDef/ADSP-21489-proc.xml",
+      "bytes": 229116,
+      "sha256": "a9308368d013db98851e862be0c5f77fd253750776072e3735f4c9c26a5c5c08"
+    },
+    {
+      "path": "System/ArchDef/ADSP-2148x-extended.xml",
+      "bytes": 387550,
+      "sha256": "bfa676d37bf822694575e73c69b02af18180bf2edd3be9f7c9fff14bd5fc7e3f"
     }
   ],
   "limits": "Presence of target headers/simulator DLLs is not simulator, peripheral or silicon qualification. Actual assembler/simulator use and independent case results must be recorded separately.",

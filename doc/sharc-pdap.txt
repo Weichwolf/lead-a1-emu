@@ -3,9 +3,10 @@ PDAP acquisition and core FIFO reference
 SharcPdap owns the PDAP slice of the IDP interface: CTL0 at24b0, PP_CTL
 at24b1, CTL1 at24b2, CTL2 at24b3, DAI_STAT0 at24b8 and FIFO at24d0.
 The explicit HWR B-17 reset words are0/0/0000ffff/0. Other mapped holes,
-DAI_STAT1 index-pointer behavior, SIP and DMA remain unsupported. Unsupported
-DMA/ping-pong or globally active SIP configuration rejects; it never reports
-a successful unimplemented channel. This is a component, not a complete IDP.
+DAI_STAT1 index-pointer behavior and SIP remain unsupported. The core-FIFO
+constructor rejects DMA without bound RAM; the bound constructor implements
+actual PDAP FIFO/RAM DMA and ping-pong (sharc-idp-dma.txt). Globally active
+SIP configuration still rejects. This is not yet a complete IDP/board model.
 
 The owner supplies DAI_PB20..1 or AMI_ADDR23..4 as twenty-bit value/knowledge
 pairs, plus optional clock and HOLD levels. PP_SELECT chooses the source;
