@@ -41,13 +41,18 @@ def main():
     parser.add_argument("emulator", help="native image decoder")
     parser.add_argument("native", nargs="*", help="optional native comparison executables/fixtures")
     parser.add_argument("--sharc-only", type=Path, help="run only this original DSP stream checker")
-    parser.add_argument("--sharc-deferred-f2", action="store_true",
+    profiles = parser.add_mutually_exclusive_group()
+    profiles.add_argument("--sharc-deferred-f2", action="store_true",
                         help="also supply the explicit candidate deferred F2 response order")
+    profiles.add_argument("--sharc-visa-instructions", action="store_true",
+                          help="separate VISA instruction-order fork after the candidate prefix")
     args = parser.parse_args()
     if args.sharc_only and args.native:
         parser.error("--sharc-only cannot be combined with the aggregate native comparisons")
     if args.sharc_deferred_f2 and not args.sharc_only:
         parser.error("--sharc-deferred-f2 requires --sharc-only")
+    if args.sharc_visa_instructions and not args.sharc_only:
+        parser.error("--sharc-visa-instructions requires --sharc-only")
     reference = ROOT / "doc/local/reference/firmware.bin"
     if not reference.exists():
         print("SKIP: original reference absent")
@@ -76,6 +81,8 @@ def main():
                 raise ValueError("Original SHARC kernel identity mismatch")
         if args.sharc_only:
             extra = ["--deferred-f2"] if args.sharc_deferred_f2 else []
+            if args.sharc_visa_instructions:
+                extra = ["--visa-instructions"]
             subprocess.run([str(args.sharc_only), directory, *extra], check=True)
         else:
             native_checks([sys.argv[0], args.emulator, *args.native], directory, specs)

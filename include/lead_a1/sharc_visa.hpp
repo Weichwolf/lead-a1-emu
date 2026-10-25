@@ -10,6 +10,8 @@
 
 namespace lead_a1 {
 
+class Sharc;
+
 // Length only, not permission to execute an instruction or its reserved fields.
 // An absent result means the available prefix cannot yet determine its length.
 [[nodiscard]] std::optional<unsigned int> sharc_visa_words(std::span<const std::uint16_t> prefix);
@@ -55,6 +57,7 @@ public:
   [[nodiscard]] std::optional<SharcVisaInstruction> advance(bool accept);
 
 private:
+  friend class Sharc;
   SharcMemory &memory_;
   SharcVisaState state_;
 };

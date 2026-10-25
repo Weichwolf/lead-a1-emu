@@ -72,6 +72,13 @@
       "local_copy_sha256": "283b966e6f1f5238a2d019bf3517c0b3b9987be64163ac66db33f3d5d816927f",
       "provenance": "Direct official package/static extraction; manufacturer-shipped kernel explanation independently corroborates discussion. Source/listing stays ignored, no implementation reuse or original Nord toolchain attribution.",
       "sections": "FINAL_INIT first-slot IDLE wake, final mask slot, completed DB target as IRQ return PC, temporary RTI and later self-modifying arithmetic-loop patch. Source-level ordering, not measured hardware/pipeline latency."
+    },
+    {
+      "author": "Analog Devices",
+      "title": "SHARC+ Core Programming Reference, Revision1.5, June2023,82-100131-01",
+      "official_url": "https://www.analog.com/media/en/dsp-documentation/processor-manuals/SC58x-2158x-prm.pdf",
+      "provenance": "Official PDF independently consulted online; local byte identity not established. Compatible legacy five-stage Type17b operand definition only, not SHARC+ instruction/pipeline/board assumptions; no implementation reused.",
+      "sections": "16-17/18 explicitly lists Type17b for five-stage cores;26-1 imm16visa range -0x8000..0x7fff. PGRrev2.4 remains the encoding/operation reference."
     }
   ],
   "spi_slave_reference": {
@@ -543,5 +550,46 @@
       }
     ],
     "limits": "Input component only: no compact CPU execution, native/VISA sequencer connection, automatic F1/IAB backpressure, cache/DMA-port composition, cross-block bursts or mixed-width branch/loop/IRQ timing. Candidate memory-response phase remains unqualified. Complete original boot/application/instrument/host/hardware objective unchanged"
+  },
+  "visa_execution_reference": {
+    "primary": "PGRrev2.4 4-5/9,4-16/23,4-54/55,9-62/63,10-5/29,11-94,12-12; later SHARC+ rev1.5 legacy Type17b/imm16visa operand-range corroboration only",
+    "api": "Sharc::step(SharcVisaBuffer&) binds memory/PC and consumes actual captured input through the existing CPU/RAM/control transaction. Internal compact decoding never modifies firmware or ready data. Reports raw encoding/address_units; stages IAB consumption and publishes it only after successful instruction commit",
+    "forms": "Qualified48-bit forms use existing operations. Compact Type1b/3b/4b/5b data-only,Type2b packed compute,Type17b signed16 immediate,Type2c integer add/sub/pass/compare/not/inc/dec/and/or/xor and floating add/sub/multiply,Type3c DM,Type11c plain/delayed conditional RTS,Type21c NOP. Native operand/mode/knowledge/width/rounding guards remain",
+    "control": "Sequential PC uses actual1/2/3 SW units. CALL pushes following address; RTS pops actual26-bit frame. Immediate redirects flush even if target equals sequential PC. Delayed JUMP/RTS retires two actual mixed-length slots. Taken VISA CALL(DB) lacks retained slot lengths and stays guarded; a false condition does not push. Single VISA counter body must be uncompressed48 per PGR4-54/55; native units remain1",
+    "owned_evidence": "Literal mixed encodings,64 signed-immediate/DREG edge cases,13 independently expected short-compute results,three ordered/equal compact COMP flag/history outcomes,actual compact dual/DM stores and postmodifies, real CALL/RTS frames, captured-return/RAM disagreement, same-address redirects, mixed delayed slots, native CALL/VISA RTS, single uncompressed loop, foreign owner, unsupported forms and read-only-store repair with independent RAM/core/control/IAB rebinding",
+    "original_profile": "original_sharc_visa_instructions separately selects the candidate late F2 prefix, preserves its native-to-VISA Address failure, then forks an instruction-order CPU at the verified checkpoint. Actual original JUMP/CALL/clock function/RTS execute from RAM/IAB; no PC/opcode is invented. The default immediate and candidate clocked profiles are unchanged",
+    "original_clock_prefix": {
+      "first_call": "0x1c0528",
+      "compact_return": "0x1c058b",
+      "retired_including_native_jump_and_entry_call": 8286,
+      "native_instructions": 1,
+      "compact_instructions": 1,
+      "wait_addresses": [
+        "0x1c0537",
+        "0x1c0546",
+        "0x1c0555",
+        "0x1c0567",
+        "0x1c0576",
+        "0x1c0588"
+      ],
+      "wait_counts": [
+        16,
+        4096,
+        16,
+        4096,
+        16,
+        16
+      ],
+      "nop_retirements": 8256,
+      "pmctl_accesses": 11,
+      "pmctl": "0x40012",
+      "settled_dividers": "0x40000",
+      "core_clkin_ratio": "18/1",
+      "peripheral_clkin_ratio": "9/1",
+      "external_clkin_ratio": "36/5",
+      "return": "placement entry+3, empty native stack; checkpoint CPU/fetch and SYSCTL unchanged; ordinary payload oracle retained"
+    },
+    "external_static_corroboration": "Private issue1 comment6390876207 at0850ab477efb4b4de3acb395baa439b70e4e570f independently identifies33 full48 instructions and compact RTS, six loop counts/addresses and all caller/return boundaries. Static source/byte evidence only; no private implementation/worktree imported and no physical timing inferred",
+    "limits": "Instruction-order reference, not native/VISA five-stage connection or full runtime. Mixed-width long/arithmetic/IRQ/IDLE control, taken VISA CALL(DB), other compact operations and cache/port/IAB scheduling remain guarded/open. Minimum-clock PMCTL input and equal CLKIN bounds while bypassed are explicit reference inputs. Candidate F2 response phase, complete application/boot/instrument/MIDI/audio/USB/UI/storage/update/recovery/performance/hardware acceptance remain unqualified"
   }
 }

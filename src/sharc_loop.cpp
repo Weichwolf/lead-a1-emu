@@ -57,7 +57,9 @@ void sharc_validate_count_loop(const SharcState &state) {
   }
 }
 
-void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode) {
+void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode, SharcInstructionSpan span) {
+  const auto units = span.units;
+  if (units == 0 || units > 3) { throw std::logic_error("Invalid SHARC loop address increment"); }
   if (state.branch || state.count_loop || !state.loops_empty || !*state.loops_empty) {
     throw std::runtime_error("SHARC nested/delayed count-loop setup not implemented");
   }
@@ -67,7 +69,7 @@ void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode) {
   }
   const auto end =
       (state.pc + (static_cast<std::uint32_t>(opcode) & sharc_pc_mask)) & sharc_pc_mask;
-  const auto body = (state.pc + 1) & sharc_pc_mask;
+  const auto body = (state.pc + units) & sharc_pc_mask;
   if (end < body || (end != body && end - body < 3)) {
     throw std::runtime_error("SHARC wrapped/two-to-three-instruction count loops not implemented");
   }
@@ -124,7 +126,12 @@ void sharc_clocked_loop_pop(SharcState &state) {
   sharc_stack_status(state);
 }
 
-unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode, bool clocked) {
+unsigned int sharc_count_loop_step(SharcState &state,
+                                   std::uint64_t opcode,
+                                   bool clocked,
+                                   SharcInstructionSpan span) {
+  const auto units = span.units;
+  if (units == 0 || units > 3) { throw std::logic_error("Invalid SHARC loop address increment"); }
   if (!sharc_loop_body_supported(opcode)) {
     throw std::runtime_error("SHARC count-loop body instruction/pipeline not implemented");
   }
@@ -146,7 +153,7 @@ unsigned int sharc_count_loop_step(SharcState &state, std::uint64_t opcode, bool
   if (last && loop->total < 4) { minimum_cycles += 3; }
   if (last) {
     state.count_loop.reset();
-    state.pc = (state.pc + 1) & sharc_pc_mask;
+    state.pc = (state.pc + units) & sharc_pc_mask;
   } else {
     state.count_loop = *loop;
   }

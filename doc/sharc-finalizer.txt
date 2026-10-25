@@ -12,7 +12,10 @@ profile executes the rewritten word, restores the saved vector and reaches
 8c005 (sharc-fetch-memory.txt); its physical response phase is unqualified.
 The next original JUMP selects VISA. Its separate input-buffer check and
 still-guarded native transport boundary are in sharc-visa.txt. No VISA
-instruction, application startup or complete boot is qualified.
+instruction in that clocked path, application startup or complete boot is
+qualified. A separate CPU instruction-order fork executes the actual first
+VISA clock call and returns (sharc-visa-execution.txt); it does not resolve
+the native/VISA clocked connection or physical memory-response phase.
 
 The qualified PX/bit/parallel prefix is documented separately. Arithmetic DO
 and deferred PC-stack setup have a bounded reference in sharc-arithmetic-loops.txt.

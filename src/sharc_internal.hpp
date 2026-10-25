@@ -100,7 +100,14 @@ sharc_pe_condition(const SharcState &state, unsigned int code, unsigned int elem
 void sharc_interrupt_guard(const SharcState &state);
 void sharc_stack_status(SharcState &state);
 void sharc_validate_count_loop(const SharcState &state);
-void sharc_begin_count_loop(SharcState &state, std::uint64_t opcode);
+
+struct SharcInstructionSpan {
+  unsigned int units{1};
+};
+
+void sharc_begin_count_loop(SharcState &state,
+                            std::uint64_t opcode,
+                            SharcInstructionSpan span = {});
 void sharc_push_call(SharcState &state, std::uint32_t address);
 [[nodiscard]] std::uint32_t sharc_pop_call(SharcState &state);
 [[nodiscard]] bool sharc_four_loop(const SharcState &state);
@@ -109,8 +116,10 @@ void sharc_validate_four_loop(const SharcState &state);
 void sharc_four_loop_finish(const SharcState &previous, SharcState &next, bool clocked);
 void sharc_four_loop_clock_pop(SharcState &state);
 [[nodiscard]] bool sharc_loop_body_supported(std::uint64_t opcode);
-[[nodiscard]] unsigned int
-sharc_count_loop_step(SharcState &state, std::uint64_t opcode, bool clocked = false);
+[[nodiscard]] unsigned int sharc_count_loop_step(SharcState &state,
+                                                 std::uint64_t opcode,
+                                                 bool clocked = false,
+                                                 SharcInstructionSpan span = {});
 void sharc_clocked_loop_pop(SharcState &state);
 void sharc_long_loop_prepare(SharcState &state, std::uint64_t opcode);
 void sharc_long_loop_finish(const SharcState &previous, SharcState &next);

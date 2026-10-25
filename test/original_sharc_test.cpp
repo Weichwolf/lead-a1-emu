@@ -18,6 +18,7 @@
 #include <iostream>
 #include <iterator>
 #include <map>
+#include <optional>
 #include <source_location>
 #include <span>
 #include <stdexcept>
@@ -362,12 +363,14 @@ struct SerialInput {
   }
 };
 
+enum class OriginalProfile : std::uint8_t { immediate, deferred_f2, visa_reference };
+
 struct HeaderDevices {
   ObservedClock &clock;
   lead_a1::SharcSpi &spi;
   lead_a1::SharcControl &control;
   unsigned int interval;
-  bool deferred_memory{};
+  OriginalProfile profile{OriginalProfile::immediate};
   Placement placement{};
 };
 
@@ -577,6 +580,108 @@ void check_original_visa_boundary(lead_a1::SharcMemory &memory,
   throw std::runtime_error("Missing original native-to-VISA transport guard");
 }
 
+lead_a1::SharcStep visa_reference_step(lead_a1::SharcMemory &memory,
+                                       lead_a1::Sharc &cpu,
+                                       std::optional<lead_a1::SharcVisaBuffer> &buffer) {
+  constexpr std::uint32_t first_short = 0x100000;
+  constexpr std::uint32_t end_short = 0x200000;
+  if (cpu.state().pc < first_short || cpu.state().pc >= end_short) { return cpu.step(); }
+  if (!buffer) {
+    buffer.emplace(memory,
+                   lead_a1::SharcVisaState{.decode = cpu.state().pc, .fetch = cpu.state().pc});
+  }
+  for (unsigned int fill = 0; fill < 2 && !buffer->instruction(); ++fill) {
+    if (buffer->can_capture()) { buffer->capture(); }
+    static_cast<void>(buffer->advance(false));
+  }
+  return cpu.step(*buffer);
+}
+
+struct VisaReferenceTrace {
+  unsigned int instructions{};
+  unsigned int native{};
+  unsigned int compact{};
+  unsigned int clock_accesses{};
+  std::array<unsigned int, 6> waits{};
+};
+
+void record_visa_reference(lead_a1::SharcStep step,
+                           VisaReferenceTrace &trace,
+                           ObservedClock &clock) {
+  ++trace.instructions;
+  if (step.pc == self_modify + 1) {
+    ++trace.native;
+    require(step.address_units == 1);
+  } else if (step.address_units == 1) {
+    ++trace.compact;
+    constexpr std::uint32_t return_pc = 0x1c058b;
+    require(step.pc == return_pc);
+  } else {
+    require(step.address_units == 3);
+  }
+  constexpr std::array<std::uint32_t, 6> waits{
+      0x1c0537, 0x1c0546, 0x1c0555, 0x1c0567, 0x1c0576, 0x1c0588};
+  for (unsigned int index = 0; index < waits.size(); ++index) {
+    if (step.pc == waits[index]) {
+      require(step.opcode == 0);
+      ++trace.waits[index];
+    }
+  }
+  if (clock.accessed) { ++trace.clock_accesses; }
+  constexpr std::uint32_t pll_bypass = 0x8000;
+  clock.device.advance({.core_cycles = step.minimum_core_cycles,
+                        .clkin_cycles = (clock.device.state().control & pll_bypass) != 0
+                                            ? step.minimum_core_cycles
+                                            : 0U});
+}
+
+void original_visa_instruction_reference(lead_a1::SharcMemory &memory,
+                                         const lead_a1::Sharc &checkpoint,
+                                         const lead_a1::SharcFetch &fetch,
+                                         HeaderDevices devices) {
+  const auto native = checkpoint.state();
+  const auto transport = fetch.state();
+  const auto controller = devices.control.snapshot();
+  // Independent instruction-order fork copies the verified CPU checkpoint.
+  // The clocked redirect stays rejected; all input still comes from RAM/IAB.
+  lead_a1::Sharc cpu(memory, native, &devices.control);
+  require(cpu.state() == native);
+  std::optional<lead_a1::SharcVisaBuffer> buffer;
+  VisaReferenceTrace trace;
+  constexpr unsigned int limit = 50000;
+  const auto return_pc = devices.placement.visa_entry + 3;
+  while (trace.instructions < limit && cpu.state().pc != return_pc) {
+    devices.clock.accessed = false;
+    record_visa_reference(visa_reference_step(memory, cpu, buffer), trace, devices.clock);
+  }
+  constexpr unsigned int expected_instructions = 8286;
+  constexpr std::array<unsigned int, 6> expected_waits{16, 4096, 16, 4096, 16, 16};
+  require(trace.instructions == expected_instructions && trace.native == 1 && trace.compact == 1 &&
+          trace.clock_accesses == 11 && trace.waits == expected_waits &&
+          cpu.state().pc == return_pc);
+  constexpr std::uint32_t call_frame = 0x1000000;
+  require(cpu.state().depth == 0 && cpu.state().pc_stack[0] == (call_frame | return_pc) &&
+          cpu.state().loops_empty == true && !cpu.state().count_loop &&
+          !cpu.state().arithmetic_loop && !cpu.state().branch && !cpu.state().interrupt);
+  const auto clock = devices.clock.device.state();
+  constexpr std::uint32_t expected_pmctl = 0x40012;
+  constexpr std::uint32_t expected_dividers = 0x40000;
+  require(clock.control == expected_pmctl && clock.effective_dividers == expected_dividers &&
+          !clock.pending_dividers && clock.pll_remaining == 0 && !clock.bypass_required);
+  const auto rates = devices.clock.device.rates();
+  constexpr unsigned int core_ratio = 18;
+  constexpr unsigned int external_numerator = 36;
+  require(rates.core == (lead_a1::SharcClockRatio{.numerator = core_ratio}) &&
+          rates.peripheral == (lead_a1::SharcClockRatio{.numerator = 9}) &&
+          rates.external ==
+              (lead_a1::SharcClockRatio{.numerator = external_numerator, .denominator = 5}));
+  require(checkpoint.state() == native && fetch.state() == transport &&
+          devices.control.snapshot() == controller);
+  std::cout
+      << "  Separate VISA instruction-order fork:8286 actual instructions, six original "
+         "wait loops/11 PMCTL accesses, first CALL returned; clocked redirect still guarded\n";
+}
+
 void sequenced_deferred_foreground(lead_a1::SharcMemory &memory,
                                    lead_a1::Sharc &cpu,
                                    lead_a1::SharcFetch &fetch,
@@ -620,6 +725,9 @@ void sequenced_deferred_foreground(lead_a1::SharcMemory &memory,
   std::cout << "  Deferred F2 input:4 original foreground instructions, saved SPI vector restored, "
                "PC0x8c005; response phase is not hardware-qualified\n";
   check_original_visa_boundary(memory, cpu, fetch, serial, devices);
+  if (devices.profile == OriginalProfile::visa_reference) {
+    original_visa_instruction_reference(memory, cpu, fetch, devices);
+  }
 }
 
 void sequenced_arithmetic_entry(lead_a1::SharcMemory &memory,
@@ -638,7 +746,7 @@ void sequenced_arithmetic_entry(lead_a1::SharcMemory &memory,
   advance_devices(memory, cpu, serial, devices);
   sequenced_vector_receive(memory, cpu, fetch, serial, devices);
   sequenced_loop_interrupt(memory, cpu, fetch, serial, devices);
-  if (devices.deferred_memory) {
+  if (devices.profile != OriginalProfile::immediate) {
     sequenced_deferred_foreground(memory, cpu, fetch, serial, devices);
     return;
   }
@@ -903,7 +1011,7 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                            unsigned int interval,
                            const CellExpectations &expected,
                            Placement placement,
-                           bool deferred_memory) {
+                           OriginalProfile profile) {
   // This fixture owns fresh RAM and PMCTL: its writes cannot seed the full stream.
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
@@ -979,7 +1087,7 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                           .spi = spi,
                           .control = control,
                           .interval = interval,
-                          .deferred_memory = deferred_memory,
+                          .profile = profile,
                           .placement = placement});
   check_cells(memory, expected);
   std::cout << "  Sequenced final payload cells: " << expected.size() << " matched\n";
@@ -1089,10 +1197,10 @@ void check_frontier(const lead_a1::Sharc &cpu,
 void run_stream(std::span<const std::byte> stream,
                 Placement placement,
                 unsigned int interval,
-                bool deferred_memory) {
+                OriginalProfile profile) {
   const auto expected = inventory(stream, placement); // Read-only oracle, never writes guest RAM.
-  sequenced_clock_setup(stream, interval, expected.cells, placement, deferred_memory);
-  if (deferred_memory) {
+  sequenced_clock_setup(stream, interval, expected.cells, placement, profile);
+  if (profile != OriginalProfile::immediate) {
     return;
   } // The existing instruction-only aggregate remains a separate fixture.
   lead_a1::SharcMemory memory;
@@ -1166,14 +1274,22 @@ void run_stream(std::span<const std::byte> stream,
             << std::flush;
 }
 
+OriginalProfile original_profile(int argc, char **argv) {
+  if (argc == 2) { return OriginalProfile::immediate; }
+  if (argc == 3) {
+    const std::string option(argv[2]);
+    if (option == "--deferred-f2") { return OriginalProfile::deferred_f2; }
+    if (option == "--visa-instructions") { return OriginalProfile::visa_reference; }
+  }
+  throw std::runtime_error("Usage: original-sharc-test decoded-image-directory "
+                           "[--deferred-f2 | --visa-instructions]");
+}
+
 }
 
 int main(int argc, char **argv) {
   try {
-    if (argc < 2 || argc > 3 || (argc == 3 && std::string(argv[2]) != "--deferred-f2")) {
-      throw std::runtime_error(
-          "Usage: original-sharc-test decoded-image-directory [--deferred-f2]");
-    }
+    const auto profile = original_profile(argc, argv);
     const std::filesystem::path directory(argv[1]);
     for (unsigned int part = 0; part < placements.size(); ++part) {
       const auto image = read_image(directory / (std::to_string(part) + "-CODE.bin"));
@@ -1184,7 +1300,7 @@ int main(int argc, char **argv) {
         const auto stream = std::span(image).subspan(placement.offset, placement.bytes);
         for (const auto interval : {2U, 3U}) {
           std::cout << "Part " << part << " transport " << transport << ": " << std::flush;
-          run_stream(stream, placement, interval, argc == 3);
+          run_stream(stream, placement, interval, profile);
         }
       }
     }

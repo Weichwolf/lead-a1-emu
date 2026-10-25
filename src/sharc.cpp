@@ -4,9 +4,11 @@
 #include "lead_a1/memory.hpp"
 #include "lead_a1/sharc_control.hpp"
 #include "lead_a1/sharc_memory.hpp"
+#include "lead_a1/sharc_visa.hpp"
 #include "sharc_dag_internal.hpp"
 #include "sharc_immediate_indexed.hpp"
 #include "sharc_internal.hpp"
+#include "sharc_visa_internal.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -15,6 +17,7 @@
 #include <optional>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 
 namespace lead_a1 {
 namespace {
@@ -35,6 +38,13 @@ constexpr unsigned int pm_write_class = 19;
 constexpr unsigned int system_bit_class = 20;
 constexpr unsigned int cache_stack_class = 23;
 constexpr std::uint32_t all_bits = std::numeric_limits<std::uint32_t>::max();
+
+struct Execution {
+  std::optional<bool> branch_taken{std::nullopt};
+  const SharcDagAddress *dag{};
+  unsigned int units{1};
+  bool fetched{};
+};
 
 void validate(const SharcState &state) {
   detail::sharc_validate_registers(state);
@@ -83,20 +93,23 @@ bool taken(const SharcState &state, std::uint64_t opcode, std::optional<bool> ca
 }
 
 std::optional<std::uint32_t>
-direct_branch(SharcState &state, std::uint64_t opcode, std::optional<bool> captured) {
+direct_branch(SharcState &state, std::uint64_t opcode, const Execution &context) {
   constexpr auto allowed = opcode_byte | condition_field | delayed | call_flag | loop_abort |
                            clear_interrupt | detail::sharc_pc_mask;
   if ((opcode & ~allowed) != 0) { throw std::runtime_error("Reserved SHARC direct-branch fields"); }
   if ((opcode & (loop_abort | clear_interrupt)) != 0) {
     throw std::runtime_error("SHARC loop-abort/clear-interrupt branch not implemented");
   }
-  if (!taken(state, opcode, captured)) { return {}; }
+  if (!taken(state, opcode, context.branch_taken)) { return {}; }
   if (state.branch) {
     throw std::runtime_error("SHARC taken branch in delay slot not implemented");
   }
   const bool db = (opcode & delayed) != 0;
   if ((opcode & call_flag) != 0) {
-    detail::sharc_push_call(state, (state.pc + (db ? 3U : 1U)) & detail::sharc_pc_mask);
+    if (db && detail::sharc_visa_address(state.pc)) {
+      throw std::runtime_error("SHARC VISA delayed CALL needs captured slot lengths");
+    }
+    detail::sharc_push_call(state, (state.pc + (db ? 3U : context.units)) & detail::sharc_pc_mask);
   }
   auto target = static_cast<std::uint32_t>(opcode) & detail::sharc_pc_mask;
   constexpr unsigned int relative = 7;
@@ -167,11 +180,9 @@ std::optional<std::uint32_t> execute(SharcMemory &memory,
                                      SharcState &state,
                                      std::uint64_t opcode,
                                      const SharcControl *control,
-                                     std::optional<bool> branch_taken = std::nullopt,
-                                     const SharcDagAddress *dag = nullptr,
-                                     bool fetched = false) {
-  if (dag != nullptr) {
-    detail::sharc_execute_dag(memory, state, opcode, control, *dag);
+                                     const Execution &context = {}) {
+  if (context.dag != nullptr) {
+    detail::sharc_execute_dag(memory, state, opcode, control, *context.dag);
     return {};
   }
   if (const auto instruction = detail::sharc_immediate_indexed_instruction(opcode)) {
@@ -207,7 +218,7 @@ std::optional<std::uint32_t> execute(SharcMemory &memory,
     case 0: {
       constexpr std::uint64_t idle = 0x008000000000;
       if (opcode == idle) {
-        detail::sharc_begin_idle(state, fetched);
+        detail::sharc_begin_idle(state, context.fetched);
       } else if (opcode != 0) {
         throw std::runtime_error("SHARC emuidle/VISA/reserved instruction not implemented");
       }
@@ -216,11 +227,11 @@ std::optional<std::uint32_t> execute(SharcMemory &memory,
     case 1: detail::sharc_compute(state, opcode); return {};
     case 2: detail::sharc_shift(state, opcode, true); return {};
     case 6:
-    case 7: return direct_branch(state, opcode, branch_taken);
-    case 10: return return_branch(state, opcode, branch_taken);
-    case 11: return detail::sharc_return_interrupt(state, opcode, branch_taken);
+    case 7: return direct_branch(state, opcode, context);
+    case 10: return return_branch(state, opcode, context.branch_taken);
+    case 11: return detail::sharc_return_interrupt(state, opcode, context.branch_taken);
     case 12:
-    case 13: detail::sharc_begin_count_loop(state, opcode); return {};
+    case 13: detail::sharc_begin_count_loop(state, opcode, {.units = context.units}); return {};
     case 14: detail::sharc_begin_arithmetic_loop(state, opcode); return {};
     case 15: {
       constexpr std::uint64_t visa_form = 0x8000000000;
@@ -254,12 +265,13 @@ unsigned int execute_loop(SharcMemory &memory,
                           std::uint64_t opcode,
                           const SharcControl *control,
                           bool clocked,
-                          const SharcDagAddress *dag) {
+                          const SharcDagAddress *dag,
+                          unsigned int units) {
   if (!detail::sharc_loop_body_supported(opcode)) {
     throw std::runtime_error("SHARC count-loop body instruction/pipeline not implemented");
   }
-  static_cast<void>(execute(memory, state, opcode, control, std::nullopt, dag));
-  return detail::sharc_count_loop_step(state, opcode, clocked);
+  static_cast<void>(execute(memory, state, opcode, control, {.dag = dag, .units = units}));
+  return detail::sharc_count_loop_step(state, opcode, clocked, {.units = units});
 }
 
 void finish_control(const SharcState &previous, SharcState &next, bool clocked) {
@@ -283,7 +295,7 @@ void finish_control(const SharcState &previous, SharcState &next, bool clocked) 
   detail::sharc_stack_status(next);
 }
 
-void execution_guard(const SharcState &state) {
+void execution_guard(const SharcState &state, bool visa) {
   if (state.idle_pc) {
     throw std::runtime_error("SHARC IDLE core requires an owner event, no instruction retires");
   }
@@ -295,11 +307,41 @@ void execution_guard(const SharcState &state) {
     throw std::runtime_error("SHARC active/unknown loop sequencing not implemented");
   }
   detail::sharc_interrupt_guard(state);
-  constexpr std::uint32_t visa_start = 0x100000;
-  constexpr std::uint32_t visa_end = 0x200000;
-  if (state.pc >= visa_start && state.pc < visa_end) {
-    throw std::runtime_error("SHARC VISA execution not implemented");
+  if (detail::sharc_visa_address(state.pc) && !visa) {
+    throw std::runtime_error("SHARC VISA execution requires its captured IAB input");
   }
+}
+
+unsigned int execution_entry(const SharcState &state,
+                             std::optional<std::uint64_t> captured,
+                             const SharcVisaInstruction *visa) {
+  execution_guard(state, visa != nullptr);
+  if (state.idle_delay_word && captured != state.idle_delay_word) {
+    throw std::runtime_error("SHARC retained IDLE delay word required at resumed retirement");
+  }
+  if (visa == nullptr) { return 1; }
+  if (!captured) {
+    throw std::logic_error("VISA retirement requires its decoded captured operation");
+  }
+  detail::sharc_visa_execution_guard(state, *visa);
+  return visa->words;
+}
+
+std::string execution_error(const SharcState &state,
+                            std::optional<std::uint64_t> opcode,
+                            const SharcVisaInstruction *visa,
+                            const std::exception &error) {
+  std::ostringstream message;
+  message << (visa != nullptr ? "SHARC VISA" : "SHARC native48") << " pc=0x" << std::hex << state.pc
+          << " opcode=";
+  if (visa != nullptr) { message << "raw0x" << visa->opcode << " normalized="; }
+  if (opcode) {
+    message << "0x" << *opcode;
+  } else {
+    message << "unfetched";
+  }
+  message << ": " << error.what();
+  return message.str();
 }
 
 }
@@ -346,7 +388,8 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
                              bool preserve_cache,
                              std::optional<bool> branch_taken,
                              SharcLoopClock loop_clock,
-                             const SharcDagAddress *dag) {
+                             const SharcDagAddress *dag,
+                             const SharcVisaInstruction *visa) {
   auto opcode = captured;
   bool transaction{};
   bool control_transaction{};
@@ -354,10 +397,7 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     if (memory_.active()) {
       throw std::logic_error("SHARC core step during another memory transaction");
     }
-    execution_guard(state_);
-    if (state_.idle_delay_word && captured != state_.idle_delay_word) {
-      throw std::runtime_error("SHARC retained IDLE delay word required at resumed retirement");
-    }
+    const auto units = execution_entry(state_, captured, visa);
     memory_.set_pc(state_.pc);
     memory_.begin_instruction();
     transaction = true;
@@ -378,7 +418,7 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     unsigned int minimum_cycles = 1;
     if (state_.count_loop && state_.count_loop->body == state_.count_loop->end) {
       minimum_cycles = execute_loop(
-          memory_, next, *opcode, control_, loop_clock != SharcLoopClock::functional, dag);
+          memory_, next, *opcode, control_, loop_clock != SharcLoopClock::functional, dag, units);
     } else {
       if (detail::sharc_four_loop(next)) {
         minimum_cycles = detail::sharc_four_loop_prepare(next, *opcode);
@@ -387,9 +427,15 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
       } else {
         detail::sharc_long_loop_prepare(next, *opcode);
       }
-      const auto target =
-          execute(memory_, next, *opcode, control_, branch_taken, dag, captured.has_value());
-      next.pc = target.value_or((state_.pc + 1) & detail::sharc_pc_mask);
+      const auto target = execute(memory_,
+                                  next,
+                                  *opcode,
+                                  control_,
+                                  {.branch_taken = branch_taken,
+                                   .dag = dag,
+                                   .units = units,
+                                   .fetched = captured.has_value() && visa == nullptr});
+      next.pc = target.value_or((state_.pc + units) & detail::sharc_pc_mask);
     }
     // A bound fetch clock already accounted for the actual PM cache request.
     // The instruction-only helper must not erase that staged fetch knowledge.
@@ -405,23 +451,16 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
       control_transaction = false;
     }
     const SharcStep result{.pc = state_.pc,
-                           .opcode = *opcode,
+                           .opcode = visa != nullptr ? visa->opcode : *opcode,
                            .next_pc = next.pc,
-                           .minimum_core_cycles = minimum_cycles};
+                           .minimum_core_cycles = minimum_cycles,
+                           .address_units = units};
     state_ = next;
     return result;
   } catch (const std::exception &error) {
     if (transaction) { memory_.abort_instruction(); }
     if (control_transaction) { control_->abort_core_instruction(); }
-    std::ostringstream message;
-    message << "SHARC native48 pc=0x" << std::hex << state_.pc << " opcode=";
-    if (opcode) {
-      message << "0x" << *opcode;
-    } else {
-      message << "unfetched";
-    }
-    message << ": " << error.what();
-    throw std::runtime_error(message.str());
+    throw std::runtime_error(execution_error(state_, opcode, visa, error));
   }
 }
 

@@ -8,14 +8,17 @@ records provenance; optional original program data stays ignored.
 Sharc operates on SharcMemory word addresses. It currently implements NOP,
 Type8a absolute/relative JUMP/CALL, plain Type11a RTS, Type17a immediate moves
 to reviewed system registers, Type18a SET/CLR/TGL/TST/XOR and Type14a 32-bit IOP
-transfers for reviewed system/sequencer registers. Execution is native-48 only.
+transfers for reviewed system/sequencer registers. The ordinary step()/bound
+native transport retain native48 inputs; the explicit captured VISA CPU
+instruction-order API is qualified separately in sharc-visa-execution.txt.
 Primary/secondary data/DAG registers, SYSCTL width selection and compute-free
 SISD Type4a indexed NW32/40 RAM transfers are documented in sharc-data.txt.
 Compute-only PASS/AND/OR/XOR/NOT and direct Rx/Sx RAM transfers are documented in
 sharc-compute.txt. Fixed COMP/COMPU and relational conditions are described in
 sharc-compare.txt. Further arithmetic, transfers, loops, cache invalidation,
 P1I/RTI and ordinary IDLE have separate contracts below. General DAG modes,
-forced LW, VISA and the complete fetch/interrupt/loop pipeline remain pending.
+forced LW and the complete fetch/interrupt/loop pipeline remain pending.
+The VISA reference does not qualify the native/VISA five-stage connection.
 Unsupported forms fail with PC, fetched opcode and access context.
 
 State and control

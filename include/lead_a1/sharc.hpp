@@ -11,6 +11,8 @@ namespace lead_a1 {
 
 class SharcControl;
 class SharcFetch;
+class SharcVisaBuffer;
+struct SharcVisaInstruction;
 struct SharcDagAddress;
 
 struct SharcKnown32 {
@@ -158,6 +160,7 @@ struct SharcStep {
   std::uint32_t next_pc{};
   // Known minimum; not a complete pipeline/cache/IOP timing model.
   unsigned int minimum_core_cycles{1};
+  unsigned int address_units{1}; // Native words or VISA short words.
 };
 
 // Private retirement selection shared with the bound fetch transport.
@@ -206,6 +209,9 @@ public:
   // Retire the matching Execute word captured by the explicit fetch transport.
   // Failed instructions retain that word; no instruction-RAM reread occurs.
   [[nodiscard]] SharcStep step(SharcFetch &fetch);
+  // Instruction-order VISA reference using actual captured IAB data. This
+  // does not supply the native/VISA five-stage fetch/branch clock connection.
+  [[nodiscard]] SharcStep step(SharcVisaBuffer &buffer);
 
 private:
   friend class SharcFetch;
@@ -213,7 +219,8 @@ private:
                                       bool preserve_cache = false,
                                       std::optional<bool> branch_taken = std::nullopt,
                                       SharcLoopClock loop_clock = SharcLoopClock::functional,
-                                      const SharcDagAddress *dag = nullptr);
+                                      const SharcDagAddress *dag = nullptr,
+                                      const SharcVisaInstruction *visa = nullptr);
   SharcMemory &memory_;
   SharcState state_;
   SharcControl *control_;
