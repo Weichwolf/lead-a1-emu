@@ -62,12 +62,16 @@ std::optional<SharcFetchIopAccess> SharcFetch::peripheral_access(const Sharc &cp
   constexpr unsigned int data_registers = 16;
   constexpr unsigned int ustat1 = 0x70;
   constexpr unsigned int ustat2 = 0x71;
+  constexpr unsigned int ustat3 = 0x7e;
+  constexpr unsigned int ustat4 = 0x7f;
+  constexpr unsigned int complement_end = 0x60;
   const auto reg = (opcode >> register_shift) & register_mask;
-  const bool scalar = reg < data_registers || reg == ustat1 || reg == ustat2;
+  const bool scalar = reg < data_registers || reg == ustat1 || reg == ustat2 || reg == ustat3 ||
+                      reg == ustat4 || (type == direct_write && reg < complement_end);
   if (type > direct_write || (opcode & forced_long) != 0 || !scalar || state_.execute->dag ||
       state_.execute->pm_data != false) {
     throw std::runtime_error(
-        "SHARC IOP preview requires an unconditional DM/DREG/USTAT32 transfer");
+        "SHARC IOP preview requires an unconditional qualified scalar32 DM transfer");
   }
   context_guard(cpu.state_, state_);
   return SharcFetchIopAccess{.pc = cpu.state_.pc,

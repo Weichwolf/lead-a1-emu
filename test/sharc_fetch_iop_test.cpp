@@ -25,6 +25,7 @@ constexpr std::uint32_t second_value = 0x33334444;
 constexpr std::uint32_t third_value = 0x55556666;
 constexpr std::uint32_t sysctl = 0x30024;
 constexpr std::uint64_t full40 = 0xffffffffff;
+constexpr std::uint32_t all_source_bits = 0xffffffff;
 constexpr lead_a1::SharcIoMapping window{.first_word = address, .words = 2};
 using Kind = lead_a1::AccessKind;
 
@@ -315,7 +316,8 @@ void status_registers_and_posted_capture() {
 }
 
 void unsupported_preview_contexts() {
-  constexpr std::array<std::uint64_t, 2> opcodes{0x107200002478, 0x108000002478};
+  constexpr std::array<std::uint64_t, 4> opcodes{
+      0x107200002478, 0x108000002478, 0x102e00002478, 0x105000002478};
   for (const auto opcode : opcodes) {
     Fixture fixture;
     fixture.code({.offset = 0, .opcode = opcode});
@@ -324,7 +326,7 @@ void unsupported_preview_contexts() {
     const auto transport = fixture.fetch.state();
     const auto bus = fixture.bus.snapshot();
     rejected([&fixture] { static_cast<void>(fixture.fetch.peripheral_access(fixture.cpu)); },
-             "unconditional DM/DREG/USTAT32 transfer");
+             "unconditional qualified scalar32 DM transfer");
     rejected([&fixture] { static_cast<void>(fixture.fetch.peripheral_access(fixture.cpu)); },
              "pc=0xc0000 word-address=0x2478 operation=read");
     require(fixture.cpu.state() == core && fixture.fetch.state() == transport &&
@@ -458,10 +460,217 @@ void ownership_and_restore() {
           copy.target.current.reads == 1);
 }
 
+struct SourceChoice {
+  unsigned int reg;
+  unsigned int bank_bit;
+  bool alternate;
+  bool short_mode;
+  unsigned int write_cycles;
+  unsigned int read_cycles;
+};
+
+void set_source(lead_a1::SharcState &state,
+                SourceChoice choice,
+                std::uint32_t word,
+                std::uint32_t known = all_source_bits) {
+  const auto bank = choice.alternate ? 1U : 0U;
+  constexpr unsigned int dag_first = 0x10;
+  constexpr unsigned int complement = 0x50;
+  constexpr unsigned int user_status = 0x70;
+  if (choice.reg < complement) {
+    state.dag[bank][(choice.reg - dag_first) / 16][choice.reg & 15] = {.value = word,
+                                                                       .known = known};
+  } else if (choice.reg < user_status) {
+    constexpr std::uint64_t low_byte = 0xff;
+    state.data[bank + 2][choice.reg & 15] = {.value = std::uint64_t{word} << 8,
+                                             .known = (std::uint64_t{known} << 8) | low_byte};
+  } else {
+    state.system[choice.reg - user_status] = {.value = word, .known = known};
+    state.effective[choice.reg - user_status] = state.system[choice.reg - user_status];
+  }
+}
+
+lead_a1::SharcState source_initial(SourceChoice choice) {
+  auto state = initial(choice.short_mode ? visa : native);
+  constexpr std::uint32_t bank_selectors = 0x4f8;
+  for (auto &bank : state.dag) {
+    for (auto &kind : bank) {
+      for (auto &reg : kind) { reg = {.value = second_value, .known = all_source_bits}; }
+    }
+  }
+  for (auto &bank : state.data) {
+    for (auto &reg : bank) { reg = {.value = std::uint64_t{second_value} << 8, .known = full40}; }
+  }
+  constexpr unsigned int mode1 = 2;
+  for (auto *mode : {&state.system[mode1], &state.effective[mode1]}) {
+    mode->value &= ~bank_selectors;
+    mode->known |= bank_selectors;
+    if (choice.alternate) { mode->value |= 1U << choice.bank_bit; }
+  }
+  set_source(state, choice, first_value);
+  return state;
+}
+
+void check_source(const lead_a1::SharcState &state, SourceChoice choice) {
+  const auto bank = choice.alternate ? 1U : 0U;
+  constexpr unsigned int complement = 0x50;
+  constexpr unsigned int user_status = 0x70;
+  if (choice.reg < complement) {
+    const auto kind = (choice.reg - 16) / 16;
+    require(state.dag[bank][kind][choice.reg & 15] ==
+            (lead_a1::SharcKnown32{.value = third_value, .known = all_source_bits}));
+    if (kind == 3) {
+      require(state.dag[bank][0][choice.reg & 15] ==
+              (lead_a1::SharcKnown32{.value = third_value, .known = all_source_bits}));
+    }
+  } else if (choice.reg < user_status) {
+    require(state.data[bank + 2][choice.reg & 15] ==
+            (lead_a1::SharcKnown40{.value = std::uint64_t{third_value} << 8, .known = full40}));
+  } else {
+    require(state.system[choice.reg - user_status] ==
+            (lead_a1::SharcKnown32{.value = third_value, .known = all_source_bits}));
+  }
+}
+
+void one_source(SourceChoice choice) {
+  Fixture fixture(
+      choice.short_mode, {}, source_initial(choice), sequenced(choice.short_mode ? visa : native));
+  constexpr unsigned int ustat3 = 0x7e;
+  constexpr unsigned int ustat4 = 0x7f;
+  constexpr unsigned int user_status = 0x70;
+  constexpr std::uint64_t immediate = 0x0f0000000000;
+  const auto destination = (choice.reg & 1) != 0 ? ustat3 : ustat4;
+  fixture.code({.offset = 0, .opcode = move(Kind::write, choice.reg)});
+  fixture.code(
+      {.offset = 1, .opcode = immediate | (std::uint64_t{choice.reg} << 32) | third_value});
+  fixture.code({.offset = 2, .opcode = move(Kind::read, destination)});
+  fixture.next();
+  require(fixture.write(choice.write_cycles).pc == fixture.entry());
+  require(fixture.target.current.writes == 0);
+  fixture.next();
+  require(!fixture.fetch.peripheral_access(fixture.cpu));
+  require(fixture.cpu.step(fixture.fetch).pc == fixture.entry() + fixture.units());
+  fixture.bus.tick();
+  check_source(fixture.cpu.state(), choice);
+  const auto posted = fixture.bus.snapshot().writes[0];
+  require(posted && posted->value == first_value && fixture.target.current.writes == 0);
+  fixture.next();
+  require(fixture.read(choice.read_cycles).pc == fixture.entry() + (2 * fixture.units()));
+  require(fixture.cpu.state().system[destination - user_status] ==
+          (lead_a1::SharcKnown32{.value = first_value, .known = all_source_bits}));
+  require(fixture.target.current.writes == 1 && fixture.target.current.reads == 1 &&
+          fixture.target.current.words[0] == first_value && fixture.target.current.words[1] == 0);
+}
+
+void all_sources() {
+  constexpr unsigned int dag_first = 0x10;
+  constexpr unsigned int dag_end = 0x50;
+  constexpr unsigned int complement_end = 0x60;
+  constexpr unsigned int ustat3 = 0x7e;
+  constexpr unsigned int ustat4 = 0x7f;
+  // PGR A-4: DAG register quadrants select banks through these MODE1 bits.
+  constexpr std::array<unsigned int, 4> dag_bits{4, 3, 6, 5};
+  unsigned int cases{};
+  for (unsigned int reg = dag_first; reg <= ustat4; ++reg) {
+    if (reg >= complement_end && reg < ustat3) { continue; }
+    auto bit = (reg & 15) < 8 ? 10U : 7U;
+    if (reg < dag_end) { bit = dag_bits[(reg & 15) / 4]; }
+    for (const bool alternate : {false, true}) {
+      for (const bool short_mode : {false, true}) {
+        for (const unsigned int writes : {4U, 5U}) {
+          for (const unsigned int reads : {7U, 8U}) {
+            one_source({.reg = reg,
+                        .bank_bit = bit,
+                        .alternate = alternate,
+                        .short_mode = short_mode,
+                        .write_cycles = writes,
+                        .read_cycles = reads});
+            ++cases;
+          }
+        }
+      }
+    }
+  }
+  constexpr unsigned int expected_cases = 1312;
+  require(cases == expected_cases);
+}
+
+void failed_source(SourceChoice choice, bool unknown_bank) {
+  auto state = source_initial(choice);
+  constexpr unsigned int mode1 = 2;
+  const auto mask = 1U << choice.bank_bit;
+  if (unknown_bank) {
+    state.effective[mode1].value &= ~mask;
+    state.effective[mode1].known &= ~mask;
+  } else {
+    set_source(state, choice, 0, 0);
+  }
+  Fixture fixture(choice.short_mode, {}, state, sequenced(choice.short_mode ? visa : native));
+  fixture.code({.offset = 0, .opcode = move(Kind::write, choice.reg)});
+  fixture.next();
+  fixture.issue(choice.write_cycles);
+  const auto core = fixture.cpu.state();
+  const auto transport = fixture.fetch.state();
+  const auto bus = fixture.bus.snapshot();
+  const auto control = fixture.control.snapshot();
+  require(fixture.bus.ready());
+  rejected([&fixture] { static_cast<void>(fixture.cpu.step(fixture.fetch)); },
+           unknown_bank ? "Unknown SHARC register bank selection"
+                        : "Unknown SHARC register operand bits");
+  require(fixture.cpu.state() == core && fixture.fetch.state() == transport &&
+          fixture.bus.snapshot() == bus && fixture.control.snapshot() == control &&
+          !fixture.memory.active() && fixture.target.current.writes == 0 &&
+          fixture.target.current.reads == 0);
+  auto repaired = core;
+  if (unknown_bank) {
+    repaired.effective[mode1] = source_initial(choice).effective[mode1];
+  } else {
+    set_source(repaired, choice, first_value);
+  }
+  lead_a1::Sharc retry(fixture.memory, repaired, &fixture.control);
+  lead_a1::SharcFetch rebound(fixture.memory, transport);
+  require(retry.step(rebound).pc == fixture.entry());
+  const auto posted = fixture.bus.snapshot().writes[0];
+  require(posted && posted->value == first_value && fixture.bus.state().clocks == bus.clocks &&
+          !fixture.bus.state().request && fixture.target.current.writes == 0);
+  for (unsigned int clock = 0; clock < choice.write_cycles; ++clock) { fixture.bus.tick(); }
+  require(fixture.target.current.writes == 1 && fixture.target.current.words[0] == first_value &&
+          fixture.bus.state().write_count == 0 && fixture.target.current.reads == 0);
+}
+
+void unknown_sources_and_banks() {
+  constexpr std::array<unsigned int, 8> registers{0x10, 0x24, 0x38, 0x4e, 0x50, 0x5f, 0x7e, 0x7f};
+  constexpr std::array<unsigned int, 8> bits{4, 3, 6, 5, 10, 7, 0, 0};
+  unsigned int cases{};
+  for (unsigned int index = 0; index < registers.size(); ++index) {
+    for (const bool alternate : {false, true}) {
+      for (const bool short_mode : {false, true}) {
+        for (const unsigned int cycles : {4U, 5U}) {
+          for (const bool unknown_bank : {false, true}) {
+            if (unknown_bank && bits[index] == 0) { continue; }
+            failed_source({.reg = registers[index],
+                           .bank_bit = bits[index],
+                           .alternate = alternate,
+                           .short_mode = short_mode,
+                           .write_cycles = cycles,
+                           .read_cycles = 8},
+                          unknown_bank);
+            ++cases;
+          }
+        }
+      }
+    }
+  }
+  constexpr unsigned int expected_cases = 112;
+  require(cases == expected_cases);
+}
+
 }
 
 int main() {
   try {
+    all_sources();
+    unknown_sources_and_banks();
     isolated_read_and_retained_input();
     stores_and_atomic_reads();
     status_registers_and_posted_capture();

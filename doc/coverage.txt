@@ -88,8 +88,9 @@ ID  State    Evidence / remaining work
              backend and CPU transactions have separate rollback. Snapshot and
              half-PCLK effect APIs retain fractional progress. Exact physical
              phase, FIFO/buffer waits and general five-stage composition remain
-             open. The bound fetch path now previews actual DM/DREG/USTAT32
-             Execute accesses and holds their real PC/pipeline/IAB for an exact
+             open. The bound fetch path now previews actual DM/DREG/USTAT1..4
+             Execute accesses, plus all DAG/complementary store sources,
+             and holds their real PC/pipeline/IAB for an exact
              unready mapped bridge request. Supported delayed core/SYSCTL
              effects still mature. Read retirement shares its response clock;
              write acceptance retains its own clock. Due delivery failures
@@ -751,6 +752,14 @@ ID  State    Evidence / remaining work
              failures/retry, cached response through a later CPU bank fault,
              independent saved-owner continuation and unsupported preview modes
              retain explicit state expectations (sharc-iop-bridge.txt).
+             Another1312 directed native/VISA cases check all DAG/complementary
+             store sources and USTAT3/4, both banks and all4/5-write7/8-read
+             bounds. Actual later full32 immediate source changes leave the
+             posted value intact; target and USTAT3/4 readback match independent
+             literals.112 unknown-source/bank cases preserve CPU/fetch/control/
+             request/target on failure, then rebind repaired owned inputs and
+             deliver exactly once. DAG/complementary load destinations remain
+             guarded pending independent pipeline composition checks.
              original_sharc_clocked_iop separately continues the actual common
              RTS through the second CALL and95 further original instructions.
              PMCTL1 and all routing/PP_CTL traffic share one posted bridge;

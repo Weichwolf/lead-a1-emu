@@ -49,7 +49,12 @@ across snapshots and mixed full/half-period calls.
 
 The bound fetch transport previews the actual Execute word without reading
 peripheral data or rereading instruction RAM. The qualified subset is an
-unconditional32-bit DM transfer through DREG0..15 or USTAT1/2. A core hold
+unconditional32-bit DM transfer through DREG0..15 or USTAT1..4. Stores also
+accept all I/M/L/B registers and complementary data registers, with their
+effective MODE1 bank selection. These sources use the ordinary CPU operand
+read and transaction; preview neither reads nor substitutes their values.
+DAG/complementary load destinations remain guarded pending their pipeline
+composition checks. A core hold
 requires the exact pending PC/address/operation and the actual mapped bridge
 or matching port. It retains every pipeline/IAB field and guest PC while
 maturing supported delayed CPU/SYSCTL effects. No guest NOP is synthesized.
@@ -79,6 +84,14 @@ real CPU token rollback after target capture, late target read/write faults,
 no-clock delivery retry, queue/response restores and malformed ownership,
 requests and snapshots. A real DAI read/mask/OR/store/read composition advances
 effect intervals before deliveries, including a half-period arrival.
+An additional1312 directed native/VISA cases cover every DAG/complementary
+source and USTAT3/4, both effective banks and4/5-write7/8-read bounds. The
+next actual instruction replaces the source before delivery; the target and
+USTAT3/4 readback must retain the original literal value. Full32-bit immediate
+replacements avoid reliance on the unresolved Type17b sign-extension rule.
+Another112 cases reject unknown source bits or bank selection without changing
+CPU/fetch/control/request/target state, then repair the owned fixture and
+rebind the actual CPU/fetch to post and deliver exactly one original value.
 
 The optional original reference uses explicit5/8-clock inputs for ten actual
 PBEN2/PBEN3/CLK2/FS2 groups and PP_CTL setup (64 instructions) after its
