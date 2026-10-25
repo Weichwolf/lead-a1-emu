@@ -1,0 +1,82 @@
+SPORT DMA and word-buffer reference
+
+SharcSportDma models one A/B DMA channel with four relative32-bit parameter
+words II/IM/count/CP. The owner supplies the SPORT number0..7 for the correct
+PMCTL1 pair gate. HWR3-4..15/26..35/45..50 and11-42..54 establish parameters,
+word buffers, standard/chained transfers, chain insertion and completion.
+It is separate from SPCTL/SPMCTL, serial framing and physical board wiring.
+No original SPORT access has been enabled by a successful register stub.
+
+II has28 bits, IM is signed16, count is16. Writing count0 requests65536
+actual words on start; completed count0 stays idle until a real start event.
+Writing1 while active permits one more word before completion. SPORT index
+addresses use the explicit full-address reference from HWR3-4/28. A2012 ADI
+reply describes internal offsets more generally; low-index interpretation
+remains disputed and rejects instead of guessing an internal/external alias.
+Normal internal full-address transfers and signed postmodification are checked;
+external RAM/28-bit wrap across its full space remain unqualified.
+
+CPSPx encodes28 address bits plus PCI in bit19 (29 bits total, Tables3-10/12;
+the summary table3-5 instead labels28). The upper address field occupies28..20.
+Internal TCB pointers use low19 plus0x80000. A zero address terminates a chain
+independently of PCI. HWR3-34/35 and its example identify CP as the highest
+TCB address, holding II. Four actual reads descend: II,IM,count,next CP.
+Tables3-15/28 use CP as the TCB base label, so their ascending offsets must
+not be applied to the live chain register. ADI employee Mitesh's May2/3,2012
+replies independently corroborate descending order and the29-bit chain width:
+https://ez.analog.com/dsp/sharc-processors/f/q-a/62312/questions-on-details-of-dma-on-the-adsp-21489
+No posted source or example implementation is reused. Primary identities and
+provenance are in reference/sharc.json; no simulator/silicon result is implied.
+
+Requests consume exact IO0 grants from the bound SharcMemoryBus. A failed RAM
+operation retains DMA, grant, cursor, count and buffer ownership for same-clock
+repair/retry. No status read supplies memory bandwidth. TCB captures retain
+individually granted words; parameters publish only after all four reads AND
+26 actual elapsed CCLK (HWR3-50). This is an explicit internal-load reference,
+not a qualified per-word bus schedule. The owner must honor locks_iop_buses(),
+channel priority and real grant timing. Control changes overlapping outstanding
+requests still need board arbitration; service rejects a changed request.
+External TCB accesses reject through
+the unavailable external-memory path. Mid-load parameter observation remains
+guarded; atomic publication does not assert hardware partial-read visibility.
+
+RX has one complete-word buffer; TX has a distinct buffer and shifter owner.
+Taking a TX word and finishing its last bit are separate owner events. Standard
+completion and PCI intermediate-block interrupts follow actual count expiry;
+ETDINTEN-style terminal TX completion waits for the tagged final shifter word.
+RX completion is independent of that option. HWR11-54's last-block prose is
+followed; its parenthetical nonzero-CP wording conflicts with chain termination
+and does not establish an alternative last-block definition. Serial bit timing,
+packing/companding, buffer-error behavior and original interrupt routing need
+the future SPORT serial/control owner. Acknowledge only consumes an event.
+
+Parameters start unknown per HWR3-26; explicit family-reference inputs may
+supply reset values. Transactions isolate tentative configuration and parameter
+writes. External buffer/clock/memory/ack events reject active instructions.
+Snapshots retain captured TCB words, remaining delay, modes, buffers and IRQs;
+malformed widths, phases and ownership reject. Active index/modifier changes,
+direction changes with owned data and initial chain insertion stay guarded.
+Normal operations use fixed state without allocation.
+
+Owned tests cover a literal50-case count/stride/direction matrix,65536-word
+zero count, real early-count abort, TX buffer/shifter limits, internal versus
+wire completion, self chains/PCI, insertion/pause, two chained TX blocks,
+14 separate captured-word/delay restores and four failed partial-TCB grant
+restores with separate RAM/controllers. Width/address guards, eight port gates,
+transactions and malformed state are checked. Fetched native4/5-write7/8-read
+cases program/read actual parameter words after CPU source changes, then prove
+late target rollback and same-clock retry without arming a fictitious DMA.
+
+Private reconstruction independently corroborates the next twelve secondary-
+control groups: transport0 c1a/c1b, transport1 additionally41a/41b, in both
+parts. Each uses fresh USTAT1 reads/writes and Type18a SET mask4 with3/3/3
+short-word widths. Own pinned field scans agree. This is static code evidence,
+not executed SPORT behavior, reset readback or a Type17b extension proof.
+
+The original firmware frontier remains278/302 instructions at SPCTLN0/c1a.
+Next connect real SPORT control/serial clocks, DMA arbitration and delayed
+status. Full boot, firmware audio, host MIDI/USB/UI/storage/recovery and physical
+comparisons remain mandatory and incomplete.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_sport_dma_(channels|posted_parameters)|sharc_ram_bus_arbitration|sharc_spi_word_grants|native_build)$' --output-on-failure

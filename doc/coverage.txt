@@ -153,6 +153,14 @@ ID  State    Evidence / remaining work
              late-failure rollback. SYSCTL is the only qualified Type1 IOP
              target; other domains stay guarded (sharc-dual-moves.txt).
              Complete cache/pipeline integration and SIMD data moves remain open.
+             SPORT DMA/word buffers have an independent native component with
+             exact bound IO0 grants, signed16 postmodification, zero-count65536,
+             standard/chained/insertion modes, separate TX buffer/shifter and
+             terminal-shift versus internal completion. Four descending TCB reads
+             and26 elapsed CCLK are both required. IOP lock/priority, precise
+             per-word phases, delayed status and original SPORT control/serial
+             binding remain open; no live firmware frontier changes follow
+             (sharc-sport-dma.txt).
              Explicit unlooped native P1I recognition sets the bit25 interrupt
              frame/IMASKP, holds its own latch clear and preserves other latches.
              Immediate conditional RTI preserves ISR results without borrowing
@@ -604,7 +612,11 @@ ID  State    Evidence / remaining work
              and the real unbound SPCTLN0 read atc1a; no full cold boot or
              manual-function acceptance follows (sharc-iop-bridge.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
-5   pending  No firmware audio, audio serial/DMA model, host audio or timing evidence.
+5   partial  Native SPORT word-buffer/DMA reference now transfers owned32-bit
+             words through actual RAM grants, with chaining and distinct internal/
+             final-shift completion. It is not bound to original SPORT control or
+             serial timing. No firmware audio, host audio or physical timing
+             evidence (sharc-sport-dma.txt).
 6   partial  Native searchable GTK table for slots A-D, documented CC references,
              strict snapshot parser, expiry, atomic publisher and directory
              replacement monitoring. Synthetic GUI integration only. Firmware
@@ -859,6 +871,16 @@ ID  State    Evidence / remaining work
              mature; final data/pin/enable/frame/clock and original SPI state
              retain literal expectations. SPORT/audio/source/board coupling,
              full boot and physical timing remain open.
+             SPORT DMA tests add50 independently listed count/stride/direction
+             cases with real RAM,65536 zero-count writes, live count abort,
+             buffer/shifter boundaries and separate completion events. Self
+             chains, PCI and two-block external TX completion, insertion/pause,
+             14 independently rebound captured-word/delay continuations and
+             four failed partial-TCB grants restored against separate RAM/buses
+             retain concrete field/data/IRQ expectations. Native fetched4/5-
+             write7/8-read parameter access checks captured source values and
+             actual late backend fault/no-time retry. Low-index addressing and
+             external RAM are guarded; no serial clock/audio/source is invented.
              No clocked VISA boot or complete application is
              qualified.
              original_sharc_images freshly verifies bundle/sections/kernels and
@@ -884,6 +906,11 @@ ID  State    Evidence / remaining work
              Private static clock-prefix/initializer identities independently
              corroborate the captured VISA reference's boundaries and six waits
              (sharc-visa-execution.txt); they do not establish hardware timing.
+             Private post-SPI field/width checks independently corroborate all
+             twelve requested SRU groups. Separate SPORT checks corroborate
+             twelve next USTAT1/Type18a SET4/read-write groups at c1a/c1b and
+             transport1's41a/41b. Static agreement establishes no readback,
+             serial timing, startup or Type17b upper16-extension qualification.
 10  pending  No hardware comparison, timing measurement or flashing performed.
 
 Quality and UI checks validate only the named bootstrap behavior. Unknown values

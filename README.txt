@@ -26,6 +26,9 @@ processor/slot wiring, MHz or playable audio. Other profiles retain independent
 execution boundaries. See doc/sharc-iop-bridge.txt, doc/sharc-dai-data.txt and
 doc/dsp-roles.txt. Compact Type17b sign extension remains an explicitly
 unproven model assumption; vendor-simulator/hardware qualification is pending.
+A separate SPORT DMA/word-buffer component has owned RAM/chain/completion and
+CPU parameter-access checks. Original SPORT control/serial binding is pending
+(doc/sharc-sport-dma.txt); it does not change the firmware boundary above.
 
 Build and checks (Linux, regular user)
 Requires LLVM 19 (clang++, clang-tidy, clang-format, sanitizer runtimes),

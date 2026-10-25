@@ -19,7 +19,7 @@
       "local_copy_bytes": 18156850,
       "local_copy_sha256": "a9534d75e8946af83d5c9e250bb7e212224786b56977d6fec90d88e178f034dc",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified; no source reused.",
-      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals; A-4 reserved readback, A-8 PMCTL1 two-PCLK effect, A-11/13 shutdown/accelerator fields, 23-11 clocks enabled by default;12-8/16 PDAP clock/hold,masking,packing/core FIFO;12-20 full32-bit PDAP payload vs SIP tags;12-23/28 overflow/threshold/enable readiness;A-174/182 control/W1S/status fields,B-17 reset"
+      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals; A-4 reserved readback, A-8 PMCTL1 two-PCLK effect, A-11/13 shutdown/accelerator fields, 23-11 clocks enabled by default;12-8/16 PDAP clock/hold,masking,packing/core FIFO;12-20 full32-bit PDAP payload vs SIP tags;12-23/28 overflow/threshold/enable readiness;A-174/182 control/W1S/status fields,B-17 reset;3-4/15 SPORT index28/modifier16/count16/encodedCP29,3-26/35 unknown parameters/standard start/count0/chaining/index-address descending TCB,3-45/50 completion/PCI/26CCLK internalTCB,11-42/54 buffer+shifter/core-DMA/completion/insertion;11-58 second-SCLK control effects/three-SCLK readiness/four-SCLK internalFS remain unimplemented"
     },
     {
       "author": "Analog Devices",
@@ -79,6 +79,13 @@
       "official_url": "https://www.analog.com/media/en/dsp-documentation/processor-manuals/SC58x-2158x-prm.pdf",
       "provenance": "Official PDF independently consulted online; local byte identity not established. Compatible legacy five-stage Type17b operand definition only, not SHARC+ instruction/pipeline/board assumptions; no implementation reused.",
       "sections": "16-17/18 explicitly lists Type17b for five-stage cores;26-1 imm16visa range -0x8000..0x7fff. PGRrev2.4 remains the encoding/operation reference."
+    },
+    {
+      "author": "Mitesh, Analog Devices employee (EngineerZone replies)",
+      "title": "Questions on details of DMA on the ADSP 21489, replies 2 and 3 May 2012",
+      "official_url": "https://ez.analog.com/dsp/sharc-processors/f/q-a/62312/questions-on-details-of-dma-on-the-adsp-21489",
+      "provenance": "Manufacturer-hosted primary employee explanation, consulted online; no posted source/example implementation reused or local-byte identity claimed. No physical Nord timing/part identification.",
+      "sections": "Explicit CP,CP-1,CP-2,CP-3 load order II/IM/count/CP;28 external address bits plus PCI require29-bit CP. Generic internal-offset discussion conflicts with HWR3-4/28 SPORT index exception: low-index interpretation stays guarded, not silently resolved."
     }
   ],
   "spi_slave_reference": {
