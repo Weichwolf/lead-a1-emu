@@ -369,7 +369,7 @@ struct SerialInput {
   }
 };
 
-enum class OriginalProfile : std::uint8_t { immediate, deferred_f2, visa_reference };
+enum class OriginalProfile : std::uint8_t { immediate, deferred_f2, visa_reference, clocked_iop };
 
 void map_original_power(lead_a1::SharcMemory &memory,
                         lead_a1::SharcPower &power,
@@ -1008,6 +1008,141 @@ void original_visa_power_reference(lead_a1::SharcMemory &memory,
                "delayed PMCTL1 outputs and eight modifiers\n";
 }
 
+// A new explicit local CCLK/PCLK epoch after the actual common-call RTS.
+// Earlier native/core-IOP and PMCTL timing remains a separately bounded input.
+void original_application_clock(lead_a1::SharcMemory &memory,
+                                lead_a1::Sharc &cpu,
+                                SerialInput &serial,
+                                HeaderDevices devices) {
+  require(devices.bridge != nullptr && devices.power != nullptr && devices.dai != nullptr &&
+          devices.clock_routes != nullptr && devices.frame_routes != nullptr &&
+          devices.pdap != nullptr);
+  advance_clocked_visa_devices(memory, cpu, serial, devices);
+  devices.power->advance_half_pclk(1);
+  devices.dai->advance_half_pclk(1);
+  devices.clock_routes->advance_half_pclk(1);
+  devices.frame_routes->advance_half_pclk(1);
+  devices.pdap->advance_cclk(1);
+  devices.bridge->tick(); // Deliver new writes after the elapsed device interval.
+}
+
+void original_application_prepare(lead_a1::SharcMemory &memory,
+                                  lead_a1::Sharc &cpu,
+                                  lead_a1::SharcFetch &fetch,
+                                  SerialInput &serial,
+                                  HeaderDevices devices) {
+  constexpr unsigned int limit = 16;
+  for (unsigned int clock = 0; clock < limit; ++clock) {
+    const auto bus = fetch.address_pm_request(cpu) ? lead_a1::SharcFetchBus::pm_data
+                                                   : lead_a1::SharcFetchBus::available;
+    const auto event = fetch.advance_sequenced(cpu, bus);
+    require(!event.compute_stall && !event.control_stall && !event.dag_stall && !event.loop_stall);
+    if (fetch.state().execute) { return; }
+    original_application_clock(memory, cpu, serial, devices);
+  }
+  throw std::runtime_error("Missing original application Execute");
+}
+
+lead_a1::SharcStep original_application_retire(lead_a1::SharcMemory &memory,
+                                               lead_a1::Sharc &cpu,
+                                               lead_a1::SharcFetch &fetch,
+                                               SerialInput &serial,
+                                               HeaderDevices devices) {
+  require(devices.bridge != nullptr);
+  const auto access = fetch.peripheral_access(cpu);
+  const bool read = access && access->operation == lead_a1::AccessKind::read;
+  if (access) {
+    require(devices.bridge->bound_to(memory, access->address));
+    devices.bridge->issue({.pc = access->pc,
+                           .address = access->address,
+                           .operation = access->operation,
+                           .delivery_cycles = read ? 8U : 5U});
+    const auto held = fetch.state();
+    const auto pc = cpu.state().pc;
+    while (!devices.bridge->ready()) {
+      if (!read) { fetch.wait_iop(cpu, *devices.bridge); }
+      original_application_clock(memory, cpu, serial, devices);
+      if (read && !devices.bridge->ready()) { fetch.wait_iop(cpu, *devices.bridge); }
+      require(fetch.state() == held && cpu.state().pc == pc);
+    }
+  }
+  const auto step = cpu.step(fetch);
+  require(step.minimum_core_cycles == 1);
+  if (!read) { original_application_clock(memory, cpu, serial, devices); }
+  return step;
+}
+
+void original_application_fault(lead_a1::SharcMemory &memory,
+                                lead_a1::Sharc &cpu,
+                                lead_a1::SharcFetch &fetch,
+                                SerialInput &serial,
+                                HeaderDevices devices) {
+  require(devices.bridge != nullptr && devices.dai != nullptr);
+  original_application_prepare(memory, cpu, fetch, serial, devices);
+  const auto core = cpu.state();
+  const auto transport = fetch.state();
+  const auto control = devices.control.snapshot();
+  const auto spi = devices.spi.state();
+  const auto access = fetch.peripheral_access(cpu);
+  constexpr unsigned int prefix_words = 181;
+  constexpr std::uint32_t sru2_pin0 = 0x1c10;
+  require(access && access->pc == devices.placement.second_call + prefix_words &&
+          access->address == sru2_pin0 && access->operation == lead_a1::AccessKind::read);
+  try {
+    static_cast<void>(original_application_retire(memory, cpu, fetch, serial, devices));
+  } catch (const std::exception &error) {
+    const std::string message(error.what());
+    if (message.find("word-address=0x1c10 operation=read") == std::string::npos ||
+        message.find("Unmapped SHARC IOP register") == std::string::npos) {
+      throw std::runtime_error("Unexpected clocked original IOP frontier: " + message);
+    }
+    require(cpu.state() == core && fetch.state() == transport &&
+            devices.control.snapshot() == control && devices.spi.state() == spi &&
+            !memory.active());
+    constexpr std::array<std::uint32_t, 4> routes{0x0e2482ca, 0x1348d30f, 0x000005d6, 0};
+    const auto dai = devices.dai->snapshot();
+    require(dai.routes == routes);
+    for (const auto &pending : dai.pending) { require(!pending); }
+    const auto bus = devices.bridge->snapshot();
+    // 82 retired + one faulting access + six refill clocks + twelve seven-clock
+    // read extensions + eleven four-clock drains of preceding posted stores.
+    constexpr unsigned int expected_clocks = 82 + 1 + 6 + (12 * 7) + (11 * 4);
+    require(bus.clocks == expected_clocks && bus.write_count == 0 && bus.read &&
+            !bus.read->response && bus.request && bus.request->pc == core.pc &&
+            !devices.bridge->waiting() && !devices.bridge->ready());
+    check_original_power_outputs(cpu, devices);
+    check_original_timing_routes(devices);
+    check_original_pdap(devices);
+    std::cout << "  Clocked original application:82 further instructions; posted PMCTL1, ten "
+                 "routing groups/PP_CTL; actual SRU2_PIN0 read fault after "
+              << bus.clocks << " explicit-phase CCLK; real Execute/IAB/PC retained\n";
+    return;
+  }
+  throw std::runtime_error("Missing clocked original SRU2_PIN0 read fault");
+}
+
+void original_clocked_application(lead_a1::SharcMemory &memory,
+                                  lead_a1::Sharc &cpu,
+                                  lead_a1::SharcFetch &fetch,
+                                  SerialInput &serial,
+                                  HeaderDevices devices) {
+  require(devices.bridge != nullptr && devices.bridge->snapshot() == lead_a1::SharcIopState{});
+  constexpr unsigned int power_instructions = 18;
+  constexpr unsigned int instructions = 82;
+  for (unsigned int index = 0; index < instructions; ++index) {
+    original_application_prepare(memory, cpu, fetch, serial, devices);
+    const auto step = original_application_retire(memory, cpu, fetch, serial, devices);
+    if (index < power_instructions) {
+      require(step.pc == original_power_pc(devices.placement, index) &&
+              step.address_units == (index < 6 ? 3U : 2U));
+    }
+    if (index + 1 == power_instructions) { check_original_power_outputs(cpu, devices); }
+  }
+  constexpr unsigned int prefix_words = 181;
+  require(cpu.state().pc == devices.placement.second_call + prefix_words);
+  original_application_fault(memory, cpu, fetch, serial, devices);
+}
+
 lead_a1::SharcState original_visa_instruction_reference(lead_a1::SharcMemory &memory,
                                                         const lead_a1::Sharc &checkpoint,
                                                         const lead_a1::SharcFetch &fetch,
@@ -1146,6 +1281,9 @@ void sequenced_deferred_foreground(lead_a1::SharcMemory &memory,
   const lead_a1::SharcFetch checkpoint_fetch(memory, fetch.state());
   check_original_visa_boundary(memory, cpu, fetch, serial, devices);
   check_original_clocked_visa_common(memory, cpu, fetch, serial, devices);
+  if (devices.profile == OriginalProfile::clocked_iop) {
+    original_clocked_application(memory, cpu, fetch, serial, devices);
+  }
   if (devices.profile == OriginalProfile::visa_reference) {
     const auto clocked = cpu.state();
     const auto common =
@@ -1442,9 +1580,12 @@ struct OriginalRouting {
   std::optional<lead_a1::SharcIopBridge> bridge;
   std::optional<lead_a1::SharcIopPort> sru;
   std::optional<lead_a1::SharcIopPort> dpi;
+  std::optional<lead_a1::SharcIopPort> power_port;
 
   lead_a1::SharcIopBridge *map(lead_a1::SharcMemory &memory, OriginalProfile profile) {
-    if (profile != OriginalProfile::visa_reference) { return nullptr; }
+    if (profile != OriginalProfile::visa_reference && profile != OriginalProfile::clocked_iop) {
+      return nullptr;
+    }
     constexpr std::uint32_t first_pben = 0x2478;
     constexpr std::uint32_t first_clock = 0x2430;
     constexpr std::uint32_t first_frame = 0x2450;
@@ -1460,6 +1601,11 @@ struct OriginalRouting {
     auto &bound = bridge.emplace(memory, peripheral, window);
     memory.map_io(sru_window, sru.emplace(bound, sru_window));
     memory.map_io(dpi_window, dpi.emplace(bound, dpi_window));
+    if (profile == OriginalProfile::clocked_iop) {
+      constexpr lead_a1::SharcIoMapping power_window{.first_word = 0x2001, .words = 1};
+      peripheral.map_io(power_window, power);
+      memory.map_io(power_window, power_port.emplace(bound, power_window));
+    }
     return &bound;
   }
 };
@@ -1746,9 +1892,10 @@ OriginalProfile original_profile(int argc, char **argv) {
     const std::string option(argv[2]);
     if (option == "--deferred-f2") { return OriginalProfile::deferred_f2; }
     if (option == "--visa-instructions") { return OriginalProfile::visa_reference; }
+    if (option == "--clocked-iop") { return OriginalProfile::clocked_iop; }
   }
   throw std::runtime_error("Usage: original-sharc-test decoded-image-directory "
-                           "[--deferred-f2 | --visa-instructions]");
+                           "[--deferred-f2 | --visa-instructions | --clocked-iop]");
 }
 
 }

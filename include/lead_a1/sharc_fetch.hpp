@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include "lead_a1/memory.hpp"
 #include "lead_a1/sharc.hpp"
 #include "lead_a1/sharc_dag.hpp"
 #include "lead_a1/sharc_memory.hpp"
@@ -10,6 +11,15 @@
 #include <optional>
 
 namespace lead_a1 {
+
+class SharcIopBridge;
+
+struct SharcFetchIopAccess {
+  std::uint32_t pc{};
+  std::uint32_t address{};
+  AccessKind operation{AccessKind::read};
+  bool operator==(const SharcFetchIopAccess &) const = default;
+};
 
 struct SharcFetchBranch {
   bool taken{};
@@ -145,6 +155,15 @@ public:
   explicit SharcFetch(SharcMemory &memory, SharcFetchState initial = {});
 
   [[nodiscard]] const SharcFetchState &state() const { return state_; }
+
+  // Read-only peripheral DM/DREG/USTAT access in the actual Execute latch. No
+  // peripheral data is read here; the board supplies its latency/clock phase.
+  [[nodiscard]] std::optional<SharcFetchIopAccess> peripheral_access(const Sharc &cpu) const;
+  // One owner-granted core hold for the exact unready bound bridge request.
+  // Retains every transport latch/PC and advances supported delayed effects.
+  // The owner separately advances peripheral time. Read retirement shares
+  // its final response clock; a spaced write still needs its acceptance clock.
+  void wait_iop(Sharc &cpu, const SharcIopBridge &bridge);
 
   // Read-only eligible Decode-to-Address PM request, before the owner supplies
   // its bus event. Qualified interlocks report no new request; this grants no

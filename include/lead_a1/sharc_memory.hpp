@@ -72,6 +72,8 @@ public:
   void abort_instruction() noexcept;
 
 private:
+  friend class SharcIopBridge;
+
   struct Region {
     SharcRegion mapping;
     std::vector<SharcCell> cells;

@@ -84,8 +84,15 @@ ID  State    Evidence / remaining work
              Failed delivery retains the elapsed clock and original PC/access;
              backend and CPU transactions have separate rollback. Snapshot and
              half-PCLK effect APIs retain fractional progress. Exact physical
-             phase, FIFO/buffer waits and full five-stage composition remain
-             open (sharc-iop-bridge.txt). Disjoint address views now share one
+             phase, FIFO/buffer waits and general five-stage composition remain
+             open. The bound fetch path now previews actual DM/DREG/USTAT32
+             Execute accesses and holds their real PC/pipeline/IAB for an exact
+             unready mapped bridge request. Supported delayed core/SYSCTL
+             effects still mature. Read retirement shares its response clock;
+             write acceptance retains its own clock. Due delivery failures
+             require no-time retry, not another hold. Mode/branch/cache/loop/IRQ
+             compositions and independent prefetch/DMA arbitration during holds
+             remain gaps (sharc-iop-bridge.txt). Disjoint address views share one
              bridge queue/clock/response across DAI and DPI; no second timing
              domain or fabricated data is introduced. A separate DAI clock/frame
              router models six CLK and five FS registers,35/25 destinations,
@@ -713,7 +720,24 @@ ID  State    Evidence / remaining work
              PP_CTL setups establish800ff000 while global IDP remains disabled;
              FIFO/partial/IRQs/input knowledge are not fabricated. The next
              failure follows193 supplied bridge clocks (sharc-pdap.txt).
-             No clocked VISA boot or complete application is qualified.
+             Fetched IOP tests add native/VISA read latencies, continuous posted
+             stores, literal write/read timing, retained instruction bytes after
+             RAM replacement, actual USTAT sources/destinations and later source
+             changes before delivery. Delayed IMASK/SYSCTL effects, due read
+             failures/retry, cached response through a later CPU bank fault,
+             independent saved-owner continuation and unsupported preview modes
+             retain explicit state expectations (sharc-iop-bridge.txt).
+             original_sharc_clocked_iop separately continues the actual common
+             RTS through the second CALL and82 further original instructions.
+             PMCTL1 and all routing/PP_CTL traffic share one posted bridge;
+             effects advance before new deliveries. All8 placements/cadences
+             reach the actual SRU2_PIN0 read at1c10 after217 local-epoch CCLK
+             under explicit5/8 timing inputs. The failed due read retains the
+             real CPU/fetch/IAB/SYSCTL/SPI; prior stores have drained. No
+             functional fork seeds this fixture. Earlier native/core-IOP/PMCTL
+             timing, independent prefetch/DMA holds and physical phase remain
+             separate gaps. No clocked VISA boot or complete application is
+             qualified.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.
              The separate original_images ARM integration aggregate is retained.

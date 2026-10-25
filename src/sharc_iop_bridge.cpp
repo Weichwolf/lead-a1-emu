@@ -211,6 +211,25 @@ bool SharcIopBridge::ready() const {
   return lead_a1::ready(current_);
 }
 
+bool SharcIopBridge::waiting() const {
+  return current_.request && !due(current_) && !lead_a1::ready(current_);
+}
+
+bool SharcIopBridge::bound_to(const SharcMemory &core, std::uint32_t address) const {
+  if (&core != &core_) { return false; }
+  const auto found = std::ranges::find_if(core_.io_, [address](const auto &region) {
+    return address >= region.first_word && address - region.first_word < region.words;
+  });
+  if (found == core_.io_.end()) { return false; }
+  const auto *region = &*found;
+  if (region->device == this) {
+    return region->first_word == window_.first_word && region->words == window_.words;
+  }
+  const auto *port = dynamic_cast<const SharcIopPort *>(region->device);
+  return port != nullptr && &port->bridge_ == this &&
+         region->first_word == port->window_.first_word && region->words == port->window_.words;
+}
+
 void SharcIopBridge::tick() {
   idle();
   if (due(current_)) { throw std::runtime_error("SHARC IOP delivery retry required before clock"); }

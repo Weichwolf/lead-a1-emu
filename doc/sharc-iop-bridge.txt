@@ -47,9 +47,22 @@ on that edge must not age during the interval preceding its arrival. The
 half-period APIs retain fractional progress per pending write, including
 across snapshots and mixed full/half-period calls.
 
-Open: exact physical phase selection for4/5 and7/8, full five-stage native/VISA
-scheduling, conditional/aborted IOP timing, buffer/FIFO hangs and BHD, port
-arbitration, complete SRU/peripheral coupling and physical board clocks.
+The bound fetch transport previews the actual Execute word without reading
+peripheral data or rereading instruction RAM. The qualified subset is an
+unconditional32-bit DM transfer through DREG0..15 or USTAT1/2. A core hold
+requires the exact pending PC/address/operation and the actual mapped bridge
+or matching port. It retains every pipeline/IAB field and guest PC while
+maturing supported delayed CPU/SYSCTL effects. No guest NOP is synthesized.
+The owner advances devices separately; read retirement shares its final
+response clock, while a spaced write still uses its own acceptance clock.
+A failed due transfer needs retry_due, not another core hold. Snapshots retain
+existing CPU, fetch and bridge state without a new hidden wait counter.
+Mode/branch/cache/loop/interrupt compositions outside this subset reject.
+
+Open: exact physical phase selection for4/5 and7/8, independent prefetch/DMA
+arbitration during IOP holds, general five-stage peripheral scheduling,
+conditional/aborted IOP timing, buffer/FIFO hangs and BHD, complete SRU/
+peripheral coupling and physical board clocks.
 Supplying a latency within documented bounds is an explicit reference input,
 not a measured Nord phase or a completed board scheduler. Core IOP addresses
 at/above30000 are deliberately outside this peripheral bridge. Unsupported
@@ -81,5 +94,21 @@ PMCTL/power handling in the separate common prefix remains explicit; this
 reference does not assert that those paths already have complete IOP timing.
 Port views solve address/queue composition, not that remaining clock gap.
 
-  cmake --build --preset strict --target lead-a1-sharc-iop-bridge-test format-check
-  ctest --preset strict -R '^sharc_iop_posted_control_transfers$' --output-on-failure
+The separate original_sharc_clocked_iop profile continues the real common-call
+return into the second CALL and application initialization through the bound
+five-stage native/VISA transport. PMCTL1 is posted through the same queue as
+DAI/DPI. Each elapsed half-PCLK precedes newly due deliveries. This profile
+starts a stated local clock epoch after the common call and supplies5/8-clock
+inputs; earlier native/core-IOP/PMCTL timing and physical Nord phase remain
+separate gaps. It neither runs the functional fork first nor seeds its device
+state from that fork. All eight placements/cadences retire82 further actual
+instructions, including the18-instruction power/modifier prefix and64 routing/
+PP_CTL instructions. Their next real SRU2_PIN0 read at1c10 fails in the backend
+with CPU, every fetch/IAB field, SYSCTL and SPI unchanged; all12 earlier posted
+writes (including PMCTL1) have drained. Observed local elapsed time is217 CCLK
+under the stated5/8 inputs:82 retired instructions, one faulting read, six
+refill clocks, twelve seven-clock read extensions and eleven four-clock
+posted-store drains. This is not a physical Nord timing measurement.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_fetched_iop_waits|sharc_iop_posted_control_transfers|original_sharc_clocked_iop)$' --output-on-failure

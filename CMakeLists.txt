@@ -49,6 +49,7 @@ target_sources(lead_a1_sharc PRIVATE src/sharc_visa.cpp src/sharc_visa_length.cp
 target_sources(lead_a1_sharc PRIVATE src/sharc_visa_decode.cpp src/sharc_visa_execute.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_visa.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_visa_loop.cpp)
+target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_iop.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_power.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_dai_enable.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_dai_timing.cpp)
@@ -62,6 +63,9 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-fetch-iop-test test/sharc_fetch_iop_test.cpp)
+  target_link_libraries(lead-a1-sharc-fetch-iop-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_fetched_iop_waits COMMAND lead-a1-sharc-fetch-iop-test)
   add_executable(lead-a1-sharc-fetch-visa-loop-test test/sharc_fetch_visa_loop_test.cpp)
   target_link_libraries(lead-a1-sharc-fetch-visa-loop-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_clocked_visa_counter_loops COMMAND lead-a1-sharc-fetch-visa-loop-test)
@@ -458,6 +462,10 @@ if(BUILD_TESTING)
     "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>
     --sharc-only $<TARGET_FILE:lead-a1-original-sharc-test> --sharc-visa-instructions)
   set_tests_properties(original_sharc_visa_instructions PROPERTIES SKIP_RETURN_CODE 77)
+  add_test(NAME original_sharc_clocked_iop COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>
+    --sharc-only $<TARGET_FILE:lead-a1-original-sharc-test> --sharc-clocked-iop)
+  set_tests_properties(original_sharc_clocked_iop PROPERTIES SKIP_RETURN_CODE 77)
   add_test(NAME native_build COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/test/native_build.py"
     --build "${CMAKE_CURRENT_BINARY_DIR}" --sanitizer "${LEAD_A1_SANITIZER}"
@@ -485,6 +493,7 @@ if(BUILD_TESTING)
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
     DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
       lead-a1-sharc-fetch-test
+      lead-a1-sharc-fetch-iop-test
       lead-a1-sharc-fetch-visa-test
       lead-a1-sharc-fetch-visa-loop-test
       lead-a1-sharc-fetch-cache-test

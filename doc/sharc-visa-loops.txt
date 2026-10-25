@@ -29,7 +29,7 @@ malformed spans and rejected count1/compact body entry. Address bounds are
 checked before addition, including malformed native UINT_MAX state. Existing
 native loop and VISA fetch regressions remain independent expectations.
 
-Both candidate original profiles continue from the actual JUMP/first CALL
+The candidate original profiles continue from the actual JUMP/first CALL
 into common entry1c0528. Its8284 further instructions take8293 further grants:
 three refill clocks and six real loop holds. Six observed NOP counts remain
 16/4096/16/4096/16/16, with11 actual PMCTL accesses and the actual compact RTS

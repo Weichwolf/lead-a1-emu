@@ -46,6 +46,8 @@ def main():
                         help="also supply the explicit candidate deferred F2 response order")
     profiles.add_argument("--sharc-visa-instructions", action="store_true",
                           help="separate VISA instruction-order fork after the candidate prefix")
+    profiles.add_argument("--sharc-clocked-iop", action="store_true",
+                          help="clocked application initialization with explicit IOP timing")
     args = parser.parse_args()
     if args.sharc_only and args.native:
         parser.error("--sharc-only cannot be combined with the aggregate native comparisons")
@@ -53,6 +55,8 @@ def main():
         parser.error("--sharc-deferred-f2 requires --sharc-only")
     if args.sharc_visa_instructions and not args.sharc_only:
         parser.error("--sharc-visa-instructions requires --sharc-only")
+    if args.sharc_clocked_iop and not args.sharc_only:
+        parser.error("--sharc-clocked-iop requires --sharc-only")
     reference = ROOT / "doc/local/reference/firmware.bin"
     if not reference.exists():
         print("SKIP: original reference absent")
@@ -83,6 +87,8 @@ def main():
             extra = ["--deferred-f2"] if args.sharc_deferred_f2 else []
             if args.sharc_visa_instructions:
                 extra = ["--visa-instructions"]
+            if args.sharc_clocked_iop:
+                extra = ["--clocked-iop"]
             subprocess.run([str(args.sharc_only), directory, *extra], check=True)
         else:
             native_checks([sys.argv[0], args.emulator, *args.native], directory, specs)

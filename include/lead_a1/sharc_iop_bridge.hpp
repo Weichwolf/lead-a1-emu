@@ -59,6 +59,9 @@ public:
   [[nodiscard]] SharcIopState snapshot() const;
   void issue(SharcIopIntent intent);
   [[nodiscard]] bool ready() const;
+  // A genuine request wait; a failed due delivery needs retry_due, not time.
+  [[nodiscard]] bool waiting() const;
+  [[nodiscard]] bool bound_to(const SharcMemory &core, std::uint32_t address) const;
   // One elapsed CCLK. A failed delivery retains its due request at this
   // clock; repair/retry_due supplies no extra time or second core operation.
   void tick();
@@ -99,6 +102,7 @@ public:
   void abort_instruction() noexcept override;
 
 private:
+  friend class SharcIopBridge;
   [[nodiscard]] MemoryAccess translate(MemoryAccess access) const;
   SharcIopBridge &bridge_;
   SharcIoMapping window_;
