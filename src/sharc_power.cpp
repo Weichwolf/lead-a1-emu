@@ -27,6 +27,7 @@ SharcAccelerator selection(std::uint32_t value) {
 
 void validate(const SharcPowerState &state) {
   if ((state.shutdown & ~shutdown_mask) != 0 || state.remaining_pclk > latency ||
+      (state.remaining_pclk == 0 && state.half_elapsed) ||
       (state.accelerator && *state.accelerator > SharcAccelerator::fft)) {
     throw std::invalid_argument("Invalid SHARC PMCTL1 clock/accelerator state");
   }
@@ -85,6 +86,20 @@ void SharcPower::advance_pclk(std::uint32_t clocks) {
   current_.shutdown = value & shutdown_mask;
   current_.accelerator = accelerator;
   current_.remaining_pclk = 0;
+  current_.half_elapsed = false;
+}
+
+void SharcPower::advance_half_pclk(std::uint32_t half_cycles) {
+  if (staged_) { throw std::logic_error("SHARC PMCTL1 half-PCLK during active instruction"); }
+  if (current_.remaining_pclk == 0) { return; }
+  const auto remaining = (current_.remaining_pclk * 2) - (current_.half_elapsed ? 1U : 0U);
+  if (half_cycles >= remaining) {
+    advance_pclk(current_.remaining_pclk);
+    return;
+  }
+  const auto elapsed = half_cycles + (current_.half_elapsed ? 1U : 0U);
+  current_.remaining_pclk -= elapsed / 2;
+  current_.half_elapsed = elapsed % 2 != 0;
 }
 
 std::uint64_t SharcPower::read(MemoryAccess access) {

@@ -595,11 +595,11 @@
   "power_reference": {
     "primary": "HWRrev1.1 A-4,A-8,A-11/13,23-11; PGRrev2.4 7-7 separate core/IOP bridge latency",
     "address": "0x2001, delivered 32-bit IOP register access at mapped offset0",
-    "state": "Explicit2147x/2148x reset clock outputs enabled; full reset/reserved readback and accelerator selection unknown. Actual full write captures raw value separately from effective shutdown/selection; two supplied PCLK intervals mature outputs. Settled readback retains raw reserved bits per HWR A-4",
+    "state": "Explicit2147x/2148x reset clock outputs enabled; full reset/reserved readback and accelerator selection unknown. Actual full write captures raw value separately from effective shutdown/selection; two supplied PCLK periods including retained fractional half-period progress mature outputs. Settled readback retains raw reserved bits per HWR A-4",
     "clock_fields": "UART0,TWI1,PWM2,MTM3,DAI4,external5,SPORT01/23/45/67 at6/7/8/9,SPI10,timers11,RTC13,accelerator16,MLB19. Bit12 reserved on2147x/2148x, stored but no LP0 output. ACCSEL18:17 selects FIR0,IIR1,FFT2;3 remains guarded",
     "transactions": "Complete delivered writes and latency stage through MemoryDevice transaction; failed later CPU/RAM operation aborts power changes. Committed outputs remain separate. External PCLK/snapshot reject active transactions; validated idle snapshots preserve remaining clocks",
     "evidence": "Literal15 gate masks, first/second-clock results/re-enable, reserved bits31/12, three selections, independent intermediate restores, malformed state/accesses, ownership, actual native direct IOP store with injected late-delivery failure rollback and unchanged-instruction retry",
-    "limits": "Bounded register/output reference: overlapping writes and unsettled guest readback remain explicit timing guards. Owner must connect clock outputs; peripheral execution, accelerator engines, core/IOP bridge4..5 CCLK latency, complete coupled schedule and physical Nord hardware/boot/instrument acceptance remain open",
+    "limits": "Bounded delivered-register/output reference: overlapping writes and unsettled guest readback remain explicit timing guards. Separate control bridge has documented latency inputs; full clock-output/peripheral coupling,accelerators,complete schedule,physical phase and Nord boot/instrument acceptance remain open",
     "package_header_confirmation": {
       "reference": "reference/visualdsp.json",
       "artifact": "214xx/include/def21489.h",
@@ -618,8 +618,8 @@
       "modifiers": "M0/M8=0,M1/M9=1,M2/M10=2,M7/M15=0xffffffff; all known32",
       "clock_inputs": "Conservative complete-PCLK lower bounds from subsequent instruction minimum core cycles, core/PCLK ratio2. Pre-write fractional phase is discarded; no delivered-write instruction time, bridge latency or physical phase is invented",
       "call_frame": "actual ordinary CALL frame bit24|entry+6; initializer has not returned",
-      "next_operation": "unsupported actual read SRU_PBEN2 at IOP word0x247a, initializer entry+39; captured instruction and CPU/IAB/power/SYSCTL/clock/SPI retain failure",
-      "frontiers": [
+      "next_operation": "Actual SRU_PBEN2 read at initializer+39 now enters separate48-instruction IOP/DAI routing reference; these PCs identify its entry, not an unsupported-access frontier",
+      "routing_entry_pcs": [
         {
           "part": 0,
           "transport": 0,
@@ -658,7 +658,7 @@
       "0x1d71f79b"
     ],
     "selectors": "Five six-bit fields per word,20 pin enables.0=LOW,1=HIGH,2..7=MISCA0..5,8..0x27=SPORT0..7 clock/FS/DA/DB,0x28..0x2f=SPORT0..7 TDV.0x30..0x3f reserved. Optional dynamic inputs stay unknown unless explicitly supplied",
-    "effects": "Before two supplied full PCLK periods use old routing; at two retain both possible routes and only equal known levels; at three commit target. Source changes do not create configuration clocks. Raw reserved31/30 retained; no global phase inferred",
+    "effects": "Elapsed full/half PCLK periods retain fractional age. Before2 use old routing; at2..3 retain both possible routes and equal known levels; at3 commit target. No global phase inferred",
     "package_header_confirmation": {
       "package_reference": "reference/visualdsp.json",
       "artifact": "214xx/include/sru21489.h",
@@ -667,28 +667,51 @@
       "scope": "Numerical source-code corroboration only; confirms0x2e/0x2f despite binary-column typos in HWR TableA-81. Header remains local, not a build dependency or reused implementation"
     },
     "owned_evidence": "Four literal reset words,20 independent default-source identities,46 live inputs,all48 selectors across20 outputs,known/unknown levels,latency0/1/2/3 and large intervals,reserved readback,independent word ages,intermediate restore,malformed input,clock/transaction guards,real native IOP store with late-delivery rollback and unchanged-instruction retry",
-    "local_original_diagnostic": {
-      "scope": "Four placements,cadence2,ignored owned probe only; existing public original regression unchanged",
-      "additional_instructions": 6,
-      "lengths": [
-        3,
-        3,
-        1,
-        2,
-        1,
-        3
+    "limits": "GroupF logical reference only; pending/overlap/gated composition guards remain where not qualified. Other groups,pin data/pads,physical phase,complete peripheral coupling and five-stage native/VISA composition remain open. No boot/audio/USB/hardware claim",
+    "original_reference": {
+      "scope": "Four placements,two serial cadences; instruction-order fork after existing power checkpoint; explicit5/8 CCLK inputs, no physical phase claim",
+      "additional_instructions": 48,
+      "groups": 8,
+      "pben2_targets": [
+        "0x1a5405d6",
+        "0x1a0005d6",
+        "0x000005d6"
       ],
-      "read_reset": "0x1a5545d6",
-      "captured_target": "0x1a5405d6",
-      "effect": "pin13 enable source changes from SPORT3_CLK to LOW; no pad/data level or physical timing inferred",
-      "next_operation": "Immediate same-word SRU_PBEN2 read hits pending-read timing guard; CPU/IAB/power/router/SYSCTL/memory failure retained",
+      "pben3_targets": [
+        "0x1d71f780",
+        "0x1d71f000",
+        "0x1d700000",
+        "0x1d000000",
+        "0x00000000"
+      ],
+      "immediates": "FFC0/F03F Type17b fields are signed16, not assumed zero-extended32",
+      "next_operation": "Real backend SRU_CLK2 read at0x2432 remains unmapped after all eight writes mature; elapsed144 bridge clocks with explicit5/8 inputs",
       "pcs": [
-        "0x1c5bc1",
-        "0x1c5b49",
-        "0x1c0788",
-        "0x1c0654"
+        "0x1c5c1a",
+        "0x1c5ba2",
+        "0x1c07e1",
+        "0x1c06ad"
       ]
-    },
-    "limits": "GroupF logical reference only. Pending reads/overlapping writes/stopped DAI composition remain guards; core/IOP delivery/readback timing must be corrected for the known-working original. Other routing groups,pin data/pads,global phase and five-stage native/VISA composition are open. No complete boot/application/instrument/host or hardware qualification"
+    }
+  },
+  "iop_control_bridge_reference": {
+    "primary": "PGRrev2.4 7-7/8; separate HWR PMCTL1/DAI effect latencies",
+    "write_delivery_cclk": [
+      4,
+      5
+    ],
+    "read_delivery_cclk": [
+      7,
+      8
+    ],
+    "continuous_write_spacing_cclk": 2,
+    "back_to_back_read_cclk": 8,
+    "atomic_write_read_cclk": [
+      11,
+      13
+    ],
+    "contract": "Real CPU source captured at posted-store retirement. Separate target memory receives delayed transactions. Reads drain writes, capture actual target once and retain response until exact request retirement. Delivery faults keep elapsed time and issue PC, then require no-clock retry_due",
+    "snapshot": "Fixed storage bound4 is not asserted silicon FIFO depth. Validate queue,history,requests,read timing and response state; restore core/backend separately",
+    "limits": "Explicit latency input does not identify physical phase. Core IOP>=30000,FIFO/buffer hang/BHD,conditional/aborted accesses,port arbitration,complete five-stage clocking and board integration remain open"
   }
 }

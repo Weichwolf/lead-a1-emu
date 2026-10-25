@@ -66,15 +66,22 @@ ID  State    Evidence / remaining work
              captures raw control and matures15 clock outputs/accelerator
              selection after two actual PCLK periods. Reserved2148x bit12 is
              retained without inventing LP0. Unknown reset/read timing, overlap,
-             snapshots and late-delivery rollback have owned checks; the
-             core/IOP bridge and complete peripheral coupling remain open
+             snapshots and late-delivery rollback have owned checks; complete
+             peripheral coupling remains open
              (sharc-power.txt). A separate DAI GroupF reference now routes20
              pin enables from48 constant/optional sources and four documented
              nonzero reset words. The2..3-PCLK interval preserves unknown
              old/new outcomes. This logical component has owned transaction,
              source, clock and snapshot checks; complete SRU groups, pad/data
-             wiring and pending IOP read/write timing remain open
-             (sharc-dai-enable.txt). Native count loops of at least five instructions
+             wiring remain open (sharc-dai-enable.txt). A separate peripheral
+             control-register bridge posts real CPU stores for4/5 CCLK delivery,
+             enforces two-clock successive-write spacing, drains writes before
+             real7/8-clock reads and caches responses until exact retirement.
+             Failed delivery retains the elapsed clock and original PC/access;
+             backend and CPU transactions have separate rollback. Snapshot and
+             half-PCLK effect APIs retain fractional progress. Exact physical
+             phase, FIFO/buffer waits and full five-stage composition remain
+             open (sharc-iop-bridge.txt). Native count loops of at least five instructions
              execute ordinary CALL/RTS, nested callees and conditional polling;
              final e-3 pre-pop, PCSTK/PCSTKP reads and failed pre-pop/pending-effect
              rollback have independent tests (sharc-long-loops.txt). Other loop
@@ -642,15 +649,19 @@ ID  State    Evidence / remaining work
              second-call instructions, including the actual PMCTL1 write and
              compact0/1/2/-1 modifier setup. Their real frames, delayed clock
              outputs, eight M values and unchanged ordinary payload are checked.
-             Each preserves the next failing original SRU_PBEN2 read at247a,
-             including CPU/IAB/power/clock/SYSCTL/SPI rollback (sharc-power.txt).
              Separate DAI owned tests cover all48 selectors/20 outputs,46 live
              input sources, constant/unknown levels and interval/restore/fault
-             cases. A local four-placement/cadence2 diagnostic executes six
-             further real instructions through the first SRU_PBEN2 write,
-             retaining the immediate pending-read boundary. This is not an
-             expanded public original profile; the known-working firmware
-             requires correcting IOP bridge/readback timing (sharc-dai-enable.txt).
+             cases. The IOP regression checks real CPU posted stores, continued
+             core work before delivery, read capture,11..13-clock write/read
+             bounds, delivery faults/retry without extra clocks, separately
+             restored owners, malformed requests/state and transaction guards.
+             The original reference adds48 actual instructions through eight
+             PBEN2/PBEN3 read/AND/OR/write groups using explicit5/8-clock inputs.
+             Intermediate raw words include signed Type17b masks; the next
+             unsupported target is SRU_CLK2 at2432. CPU/IAB/SYSCTL/SPI remain
+             unchanged on that failed delivery, after prior writes really drain.
+             The earlier pending PBEN2 read is now executed with real timing;
+             exact physical phase is still unqualified (sharc-iop-bridge.txt).
              No clocked VISA boot or complete application is qualified.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

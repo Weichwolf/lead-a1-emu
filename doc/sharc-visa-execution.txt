@@ -58,8 +58,9 @@ This reference supplies only instruction minimum-clock bounds to PMCTL, with
 equal stable CLKIN counts while bypassed. Ratios18/9/36/5 are modeled relative
 to the explicit CLKIN input; no physical frequency or board phase is inferred.
 It does not replace the failed clocked redirect or qualify a full boot.
-The subsequent second-call power/modifier prefix and still-unsupported SRU
-read are qualified separately in sharc-power.txt. The initializer is incomplete;
+The subsequent second-call power/modifier prefix and48-instruction PBEN routing
+reference are qualified separately in sharc-power.txt/sharc-dai-enable.txt.
+The next target is unmapped SRU_CLK2. The initializer is incomplete;
 full instrument acceptance remains unchanged.
 
 Primary constraints: PGRrev2.4 4-5/9,4-16/23,4-54/55,9-62/63,10-5/29,

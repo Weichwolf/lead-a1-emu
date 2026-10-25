@@ -1,0 +1,71 @@
+SHARC peripheral control-register bridge
+
+PGRrev2.4 7-7/8 distinguishes core IOP registers from peripheral IOP registers.
+Peripheral writes accept the actual CPU source value, then deliver it after
+4..5 CCLK. The first store accepts in one core cycle; continuous subsequent
+stores have two-CCLK spacing. Other core instructions can execute before the
+peripheral sees a posted write. A peripheral read drains prior writes, then
+captures actual target data after7..8 CCLK. Immediate back-to-back reads need
+eight clocks. A write/read pair therefore takes11..13 CCLK. These are primary
+control-register bounds, not permission to assume FIFO or buffer readiness.
+
+SharcIopBridge is a MemoryDevice mapped in the core's SharcMemory. A separate
+SharcMemory maps real peripheral devices. issue supplies the actual instruction
+PC, operation, logical word address and an explicit documented latency input.
+The normal core instruction supplies store data through its real transaction;
+no host value is substituted. A read response comes from one actual peripheral
+transaction and remains cached until the exact core request retires. Zero is
+valid data. A later CPU fault rolls back token consumption, preserving an
+already completed external read without replaying its side effects.
+
+The owner advances one elapsed CCLK with tick. At delivery, backend accesses
+have the issuing PC and normal word-address/operation diagnostics. A failed
+transfer aborts its target transaction, retains the elapsed clock and due
+request, and rejects further clocks until retry_due succeeds. Already retired
+core instructions are not rolled back for a later posted-store failure.
+retry_due adds no elapsed time. Foreign transactions cannot be stolen.
+
+The fixed four-entry array is a storage bound, not an asserted silicon FIFO
+depth. Snapshots retain posted values, original PCs, timestamps, read start
+and any captured response; backend/core snapshots remain separately owned.
+Restore checks request pairing, queue continuity, timing and history. Clock
+events, issue and snapshots reject active transactions. Normal queue/clock
+operations use fixed state and do not allocate.
+
+When composing a core/PCLK ratio of2 with PMCTL1 and DAI effects, advance the
+elapsed half-PCLK interval before tick delivers a new write. A write arriving
+on that edge must not age during the interval preceding its arrival. The
+half-period APIs retain fractional progress per pending write, including
+across snapshots and mixed full/half-period calls.
+
+Open: exact physical phase selection for4/5 and7/8, full five-stage native/VISA
+scheduling, conditional/aborted IOP timing, buffer/FIFO hangs and BHD, port
+arbitration, complete SRU/peripheral coupling and physical board clocks.
+Supplying a latency within documented bounds is an explicit reference input,
+not a measured Nord phase or a completed board scheduler. Core IOP addresses
+at/above30000 are deliberately outside this peripheral bridge. Unsupported
+target registers still fail through the real backend.
+
+The full instrument objective remains unchanged. Passing component checks or
+an instruction-order original prefix does not prove cold boot, audio or USB.
+Primary document identities are pinned in reference/sharc.json.
+
+Owned tests execute real native stores/loads, source capture followed by core
+work, continuous posted stores, both read/write bounds and11..13-clock atomic
+pairs. They check independent literal values, cached zero/nonzero responses,
+real CPU token rollback after target capture, late target read/write faults,
+no-clock delivery retry, queue/response restores and malformed ownership,
+requests and snapshots. A real DAI read/mask/OR/store/read composition advances
+effect intervals before deliveries, including a half-period arrival.
+
+The optional original reference uses explicit5/8-clock inputs for eight actual
+PBEN2/PBEN3 groups (48 instructions) after its unchanged power checkpoint.
+At the next SRU_CLK2 read at2432 all eight writes have matured. With these
+inputs144 bridge clocks have elapsed, including the failing ninth read;
+its CPU/IAB remain unchanged and the original issuing PC is retained.
+This is instruction-order evidence with a stated local clock origin; it does
+not resolve native/VISA Address timing, unknown global phase or physical SPI
+overlap. Earlier native candidate input and ordinary payload checks stay intact.
+
+  cmake --build --preset strict --target lead-a1-sharc-iop-bridge-test format-check
+  ctest --preset strict -R '^sharc_iop_posted_control_transfers$' --output-on-failure

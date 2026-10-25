@@ -106,6 +106,36 @@ void reset_latency_and_outputs() {
   }
 }
 
+void half_period_progress_and_restore() {
+  SharcPower power;
+  write(power, 1);
+  power.advance_half_pclk(0);
+  require(!power.state().half_elapsed && power.state().remaining_pclk == 2);
+  power.advance_half_pclk(1);
+  const auto half = power.snapshot();
+  require(half.half_elapsed && half.remaining_pclk == 2);
+  SharcPower restored(half);
+  restored.advance_pclk(1);
+  require(restored.state().half_elapsed && restored.state().remaining_pclk == 1);
+  require(restored.enabled(SharcClockGate::uart));
+  restored.advance_half_pclk(1);
+  require(!restored.enabled(SharcClockGate::uart));
+  require(!restored.state().half_elapsed && restored.state().remaining_pclk == 0);
+  power.advance_half_pclk(2);
+  require(power.enabled(SharcClockGate::uart) && power.state().half_elapsed);
+  power.advance_half_pclk(1);
+  require(power.snapshot() == restored.snapshot());
+  auto invalid = power.snapshot();
+  invalid.half_elapsed = true;
+  rejected([&] { const SharcPower other(invalid); }, "state");
+  write(power, 0);
+  power.advance_half_pclk(std::numeric_limits<std::uint32_t>::max());
+  require(power.enabled(SharcClockGate::uart) && !power.state().half_elapsed);
+  power.begin_instruction();
+  rejected([&] { power.advance_half_pclk(1); }, "active instruction");
+  power.abort_instruction();
+}
+
 void selection_and_restore() {
   struct Example {
     std::uint32_t value;
@@ -219,6 +249,7 @@ void actual_cpu_transaction_rollback() {
 
 int main() try {
   reset_latency_and_outputs();
+  half_period_progress_and_restore();
   selection_and_restore();
   transaction_ownership();
   malformed_accesses_and_states();

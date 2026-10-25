@@ -17,6 +17,7 @@ using SharcDaiEnableOutputs = std::array<std::optional<bool>, sharc_dai_enable_p
 struct SharcDaiEnablePending {
   std::uint32_t target{};
   unsigned int elapsed_pclk{};
+  bool half_elapsed{};
   bool operator==(const SharcDaiEnablePending &) const = default;
 };
 
@@ -42,6 +43,7 @@ public:
   [[nodiscard]] SharcDaiEnableOutputs outputs() const;
   void source(unsigned int encoding, std::optional<bool> value);
   void advance_pclk(std::uint32_t clocks);
+  void advance_half_pclk(std::uint32_t half_cycles);
   [[nodiscard]] std::uint64_t read(MemoryAccess access) override;
   void write(MemoryAccess access, std::uint64_t value) override;
   void begin_instruction() override;

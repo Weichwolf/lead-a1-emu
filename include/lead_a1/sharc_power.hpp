@@ -35,6 +35,7 @@ struct SharcPowerState {
   std::uint32_t shutdown{};
   std::optional<SharcAccelerator> accelerator{std::nullopt};
   unsigned int remaining_pclk{};
+  bool half_elapsed{};
   bool operator==(const SharcPowerState &) const = default;
 };
 
@@ -49,6 +50,7 @@ public:
   [[nodiscard]] SharcPowerState snapshot() const;
   [[nodiscard]] bool enabled(SharcClockGate gate) const;
   void advance_pclk(std::uint32_t clocks);
+  void advance_half_pclk(std::uint32_t half_cycles);
   [[nodiscard]] std::uint64_t read(MemoryAccess access) override;
   void write(MemoryAccess access, std::uint64_t value) override;
   void begin_instruction() override;

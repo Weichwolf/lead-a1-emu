@@ -2,7 +2,7 @@ PMCTL1 peripheral clock reference
 
 SharcPower models a delivered32-bit IOP access at word2001 (mapped offset0).
 HWRrev1.1 A-8 gives two PCLK cycles of peripheral effect latency. Explicit
-advance_pclk intervals mature the captured shutdown fields and accelerator
+advance_pclk or advance_half_pclk intervals mature the captured shutdown fields and accelerator
 selection; reads, snapshots and writes do not supply elapsed time. Outputs
 change only after both clocks. The owner must route these outputs to the
 corresponding peripherals, independently of serial edges and RAM grants.
@@ -22,7 +22,8 @@ commit/abort stages the complete write and pending latency. External clock
 advance and serialization reject an active transaction. enabled() exposes
 only committed clock outputs. Snapshot restore validates masks, pending
 counts, reset knowledge, selection and settled output consistency; a restored
-one-clock remainder needs that remaining real clock. No read clears it.
+one-clock remainder needs that remaining real clock. Fractional half-period
+progress survives restore and mixed full/half-period calls. No read clears it.
 
 The current bounded reference rejects reserved accelerator selection, another
 write before the pending effect matures, and unsettled guest readback. These
@@ -33,7 +34,8 @@ writes fail. Bus faults receive address/operation/PC from SharcMemory/core.
 PGRrev2.4 7-7 separately gives4..5 CCLK peripheral-register write latency
 through the CCLK/PCLK bridge. This device starts at delivered IOP input and
 does not supply that bridge, automatic scheduler phase, port arbitration or
-peripheral behavior. Coupled CPU/peripheral timing remains required work.
+peripheral behavior. The separate control-register bridge contract is in
+sharc-iop-bridge.txt; complete CPU/peripheral coupling remains required work.
 The full original-instrument acceptance in objective.txt is unchanged.
 
 Owned tests use15 independently listed gate masks, exact first/second-clock
@@ -55,11 +57,11 @@ only in raw control. Eight actual M registers hold0/1/2/-1 in both DAGs.
 The real unreturned frame is entry+6; checkpoint CPU/fetch/SYSCTL and ordinary
 payload-cell checks remain. No host PC, opcode or padding is substituted.
 
-Each of four placements at both serial cadences then fails atomically on the
-actual SRU_PBEN2 read at word247a. Its PCs are1c5bb4/1c5b3c/1c077b/1c0647.
-The captured read and CPU/IAB/power/SYSCTL/clock/SPI state remain unchanged.
-This preserves the next missing routing input; it does not complete the I/O
-initializer, supply a pin-enable reset value or qualify the five-stage switch.
+Each of four placements at both serial cadences then enters the separate
+IOP/DAI routing reference (sharc-dai-enable.txt). It now executes the original
+PBEN2/PBEN3 groups through real delayed transfers and stops at missing SRU_CLK2.
+This extends the instruction-order checkpoint, without completing the I/O
+initializer or qualifying the five-stage switch.
 Post-delivery PCLK lower bounds discard unknown pre-write fractional phase;
 they do not establish a global phase or the separate core/IOP bridge latency.
 

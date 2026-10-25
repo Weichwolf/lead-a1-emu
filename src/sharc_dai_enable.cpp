@@ -115,6 +115,25 @@ void SharcDaiEnable::advance_pclk(std::uint32_t clocks) {
   }
 }
 
+void SharcDaiEnable::advance_half_pclk(std::uint32_t half_cycles) {
+  if (staged_) { throw std::logic_error("SHARC DAI half-PCLK during active instruction"); }
+  require_clock();
+  for (unsigned int index = 0; index < current_.pending.size(); ++index) {
+    auto &pending = current_.pending[index];
+    if (!pending) { continue; }
+    const auto remaining =
+        ((maximum_latency - pending->elapsed_pclk) * 2) - (pending->half_elapsed ? 1U : 0U);
+    if (half_cycles >= remaining) {
+      current_.routes[index] = pending->target;
+      pending.reset();
+    } else {
+      const auto elapsed = half_cycles + (pending->half_elapsed ? 1U : 0U);
+      pending->elapsed_pclk += elapsed / 2;
+      pending->half_elapsed = elapsed % 2 != 0;
+    }
+  }
+}
+
 std::uint64_t SharcDaiEnable::read(MemoryAccess access) {
   const auto index = register_index(access);
   require_clock();

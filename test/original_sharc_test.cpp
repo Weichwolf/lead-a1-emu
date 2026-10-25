@@ -4,7 +4,9 @@
 #include "lead_a1/sharc_boot.hpp"
 #include "lead_a1/sharc_clock.hpp"
 #include "lead_a1/sharc_control.hpp"
+#include "lead_a1/sharc_dai_enable.hpp"
 #include "lead_a1/sharc_fetch.hpp"
+#include "lead_a1/sharc_iop_bridge.hpp"
 #include "lead_a1/sharc_memory.hpp"
 #include "lead_a1/sharc_power.hpp"
 #include "lead_a1/sharc_spi.hpp"
@@ -383,6 +385,8 @@ struct HeaderDevices {
   OriginalProfile profile{OriginalProfile::immediate};
   Placement placement{};
   lead_a1::SharcPower *power{};
+  lead_a1::SharcDaiEnable *dai{};
+  lead_a1::SharcIopBridge *bridge{};
 };
 
 void check_frontier(const lead_a1::Sharc &cpu,
@@ -650,31 +654,112 @@ void record_visa_reference(lead_a1::SharcStep step,
                                             : 0U});
 }
 
+void original_routing_clock(HeaderDevices devices) {
+  require(devices.power != nullptr && devices.dai != nullptr && devices.bridge != nullptr);
+  devices.clock.device.advance({.core_cycles = 1});
+  devices.power->advance_half_pclk(1);
+  devices.dai->advance_half_pclk(1);
+  devices.bridge->tick();
+}
+
+lead_a1::SharcStep original_routing_step(lead_a1::Sharc &cpu,
+                                         lead_a1::SharcVisaBuffer &buffer,
+                                         HeaderDevices devices) {
+  require(devices.bridge != nullptr);
+  fill_visa_reference(buffer);
+  const auto input = buffer.instruction();
+  if (!input) { throw std::runtime_error("Missing original routing instruction"); }
+  const auto type = input->opcode >> 40;
+  const auto address = static_cast<std::uint32_t>(input->opcode);
+  constexpr std::uint32_t first_sru = 0x2400;
+  constexpr std::uint32_t end_sru = 0x2500;
+  constexpr unsigned int direct_read = 0x10;
+  constexpr unsigned int direct_write = 0x11;
+  const bool peripheral = input->words == 3 && (type == direct_read || type == direct_write) &&
+                          address >= first_sru && address < end_sru;
+  if (peripheral) {
+    // Explicit documented worst-bound inputs, not an inferred physical phase.
+    devices.bridge->issue(
+        {.pc = cpu.state().pc,
+         .address = address,
+         .operation = type == direct_read ? lead_a1::AccessKind::read : lead_a1::AccessKind::write,
+         .delivery_cycles = type == direct_read ? 8U : 5U});
+    while (!devices.bridge->ready()) { original_routing_clock(devices); }
+  }
+  const auto step = cpu.step(buffer);
+  if (!peripheral || type == direct_write) {
+    for (unsigned int cycle = 0; cycle < step.minimum_core_cycles; ++cycle) {
+      original_routing_clock(devices);
+    }
+  }
+  return step;
+}
+
+void original_routing_group(lead_a1::Sharc &cpu,
+                            lead_a1::SharcVisaBuffer &buffer,
+                            HeaderDevices devices,
+                            unsigned int group,
+                            std::uint32_t expected) {
+  require(devices.bridge != nullptr);
+  constexpr std::uint64_t full40 = 0xffffffffff;
+  constexpr std::uint32_t pben2 = 0x247a;
+  constexpr std::uint32_t pben3 = 0x247b;
+  const bool signed_mask = group == 3 || group == 4;
+  const std::array<unsigned int, 6> widths{3, signed_mask ? 2U : 3U, 1, 2, 1, 3};
+  for (const auto width : widths) {
+    const auto step = original_routing_step(cpu, buffer, devices);
+    require(step.address_units == width && step.minimum_core_cycles == 1);
+  }
+  require(cpu.state().data[0][0] ==
+          (lead_a1::SharcKnown40{.value = std::uint64_t{expected} << 8, .known = full40}));
+  const auto bus = devices.bridge->snapshot();
+  const auto posted = bus.writes[0];
+  require(bus.write_count == 1 && posted && posted->value == expected &&
+          posted->intent.address == (group < 3 ? pben2 : pben3));
+}
+
 void original_visa_routing_boundary(lead_a1::SharcMemory &memory,
                                     lead_a1::Sharc &cpu,
                                     lead_a1::SharcVisaBuffer &buffer,
                                     HeaderDevices devices) {
-  require(devices.power != nullptr);
+  require(devices.power != nullptr && devices.dai != nullptr && devices.bridge != nullptr);
+  // Independently derived raw words after each original read/AND/OR/write.
+  // Type17b FFC0/F03F are signed16 immediates, not zero-extended masks.
+  constexpr std::array<std::uint32_t, 8> targets{
+      0x1a5405d6, 0x1a0005d6, 0x000005d6, 0x1d71f780, 0x1d71f000, 0x1d700000, 0x1d000000, 0};
+  for (unsigned int group = 0; group < targets.size(); ++group) {
+    original_routing_group(cpu, buffer, devices, group, targets[group]);
+  }
+  constexpr unsigned int prefix_words = 141;
+  require(cpu.state().pc == devices.placement.second_call + prefix_words);
   fill_visa_reference(buffer);
   const auto before = cpu.state();
   const auto input = buffer.state();
   const auto power = devices.power->snapshot();
   const auto control = devices.control.snapshot();
-  const auto clock = devices.clock.device.state();
   const auto spi = devices.spi.state();
   try {
-    static_cast<void>(cpu.step(buffer));
+    static_cast<void>(original_routing_step(cpu, buffer, devices));
   } catch (const std::exception &error) {
     const std::string message(error.what());
-    require(message.find("SHARC direct read word-address=0x247a") != std::string::npos &&
+    require(message.find("word-address=0x2432 operation=read") != std::string::npos &&
             message.find("Unmapped SHARC IOP register") != std::string::npos);
     require(cpu.state() == before && buffer.state() == input &&
             devices.power->snapshot() == power && devices.control.snapshot() == control &&
-            devices.clock.device.state() == clock && devices.spi.state() == spi &&
-            !memory.active());
+            devices.spi.state() == spi && !memory.active());
+    constexpr std::array<std::uint32_t, 4> routes{0x0e2482ca, 0x1348d30f, 0x000005d6, 0};
+    const auto routing = devices.dai->snapshot();
+    require(routing.routes == routes);
+    for (const auto &pending : routing.pending) { require(!pending); }
+    const auto bus = devices.bridge->snapshot();
+    constexpr unsigned int elapsed_clocks = 144;
+    require(bus.clocks == elapsed_clocks && bus.write_count == 0 && bus.read &&
+            !bus.read->response && bus.request && bus.request->pc == before.pc);
+    std::cout << "  Separate IOP routing prefix:48 actual instructions, eight original "
+                 "read/mask/OR/write groups; explicit5/8 timing input; SRU_CLK2 remains unmapped\n";
     return;
   }
-  throw std::runtime_error("Missing original SRU_PBEN2 read boundary");
+  throw std::runtime_error("Missing original SRU_CLK2 read boundary");
 }
 
 void check_original_power_outputs(const lead_a1::Sharc &cpu, HeaderDevices devices) {
@@ -738,7 +823,7 @@ void original_visa_power_reference(lead_a1::SharcMemory &memory,
   check_original_power_outputs(cpu, devices);
   original_visa_routing_boundary(memory, cpu, buffer, devices);
   std::cout << "  Separate VISA power prefix:18 actual instructions, six full/twelve compact, "
-               "delayed PMCTL1 outputs and eight modifiers; SRU_PBEN2 read remains unsupported\n";
+               "delayed PMCTL1 outputs and eight modifiers\n";
 }
 
 void original_visa_instruction_reference(lead_a1::SharcMemory &memory,
@@ -1117,6 +1202,20 @@ void sequenced_first_header(lead_a1::SharcMemory &memory,
   sequenced_first_record(memory, cpu, fetch, stream, serial, devices);
 }
 
+lead_a1::SharcIopBridge *map_original_routing(lead_a1::SharcMemory &memory,
+                                              lead_a1::SharcMemory &peripheral,
+                                              std::optional<lead_a1::SharcIopBridge> &bridge,
+                                              lead_a1::SharcDaiEnable &dai,
+                                              OriginalProfile profile) {
+  if (profile != OriginalProfile::visa_reference) { return nullptr; }
+  constexpr lead_a1::SharcIoMapping sru{.first_word = 0x2400, .words = 0x100};
+  constexpr std::uint32_t first_pben = 0x2478;
+  peripheral.map_io({.first_word = first_pben, .words = 4}, dai);
+  auto &bound = bridge.emplace(memory, peripheral, sru);
+  memory.map_io(sru, bound);
+  return &bound;
+}
+
 void sequenced_clock_setup(std::span<const std::byte> stream,
                            unsigned int interval,
                            const CellExpectations &expected,
@@ -1124,6 +1223,9 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                            OriginalProfile profile) {
   // This fixture owns fresh RAM and PMCTL: its writes cannot seed the full stream.
   lead_a1::SharcPower power;
+  lead_a1::SharcDaiEnable dai(power);
+  lead_a1::SharcMemory peripheral;
+  std::optional<lead_a1::SharcIopBridge> bridge;
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
   auto boot = lead_a1::SharcSpiBoot::slave_reference_214xx();
@@ -1131,6 +1233,7 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
   ObservedClock clock;
   memory.map_io({.first_word = 0x2000, .words = 1}, clock);
   map_original_power(memory, power, profile);
+  auto *routing = map_original_routing(memory, peripheral, bridge, dai, profile);
   lead_a1::SharcControl control(true);
   lead_a1::SharcSpi spi(boot.state());
   memory.map_io({.first_word = sysctl, .words = 1}, control);
@@ -1201,7 +1304,9 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                           .interval = interval,
                           .profile = profile,
                           .placement = placement,
-                          .power = &power});
+                          .power = &power,
+                          .dai = &dai,
+                          .bridge = routing});
   check_cells(memory, expected);
   std::cout << "  Sequenced final payload cells: " << expected.size() << " matched\n";
 }

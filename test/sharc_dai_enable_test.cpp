@@ -127,6 +127,35 @@ void latency_and_ambiguous_interval() {
   prefix(dai, {false, true, std::nullopt, true, true});
 }
 
+void half_period_intervals_and_restore() {
+  SharcPower power;
+  SharcDaiEnable dai(power);
+  dynamic_low(dai);
+  write(dai, 0, all_high);
+  dai.advance_half_pclk(1);
+  const auto half = dai.snapshot();
+  const auto pending = half.pending[0];
+  require(pending && pending->half_elapsed);
+  SharcDaiEnable restored(power, half);
+  restored.advance_pclk(1); // 1.5 periods: old output remains known low.
+  prefix(restored, {false, false, false, false, false});
+  restored.advance_half_pclk(1); // Two periods: earliest possible effect.
+  prefix(restored, {std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt});
+  restored.advance_half_pclk(1); // 2.5 periods: latest bound is still pending.
+  prefix(restored, {std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt});
+  restored.advance_half_pclk(1);
+  prefix(restored, {true, true, true, true, true});
+  require(read(restored, 0) == all_high);
+  dai.advance_half_pclk(5);
+  require(dai.snapshot() == restored.snapshot());
+  write(dai, 0, 0);
+  dai.advance_half_pclk(std::numeric_limits<std::uint32_t>::max());
+  prefix(dai, {false, false, false, false, false});
+  dai.begin_instruction();
+  rejected([&] { dai.advance_half_pclk(1); }, "active instruction");
+  dai.abort_instruction();
+}
+
 void all_source_selections() {
   SharcPower power;
   SharcDaiEnable dai(power);
@@ -265,6 +294,7 @@ void actual_cpu_store_rollback() {
 int main() try {
   reset_and_live_sources();
   latency_and_ambiguous_interval();
+  half_period_intervals_and_restore();
   all_source_selections();
   independent_words_and_ownership();
   malformed_and_gated_inputs();

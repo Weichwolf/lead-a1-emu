@@ -49,6 +49,7 @@ target_sources(lead_a1_sharc PRIVATE src/sharc_visa.cpp src/sharc_visa_length.cp
 target_sources(lead_a1_sharc PRIVATE src/sharc_visa_decode.cpp src/sharc_visa_execute.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_power.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_dai_enable.cpp)
+target_sources(lead_a1_sharc PRIVATE src/sharc_iop_bridge.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_float.cpp src/sharc_float_compute.cpp src/sharc_fetch_multiplier.cpp)
 target_include_directories(lead_a1_sharc PUBLIC include)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
@@ -56,6 +57,9 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-iop-bridge-test test/sharc_iop_bridge_test.cpp)
+  target_link_libraries(lead-a1-sharc-iop-bridge-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_iop_posted_control_transfers COMMAND lead-a1-sharc-iop-bridge-test)
   add_executable(lead-a1-sharc-dai-enable-test test/sharc_dai_enable_test.cpp)
   target_link_libraries(lead-a1-sharc-dai-enable-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_dai_pin_enable_routing COMMAND lead-a1-sharc-dai-enable-test)
@@ -483,6 +487,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-visa-cpu-test
       lead-a1-sharc-power-test
       lead-a1-sharc-dai-enable-test
+      lead-a1-sharc-iop-bridge-test
       lead-a1-sharc-loop-idle-test
       lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test lead-a1-sharc-float-test lead-a1-sharc-float-multiply-test lead-a1-sharc-compare-test lead-a1-sharc-multiplier-branch-test lead-a1-sharc-float-fixed-stall-test lead-a1-sharc-idle-branch-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test
