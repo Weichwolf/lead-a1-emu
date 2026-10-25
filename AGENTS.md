@@ -27,6 +27,7 @@
 
 # Quality gates
 
+- Run quality gates locally. Do not add GitHub Actions workflows or GitHub CI.
 - C++23, CMake/Ninja, LLVM 19; warnings as errors, clang-format, mandatory
   clang-tidy with zero findings and at most 120 lines per function.
 - Instrument project code and future native dependencies with ASan/UBSan.
