@@ -199,6 +199,13 @@ std::uint32_t spi_pending(const SpiState &state) {
   return pending;
 }
 
+bool spi_samples_input(const SpiState &state) {
+  if (!state.active || state.active->stage != SpiStage::shifting) { return false; }
+  const bool leading = state.active->edges % 2 == 0;
+  const bool phase = (state.active->format & spi_phase) != 0;
+  return leading == phase;
+}
+
 void spi_advance(SpiState &state, SpiInput input) {
   if (!state.active) { throw std::logic_error("SPI clock event without active transfer"); }
   auto &transfer = *state.active;
@@ -217,10 +224,9 @@ void spi_advance(SpiState &state, SpiInput input) {
     case SpiStage::shifting: break;
     default: throw std::logic_error("Invalid SPI transfer stage");
   }
-  const bool leading = transfer.edges % 2 == 0;
   const bool phase = (transfer.format & spi_phase) != 0;
   state.clock = !state.clock;
-  if (leading == phase) {
+  if (spi_samples_input(state)) {
     sample(state, input);
   } else {
     const auto index = (transfer.edges / 2) + (phase ? 1U : 0U);

@@ -4,6 +4,7 @@
 #include "arm/peripherals/gpio.hpp"
 #include "arm/peripherals/spi.hpp"
 #include "board/processor_links.hpp"
+#include "board/spi_sharc_link.hpp"
 #include "common/memory.hpp"
 #include "sharc/core/sharc.hpp"
 #include "sharc/memory/sharc_memory.hpp"
@@ -191,6 +192,7 @@ struct Fixture {
   lead_a1::SharcMemory dsp_memory;
   unsigned int dsp_channel{};
   lead_a1::Sharc *cooperative_dsp{};
+  std::optional<lead_a1::SpiSharcLink> serial_link;
 
   Fixture(std::span<const std::byte> image, Placement placement) : reference_image(image) {
     constexpr std::uint32_t bin_bytes = 1040;
@@ -237,20 +239,20 @@ struct Fixture {
     memory.write({.address = placement.clock, .size = 4}, clock_input);
   }
 
+  lead_a1::SpiSharcLink &connection() {
+    if (!serial_link) { throw std::logic_error("Missing original SPI/SHARC connection"); }
+    return *serial_link;
+  }
+
   void observe_dsp() {
     if (!dsp) { return; }
-    const auto select = 1U << (11 + dsp_channel);
-    const auto bank = gpio.device.drives()[2];
+    auto &wires = connection();
     const auto serial = spi0.device.pins();
     constexpr std::uint16_t clock_pin = 0x200;
     constexpr std::uint16_t data_pin = 0x400;
-    require((bank.enabled & select) != 0);
     require((serial.enabled & (clock_pin | data_pin)) == (clock_pin | data_pin));
-    const lead_a1::SharcBootLines lines{.selected = (bank.high & select) == 0,
-                                        .clock = (serial.high & clock_pin) != 0,
-                                        .mosi = (serial.high & data_pin) != 0};
     if (runtime) {
-      runtime->device.observe(dsp_memory, lines);
+      wires.observe(runtime->device);
       // Explicit functional owner grant between ARM instructions/serial edges.
       // Cooperative stepping below is an explicit functional reference,
       // not physical IOP bus timing or a measured processor-clock ratio.
@@ -262,7 +264,7 @@ struct Fixture {
         runtime->device.acknowledge_interrupt();
       }
     } else {
-      dsp->observe(dsp_memory, lines);
+      wires.observe(*dsp);
     }
   }
 
@@ -278,10 +280,10 @@ struct Fixture {
     while (due && *due <= ticks) {
       const auto before = spi0.device.state().active;
       if (dsp) {
-        constexpr std::uint16_t data_pin = 0x400;
-        const bool outgoing = (spi0.device.pins().high & data_pin) != 0;
-        // Owned external pull-up at the disabled DSP MISO output.
-        spi0.device.advance({.received = true, .observed_output = outgoing});
+        // Explicit owned weak pull-up, used only when the real DSP output is undriven.
+        auto &wires = connection();
+        const auto input = runtime ? wires.input(runtime->device, true) : wires.input(*dsp, true);
+        spi0.device.advance(input);
         observe_dsp();
       } else {
         spi0.device.advance();
@@ -1194,6 +1196,14 @@ void kernel_transfer(std::span<const std::byte> image,
   fixture.dsp.emplace(lead_a1::SharcSpiBoot::slave_reference_214xx());
   fixture.dsp_memory.map_2148x_5mbit_ram();
   fixture.dsp_channel = channel;
+  fixture.serial_link.emplace(fixture.spi0.device,
+                              fixture.gpio.device,
+                              fixture.dsp_memory,
+                              lead_a1::SpiSharcWiring{.bank = 2,
+                                                      .select_pin = 11 + channel,
+                                                      .clock_pin = 9,
+                                                      .mosi_pin = 10,
+                                                      .active_low = true});
   fixture.spi0.events.clear();
   fixture.gpio.events.clear();
   fixture.transmitted.clear();
@@ -1293,6 +1303,12 @@ void original_uploader_handshake(std::span<const std::byte> image,
   fixture.dsp.emplace(lead_a1::SharcSpiBoot::slave_reference_214xx());
   fixture.dsp_channel = 1;
   fixture.dsp_memory.map_2148x_5mbit_ram();
+  fixture.serial_link.emplace(
+      fixture.spi0.device,
+      fixture.gpio.device,
+      fixture.dsp_memory,
+      lead_a1::SpiSharcWiring{
+          .bank = 2, .select_pin = 12, .clock_pin = 9, .mosi_pin = 10, .active_low = true});
   fixture.gpio.events.clear();
   fixture.transmitted.clear();
   lead_a1::ArmState initial;

@@ -43,9 +43,14 @@ implicit. A complete word writes RAM transactionally, advances the DMA cursor
 and decreases the count. Failed writes preserve both receiver and memory state.
 The first 1536 bytes become 256 NW48 instructions at 0x8c000 through aliases.
 
-entry() becomes available only after all 384 words have committed. This is a
-functional scheduler handoff to reset location 0x8c000; it does not execute any
-SHARC instruction, assert a ready GPIO, or qualify interrupt/boot timing.
+entry() becomes available only after all 384 words have committed and reports
+the loaded kernel/IVT base 0x8c000. Existing instruction fixtures initialize an
+explicit software-entry state there. HWR24-25 requires the boot peripheral's
+interrupt vector and its RTI before kernel execution. All four pinned kernels
+contain the unconditional native RTI at 0x8c030; their first five words are NOPs.
+Initial boot-IRQ delivery, return-frame state and reset-to-kernel sequencing
+remain unimplemented. The reported base is not a qualified first Execute PC.
+No readiness GPIO or physical reset/interrupt timing follows from completion.
 This limited initial loader is not a programmable SPI register facade. Further
 selected clock edges require an explicit runtime SPI/core handoff and fail
 on this bootstrap object. SharcSpi supplies that separate programmable RX DMA

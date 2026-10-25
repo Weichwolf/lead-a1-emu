@@ -221,8 +221,12 @@ std::array<bool, gpio_banks> Gpio::interrupts() const {
   return result;
 }
 
-void Gpio::check_sample(unsigned int bank, GpioSample levels) const {
+void Gpio::check_external_event() const {
   if (pending_) { throw std::logic_error("GPIO sample during active instruction"); }
+}
+
+void Gpio::check_sample(unsigned int bank, GpioSample levels) const {
+  check_external_event();
   if (bank >= gpio_banks || pin_mask(current_, bank) == 0) {
     throw std::invalid_argument("Invalid GPIO sample bank");
   }

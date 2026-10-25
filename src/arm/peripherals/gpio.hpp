@@ -50,6 +50,7 @@ public:
   [[nodiscard]] std::array<GpioDrive, gpio_banks> drives() const;
   [[nodiscard]] std::array<bool, gpio_banks> interrupts() const;
   // Explicit synchronized pad sample, including output feedback if connected.
+  void check_external_event() const;
   void check_sample(unsigned int bank, GpioSample levels) const;
   void sample(unsigned int bank, GpioSample levels);
   [[nodiscard]] std::uint64_t read(MemoryAccess access) override;

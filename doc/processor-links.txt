@@ -60,6 +60,8 @@ including all original RAM-clear oracles. A named software-wiring candidate
 connects bank 3 pin2 to that transport's core FLAG0 and pin3 to core FLAG1.
 The source is the kernel's actual known HIGH output; the original MCU then
 executes its real LDRH/TST/BEQ and reaches the first remainder-send setup.
+The serial pin path uses SpiSharcLink (spi-sharc-link.txt); functional clock
+cadence, DMA grants and the MISO pull remain explicit fixture inputs.
 
 Static continuation contract (not executed by these uploader cases)
 Independent PC-relative literal decoding of both hash-checked CODE sections

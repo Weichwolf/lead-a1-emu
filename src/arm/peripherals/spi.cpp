@@ -268,15 +268,23 @@ std::optional<unsigned int> Spi::next_event() const {
   return working().active ? std::optional<unsigned int>{working().event_delay} : std::nullopt;
 }
 
+void Spi::check_external_event() const {
+  if (pending_) { throw std::logic_error("SPI external event during active instruction"); }
+}
+
+bool Spi::samples_external_input() const {
+  return detail::spi_samples_input(working()) && (working().control & detail::spi_loopback) == 0;
+}
+
 void Spi::advance(SpiInput input) {
-  if (pending_) { throw std::logic_error("SPI clock event during active instruction"); }
+  check_external_event();
   auto next = current_;
   detail::spi_advance(next, input);
   current_ = next;
 }
 
 void Spi::sample_pins(SpiPins sample) {
-  if (pending_) { throw std::logic_error("SPI pin sample during active instruction"); }
+  check_external_event();
   const auto mask = 0xf00U | current_.chip_selects;
   if ((sample.enabled & ~mask) != 0 || (sample.high & ~sample.enabled) != 0) {
     throw std::invalid_argument("Invalid SPI pin sample knowledge");

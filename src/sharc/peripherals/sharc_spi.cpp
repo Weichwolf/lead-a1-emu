@@ -160,14 +160,14 @@ SharcSpiState &SharcSpi::working() {
   return staged_ ? *staged_ : current_;
 }
 
-void SharcSpi::external_event(const SharcMemory &memory) const {
+void SharcSpi::check_external_event(const SharcMemory &memory) const {
   if (staged_ || memory.active()) {
     throw std::logic_error("SHARC SPI external event during active instruction transaction");
   }
 }
 
 void SharcSpi::observe(SharcMemory &memory, SharcBootLines lines) try {
-  external_event(memory);
+  check_external_event(memory);
   auto next = current_;
   if (!lines.selected) {
     if (next.serial.bits != 0) {
@@ -214,7 +214,7 @@ unsigned int SharcSpi::dma_request() const {
 }
 
 unsigned int SharcSpi::service_dma(SharcMemory &memory) try {
-  external_event(memory);
+  check_external_event(memory);
   if (current_.burst_remaining != 0) {
     throw std::runtime_error("SHARC active arbitrated SPI group requires word grants");
   }

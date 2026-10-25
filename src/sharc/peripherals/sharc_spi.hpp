@@ -49,6 +49,7 @@ public:
 
   [[nodiscard]] std::optional<bool> miso() const;
   [[nodiscard]] bool interrupt_request() const;
+  void check_external_event(const SharcMemory &memory) const;
 
   void observe(SharcMemory &memory, SharcBootLines lines);
   [[nodiscard]] unsigned int dma_request() const;
@@ -72,7 +73,6 @@ private:
   [[nodiscard]] std::uint64_t port_read(MemoryAccess access);
   void port_write(MemoryAccess access, std::uint64_t value);
   [[nodiscard]] SharcSpiState &working();
-  void external_event(const SharcMemory &memory) const;
   SharcSpiState current_;
   std::optional<SharcSpiState> staged_;
 };

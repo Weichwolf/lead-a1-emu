@@ -61,7 +61,7 @@ std::optional<SharcMemoryRequest> SharcSpi::dma_word_request() const {
 }
 
 void SharcSpi::service_dma_word(SharcMemoryBus &bus) try {
-  external_event(bus.memory());
+  check_external_event(bus.memory());
   const auto request = dma_word_request();
   if (!request || bus.grant(SharcMemoryMaster::io0) != request) {
     throw std::runtime_error("SHARC SPI word requires its exact IOD0 memory grant");

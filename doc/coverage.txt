@@ -64,6 +64,12 @@ ID  State    Evidence / remaining work
              nets stay unknown; all proposed input/edge changes validate before
              atomic publication. No Nord pinout, unconnected-pad default or
              propagation clock is supplied (processor-links.txt).
+             A separate SPI/SHARC connection now samples committed GPIO select,
+             SCLK and MOSI into the real bootstrap/runtime receivers. Actual
+             slave MISO is queried only on a consuming master event, with explicit
+             pulls only for undriven output. DMA/IRQ/time remain owner operations;
+             multi-slave buses and reset pin conditions remain open
+             (spi-sharc-link.txt).
              SPI master serial edges, formats/parity, TX/RX pipeline occupancy,
              register lanes, status/data acknowledgments and IRQ priorities have
              independent serial/bus/ARM tests (spi.txt). Explicit clock events
@@ -71,7 +77,11 @@ ID  State    Evidence / remaining work
              SHARC word-addressed RAM shares 16-bit cells across 16/32/40/48/64
              views, with unknown-bit tracking and transactional IOP/RAM tests.
              Explicit initial SPI-slave bootstrap loads 384 NW32 words through
-             serial edges, exposes 256 NW48 instructions and a reset handoff.
+             serial edges and exposes 256 NW48 instructions plus completion/base
+             metadata. HWR24-25 requires the initial boot IRQ and vector RTI;
+             all four pinned kernels have that RTI at8c030. Initial interrupt,
+             return-frame/reset sequencing remain open. Existing software-entry
+             fixtures at8c000 do not qualify this hardware activation (sharc.txt).
              Native-48 SHARC sequencing/system-register execution has owned
              literal/frame/condition/rollback tests, including two delay slots,
              read-only interrupt bits and delayed control effects (sharc-core.txt).
@@ -610,6 +620,9 @@ ID  State    Evidence / remaining work
              proves neither continuous scheduling, physical pins/pulls nor the
              remainder upload, second DSP, final release or cold boot
              (processor-links.txt).
+             The same original first-kernel/handshake cases also pass through
+             the production SPI/SHARC pin connection; clock cadence and DMA
+             arbitration remain fixture-owned (spi-sharc-link.txt).
              Under explicit candidate boot/wiring/clock inputs, both original ARM
              block writers additionally load all 256 SHARC kernel words from
              each of the four original placements over 768 real 16-bit transfers.
@@ -720,6 +733,14 @@ ID  State    Evidence / remaining work
              Two separately registered original uploader references additionally
              check the real first-kernel transfer and first readiness branch;
              they retain the limitations above (processor-links.txt).
+             SPI/SHARC connection checks compare all 384 owned bootstrap words,
+             failed last-bit memory delivery and same-boundary retry, foreign
+             transactions, floating sources, active-HIGH select and malformed
+             endpoints. Actual master/slave exchange checks different 32-bit
+             payloads in each direction. Missing pulls, unknown driven MISO,
+             launch versus sampling edges and internal loopback have independent
+             failure/data expectations; no DMA grant or IRQ acknowledgement is
+             manufactured (spi-sharc-link.txt).
              Programmable IRQ checks independently list all19 routes and171
              ordered priority pairs,38 mask/IDLE cases and ten restored fetched
              secondary handlers. Thirty enabled mask changes, inherited pending

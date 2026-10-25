@@ -1,0 +1,58 @@
+Explicit MCU SPI / GPIO to SHARC serial connection
+
+SpiSharcLink binds one SPI master, one GPIO select driver and one DSP memory
+owner through caller-supplied bank/select/SCLK/MOSI pin numbers and polarity.
+There is no default Nord routing, processor count, pull or source frequency.
+Only committed pin drivers are sampled. Open master/GPIO/DSP transactions
+reject before a receiving device changes. Undriven select or SCLK diagnoses;
+an undriven MOSI stays unknown and is required only on an actual receive edge.
+This driven-clock contract does not qualify floating pins during board reset.
+
+observe() supplies the actual levels to the existing bootstrap or runtime SPI
+receiver. It neither replaces the firmware block writer nor grants DMA, latches
+a core IRQ, acknowledges a peripheral, steps a core or advances a clock. The
+owner must observe committed control changes before the next master event and
+observe again after it. input() rejects select/clock levels not yet seen by the
+receiver, preventing the next event from bypassing a failed observation. Repair
+the missing memory/input at that boundary and retry observe() without time or
+another guest instruction. Complete multi-endpoint scheduling remains separate.
+
+input() samples actual runtime MISO only if the master's next event consumes
+external pad input. The same phase/edge predicate drives the master's actual
+shift implementation. Falling launch edges in this slave profile, hold/gap/idle
+and internal loopback events require no external MISO. This matters at the first
+transmit edge: driven data is unknown until the slave loads its shifter there.
+
+On a sampling event, the slave's actual driven HIGH or LOW wins over an explicit
+weak pull supplied by the caller. Only an undriven output can use that pull.
+Unknown driven data rejects in the slave instead of silently becoming a pull
+value. An absent pull stays unknown; the master diagnoses it at the actual
+sampling event. Output monitoring comes from the actual MOSI driver.
+
+The link stores references and immutable wire configuration, not duplicate
+device or event state. Its devices must outlive it and all calls use one owning
+emulation thread. Success paths have no callbacks or allocations. General
+device snapshot restoration, weak select/SCLK sources, bus contention between
+multiple slaves, pinmux, synchronizers and complete board timing remain open.
+
+Owned checks drive a full 384-word bootstrap through explicit pin writes and
+compare every RAM word. A failing last-bit write retains the exact master,
+GPIO and receiver state; mapping the missing destination permits the same
+rising boundary to commit once. Unknown MOSI, undriven clock/select, active
+owners, active-HIGH selection, malformed endpoints and unobserved controls
+are checked. An actual master transfer receives a distinct 32-bit word from
+the runtime slave while the slave captures the master's different word. No
+host reply bytes or implicit DMA/IRQ acknowledgements supply that exchange.
+
+The optional original SPI fixtures use this production connection for their
+existing GPIO bank 2 pins 11/12, SPI SCLK9/MOSI10 candidate. The owned 200 MHz
+clock input, functional instruction cadence, DMA grants and optional pull-up
+remain explicitly fixture-owned. All original word/payload/frontier oracles
+remain in force. This does not establish full MCU uploader scheduling, physical
+Nord wiring, complete cold boot, firmware audio or objective.txt acceptance.
+The initial hardware boot-IRQ/RTI activation and return frame remain open;
+bootstrap completion metadata does not establish the first Execute PC
+(sharc.txt).
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(processor_spi_sharc_wires|spi_serial|sharc_boot_serial|sharc_runtime_spi|sharc_spi_control_buffers)$' --output-on-failure

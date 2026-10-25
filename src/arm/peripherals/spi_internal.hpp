@@ -29,6 +29,7 @@ inline constexpr std::uint16_t spi_serial_pins = 0xe00;
 void spi_reset_data(SpiState &state);
 void spi_submit(SpiState &state, SpiWord word);
 void spi_advance(SpiState &state, SpiInput input);
+[[nodiscard]] bool spi_samples_input(const SpiState &state);
 void spi_consume(SpiState &state);
 [[nodiscard]] std::uint32_t spi_pending(const SpiState &state);
 

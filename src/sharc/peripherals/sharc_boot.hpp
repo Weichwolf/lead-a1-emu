@@ -35,8 +35,9 @@ public:
   // DMISO=1 in this boot profile: no driven MISO, including after kernel load.
   [[nodiscard]] static std::optional<bool> miso() { return {}; }
 
-  // A completed initial DMA releases the idle core at this word address.
-  // This is a scheduler handoff, not firmware readiness or GPIO activity.
+  // Completion metadata: base address of the fully loaded kernel/IVT.
+  // The board must separately deliver the initial boot IRQ and execute its RTI
+  // with an established return frame; see doc/sharc.txt. No readiness is implied.
   [[nodiscard]] std::optional<std::uint32_t> entry() const;
   void observe(SharcMemory &memory, SharcBootLines lines);
 

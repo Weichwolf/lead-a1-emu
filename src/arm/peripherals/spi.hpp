@@ -91,6 +91,9 @@ public:
   [[nodiscard]] SpiState state() const;
   [[nodiscard]] SpiPins pins() const;
   [[nodiscard]] bool interrupt() const;
+  void check_external_event() const;
+  // Whether the next event actually consumes external serial pad samples.
+  [[nodiscard]] bool samples_external_input() const;
   // Relative event interval in half SPI-module-clock periods; idle has none.
   [[nodiscard]] std::optional<unsigned int> next_event() const;
   // Board advances emulated time by next_event(), then supplies sampled pads.
