@@ -12,6 +12,7 @@ src/common/             Shared memory/device interfaces.
 src/firmware/           Container and image decoding.
 src/arm/core/           ARM execution, data/cache/MMU/system state.
 src/arm/peripherals/    AINTC, GPIO and SPI.
+src/sharc/board/        Bound peripheral DMA scheduling.
 src/sharc/core/         SHARC instruction execution and architectural state.
 src/sharc/memory/       Memory views, arbitration and IOP bridge.
 src/sharc/peripherals/  Boot SPI, clocks, PCG, control, DAI, PDAP/IDP DMA, SPORT.

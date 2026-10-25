@@ -142,13 +142,23 @@ ID  State    Evidence / remaining work
              6-bit modify and16-bit live/reload counts. Standard/ping-pong
              phases, explicit zero-count65536, pause/resume, successful-write
              completion and independently restored FIFO/RAM/bus state have
-             owned tests. SIP sourcing, shared peripheral-group arbitration,
+             owned tests. SIP sourcing, complete peripheral arbitration,
              DAI/core IRQ and physical start/status timing remain open
              (sharc-idp-dma.txt). Native count loops of at least five instructions
              execute ordinary CALL/RTS, nested callees and conditional polling;
              final e-3 pre-pop, PCSTK/PCSTKP reads and failed pre-pop/pending-effect
              rollback have independent tests (sharc-long-loops.txt). Other loop
              forms, counter readback and full pipeline timing remain open.
+             A two-stage normal32 peripheral DMA arbiter now selects fixed
+             SPORT/IDP/UART channel ordinals and fixed/cyclic IOD0 groups.
+             SYSCTL.DCPR core effect and additional2-PCLK peripheral mode are
+             separate. Unknown rotating cursor/history remains explicit and
+             ambiguous winners reject. A board component binds actual SPI,
+             PDAP and eight SPORT owners to real RAM grants, retaining failed
+             accesses for no-time retry. Owned producer data/counters/IRQ order
+             and independent continuations pass. Cursor reset/physical phase,
+             launch/read pipelining, TCB dual-bus locks, MLB/link/SPEP and full
+             CPU/source/IRQ coupling remain open (sharc-dma-arbitration.txt).
              Arithmetic DO and straight>=5-instruction compute/register bodies
              sample old flags/pre-pop at e-2, preserve latched termination and
              report two flush lower-bound clocks. FOREVER/SIMD AND, LADDR/stack
@@ -636,9 +646,10 @@ ID  State    Evidence / remaining work
              The separate clocked IOP profile now preserves actual native
              posted SPI setup, all ordinary records/final-cell checks and384
              vector words through original P1I/RTI/native-VISA transition.
-             Its application reference reaches414/440 original instructions,
+             Its application reference reaches417/442 original instructions,
              including actual SPORT/PCG/PICR/secondary-mode and complete IDP
-             parameter/enable setup, then fails at SYSCTL.DCPR write. No source
+             parameter/enable and DCPR/mask setup, then fails at pending MODE1/IOP
+             composition or LIRPTL access. No source
              SCLK/serial data,
              full cold boot or manual-function acceptance (sharc-sport.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
@@ -903,7 +914,7 @@ ID  State    Evidence / remaining work
              PC/width/register/post-value expectations. All24 actual TCBs and
              cyclic partners match factual original/static expectations;
              odd normal-word indices and separate buffers remain unchanged.
-             All eight cases reach414/440 application instructions. The actual
+             All eight cases retain the414/440 application checkpoint. The actual
              complete19-instruction IDP initialization now programs both ring
              bases, M=1, PC=80 and global CTL0=a0 through the bound receiver
              and real posted parameter port. Final indexB retirement still
@@ -913,14 +924,20 @@ ID  State    Evidence / remaining work
              Literal expected receiver/DMA state follows the real pending or
              delivered global-enable write and retains unresolved startup.
              The following SYSCTL read/SET80 establishes4->84 in USTAT1;
-             actual DCPR writes at+961/+1027 fail without changing CPU/fetch,
-             controller, receiver or bus. This is the missing peripheral-group
-             arbiter/rotation behavior, not a firmware defect. Prior data/pin/
+             actual DCPR writes at+961/+1027 now execute through the bound
+             peripheral arbiter. Original IMASK SET5000/1000 and transport0's
+             MODE1 SET1800 retain literal value/knowledge expectations. Prefixes
+             reach417/442 instructions. The next SPCTL2 read+970 rejects its
+             pending MODE1/IOP composition; transport1 LIRPTL SET400 at+1033
+             rejects unimplemented register semantics. Exact CPU/fetch/control/
+             receiver/bridge/fabric/SPI snapshots survive both failures. Fabric
+             clocks equal bridge clocks since application entry, with no data
+             requests or invented RAM/IRQ effects. Prior data/pin/
              enable/frame/clock,vector/payload and original SPI/SPORT/TCB
              assertions remain. Transport0's actual PCG setup remains disabled;
              transport1 alone retains its original RND32 clear. Image-specific
              ring bases and secondary B0/I0/L0/R0/R2/R3/M8/M1 remain checked.
-             Complete DCPR/peripheral arbitration, SPORT/audio/source/board
+             Complete peripheral arbitration, SPORT/audio/source/board
              coupling, boot and physical timing remain open
              (sharc-idp-dma.txt,sharc-pcg.txt,sharc-picr.txt,sharc-sport.txt).
              SPORT DMA tests add50 independently listed count/stride/direction
@@ -992,6 +1009,12 @@ ID  State    Evidence / remaining work
              clocked reference; own pinned field scans additionally establish
              the following SYSCTL read/SET80/write with3/3/3 short-word widths
              in all four programs (sharc-idp-dma.txt).
+             Private factual handoffs6401062330/6401407526 corroborate actual
+             IDP completion vector/ISR latch-read versus separate mask RMW,
+             SYSCTL/mask/MODE/SPORT fields and the MCU GPIO uploader's logical
+             readiness/release sequence. They do not prove physical FLAG wiring,
+             package roles or timing. No FLAG0 input is forced and no private
+             implementation is imported (sharc-dma-arbitration.txt).
 10  pending  No hardware comparison, timing measurement or flashing performed.
 
 Quality and UI checks validate only the named bootstrap behavior. Unknown values

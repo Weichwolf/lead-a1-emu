@@ -3,6 +3,7 @@
 
 #include "sharc/memory/sharc_memory.hpp"
 
+#include <array>
 #include <cstdint>
 #include <optional>
 
@@ -14,6 +15,9 @@ struct SharcControlState {
   std::uint32_t effective{};
   std::uint32_t effective_known{};
   std::optional<std::uint32_t> delayed;
+  std::optional<bool> dma_rotation{false};
+  // HWR3-43: separate2-PCLK mode effects, sampled at actual half-PCLK events.
+  std::array<std::optional<bool>, 4> dma_commands{};
   bool operator==(const SharcControlState &) const = default;
 };
 
@@ -32,6 +36,8 @@ public:
   // Settles the supported one-cycle effect after a positive quiet internal
   // processor-clock interval (PGR A-32/A-45); no guest instruction retires.
   void advance_internal_clocks(unsigned int core_cycles);
+  void advance_half_pclk(unsigned int half_periods);
+  [[nodiscard]] std::optional<bool> dma_rotation() const;
   [[nodiscard]] std::uint64_t read(MemoryAccess access) override;
   void write(MemoryAccess access, std::uint64_t value) override;
   void begin_instruction() override;

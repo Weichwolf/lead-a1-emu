@@ -11,6 +11,7 @@
 #include <source_location>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace {
 
@@ -98,8 +99,8 @@ void transaction_ownership() {
 void invalid_fields() {
   lead_a1::SharcControl control(true);
   const auto before = control.state();
-  constexpr std::array<std::uint64_t, 6> unsupported{
-      1, 2, 0x80, 0x10000, 0x1000000, std::uint64_t{1} << 32};
+  constexpr std::array<std::uint64_t, 5> unsupported{
+      1, 2, 0x10000, 0x1000000, std::uint64_t{1} << 32};
   for (const auto value : unsupported) {
     rejected([&] { control.write(word, value); }, "write not implemented");
     require(control.state() == before);
@@ -190,6 +191,71 @@ void snapshots_and_corruption() {
   require(unknown.snapshot() == partial);
 }
 
+void dma_mode_has_separate_peripheral_latency() {
+  lead_a1::SharcControl control(true);
+  constexpr std::uint32_t rotating = 0x84;
+  control.write(word, rotating);
+  constexpr unsigned int unrelated_peripheral_time = 100;
+  control.advance_half_pclk(unrelated_peripheral_time);
+  require(control.read(word) == rotating && control.dma_rotation() == false);
+  control.advance_internal_clocks(1);
+  require(control.state().effective == rotating && control.dma_rotation() == false);
+  control.advance_half_pclk(2);
+  const auto midway = control.snapshot();
+  auto restored = lead_a1::SharcControl::from_snapshot(midway);
+  restored.advance_half_pclk(1);
+  require(restored.dma_rotation() == false);
+  restored.advance_half_pclk(1);
+  require(restored.dma_rotation() == true && control.snapshot() == midway);
+  control.advance_half_pclk(2);
+  require(control.dma_rotation() == true);
+  control.write(word, 4);
+  control.advance_internal_clocks(1);
+  control.advance_half_pclk(1);
+  control.write(word, rotating);
+  control.advance_internal_clocks(1);
+  for (const auto bit : std::string_view("1101")) {
+    control.advance_half_pclk(1);
+    require(control.dma_rotation() == (bit == '1'));
+  }
+  control.begin_instruction();
+  rejected([&] { static_cast<void>(control.dma_rotation()); }, "active transaction");
+  rejected([&] { control.advance_half_pclk(1); }, "active transaction");
+  control.abort_instruction();
+}
+
+void dma_unknown_state_and_same_phase_effects() {
+  lead_a1::SharcControl control(true);
+  constexpr std::uint32_t rotation = 0x80;
+  constexpr std::uint32_t rotating = 0x84;
+  auto state = control.snapshot();
+  state.known &= ~rotation;
+  state.effective_known &= ~rotation;
+  state.dma_rotation.reset();
+  auto unknown = lead_a1::SharcControl::from_snapshot(state);
+  require(!unknown.dma_rotation());
+  unknown.write(word, rotating);
+  unknown.advance_internal_clocks(1);
+  unknown.advance_half_pclk(4);
+  require(unknown.dma_rotation() == true);
+  control.write(word, rotating);
+  control.advance_internal_clocks(1);
+  control.write(word, 4);
+  const auto waiting = control.snapshot();
+  rejected([&] { control.advance_internal_clocks(1); }, "same half-PCLK interval");
+  require(control.snapshot() == waiting);
+  control.advance_half_pclk(1);
+  control.advance_internal_clocks(1);
+  control.advance_half_pclk(3);
+  require(control.dma_rotation() == true);
+  control.advance_half_pclk(1);
+  require(control.dma_rotation() == false);
+  state = control.snapshot();
+  state.dma_commands.back() = true;
+  rejected([&] { const auto invalid = lead_a1::SharcControl::from_snapshot(state); },
+           "DMA mode snapshot");
+}
+
 }
 
 int main() {
@@ -200,6 +266,8 @@ int main() {
     cpu_effects_and_failed_store();
     quiet_internal_clock_effects();
     snapshots_and_corruption();
+    dma_mode_has_separate_peripheral_latency();
+    dma_unknown_state_and_same_phase_effects();
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

@@ -87,8 +87,9 @@ This component does not yet drive SharcFetch or advance a processor,
 PMCTL/SYSCTL or interrupt controller. It does not select between PM data
 and instruction fetch, define full pipeline partial stalls, retire a CPU
 instruction or resolve mixed loop/DAG/cache hazards. IOP-register arbitration
-uses a DIFFERENT priority (DM>PM>IO), so IOP addresses are excluded. Earlier
-peripheral channel/group arbitration, DCPR rotation, external memory, DMA
+uses a DIFFERENT priority (DM>PM>IO), so IOP addresses are excluded. Peripheral
+group/DCPR selection is now separately bound by SharcDmaFabric
+(sharc-dma-arbitration.txt). Full physical arbitration, external memory, DMA
 chaining, audio serial paths and the four physical shadow-write FIFOs are
 not implemented here. Logical writes are immediately visible at successful
 grant consumption; no physical FIFO drain timing or silicon anomaly is

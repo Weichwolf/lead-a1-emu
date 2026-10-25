@@ -51,6 +51,8 @@ target_include_directories(lead_a1_arm PUBLIC src)
 target_link_libraries(lead_a1_arm PUBLIC lead_a1_quality PRIVATE lead_a1_sleigh)
 
 add_library(lead_a1_sharc STATIC
+  src/sharc/board/sharc_dma_fabric.cpp
+  src/sharc/memory/sharc_dma_arbiter.cpp
   src/sharc/core/sharc.cpp
   src/sharc/core/sharc_arithmetic_loop.cpp
   src/sharc/core/sharc_bit_shift.cpp
@@ -138,6 +140,12 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-dma-fabric-test test/sharc_dma_fabric_test.cpp)
+  target_link_libraries(lead-a1-sharc-dma-fabric-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_dma_real_producer_fabric COMMAND lead-a1-sharc-dma-fabric-test)
+  add_executable(lead-a1-sharc-dma-arbiter-test test/sharc_dma_arbiter_test.cpp)
+  target_link_libraries(lead-a1-sharc-dma-arbiter-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_dma_group_arbitration COMMAND lead-a1-sharc-dma-arbiter-test)
   add_executable(lead-a1-sharc-idp-dma-bus-test test/sharc_idp_dma_bus_test.cpp)
   target_link_libraries(lead-a1-sharc-idp-dma-bus-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_idp_dma_posted_parameters COMMAND lead-a1-sharc-idp-dma-bus-test)
@@ -645,7 +653,7 @@ add_custom_target(format-check
 if(BUILD_TESTING)
   add_custom_target(quality
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
-    DEPENDS lead-a1-sharc-idp-dma-bus-test lead-a1-sharc-idp-dma-test lead-a1-sharc-pcg-bus-test lead-a1-sharc-pcg-test lead-a1-sharc-picr-test lead-a1-sharc-picr-bus-test format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
+    DEPENDS lead-a1-sharc-dma-fabric-test lead-a1-sharc-dma-arbiter-test lead-a1-sharc-idp-dma-bus-test lead-a1-sharc-idp-dma-test lead-a1-sharc-pcg-bus-test lead-a1-sharc-pcg-test lead-a1-sharc-picr-test lead-a1-sharc-picr-bus-test format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
       lead-a1-sharc-sport-test
       lead-a1-sharc-sport-bus-test
       lead-a1-sharc-sport-dma-test

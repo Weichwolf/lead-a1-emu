@@ -42,7 +42,8 @@ service_dma() preflights receiver changes, executes the real RAM operation and
 only then commits FIFO/index/count/half/completion. Failure retains all owner
 state and the unconsumed grant; error context includes channel, PC, operation,
 raw index/count and the underlying address. No allocation occurs on success.
-Memory-port grants are real; shared peripheral-group arbitration remains open.
+Memory-port grants are real; sharc-dma-arbitration.txt adds a separately bound
+logical group arbiter. Full physical arbitration and board coupling remain open.
 
 Completion events retain a per-channel pending mask separately from CPU IRQs.
 FIFO threshold interrupts are suppressed while DMA service is selected.
@@ -70,11 +71,12 @@ modify1, half count80 and CTL0 read/SETa0/write. Each PC/width/register/post-val
 has an independently scanned original expectation. Exact receiver/parameter/
 phase state is checked against whether the actual5-clock global-enable write
 is still pending or delivered. No input edge/word or grant is supplied, so no
-transfer/IRQ is invented. Original application prefixes reach414/440 after the
-next SYSCTL read and SET80. Actual write at+961/+1027 (SYSCTL word30024) fails
-on unsupported DCPR rotation. CPU/fetch/controller/receiver/bus retain their
-pre-instruction state. PGR A-46 identifies bit7 as peripheral DMA group priority
-rotation; this is the next emulator gap, not permission to alter firmware.
+transfer/IRQ is invented. The original SYSCTL read/SET80/write now executes
+through the bound peripheral DMA arbiter (sharc-dma-arbitration.txt), with4->84
+conditional on the explicit SYSCTL input. IMASK and transport0 MODE1 effects
+advance the prefixes to417/442 instructions. The next SPCTL2 read+970 rejects
+pending MODE1/IOP coupling; transport1 LIRPTL SET400+1033 remains unsupported.
+Exact CPU/fetch/control/receiver/bridge/fabric snapshots survive these failures.
 The complete payload/vector/SPI/DAI/SPORT oracles remain; full boot/audio and
 objective.txt acceptance are still open.
 

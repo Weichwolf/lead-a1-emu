@@ -16,9 +16,36 @@ namespace {
 constexpr std::uint32_t all_bits = std::numeric_limits<std::uint32_t>::max();
 constexpr std::uint32_t internal_vectors = 4;
 constexpr std::uint32_t data_widths = 0x1e00;
-constexpr std::uint32_t supported = internal_vectors | data_widths;
+constexpr std::uint32_t dma_rotation_bit = 0x80;
+constexpr std::uint32_t supported = internal_vectors | data_widths | dma_rotation_bit;
+
+void validate_dma(const SharcControlState &state) {
+  auto latest = state.dma_rotation;
+  for (const auto command : state.dma_commands) {
+    if (command) { latest = command; }
+  }
+  if (state.delayed) { latest = (*state.delayed & dma_rotation_bit) != 0; }
+  const bool known = (state.known & dma_rotation_bit) != 0;
+  if (latest.has_value() != known ||
+      (latest && *latest != ((state.control & dma_rotation_bit) != 0))) {
+    throw std::invalid_argument("Invalid SHARC SYSCTL DMA mode snapshot");
+  }
+}
+
+void arm_dma(SharcControlState &state, std::uint32_t value) {
+  const bool changed = (state.effective_known & dma_rotation_bit) == 0 ||
+                       ((state.effective ^ value) & dma_rotation_bit) != 0;
+  if (!changed) { return; }
+  const bool rotating = (value & dma_rotation_bit) != 0;
+  auto &command = state.dma_commands.back();
+  if (command && *command != rotating) {
+    throw std::runtime_error("SYSCTL DCPR effects in the same half-PCLK interval not qualified");
+  }
+  command = rotating;
+}
 
 void validate_state(const SharcControlState &state) {
+  validate_dma(state);
   for (const auto fields :
        {SharcKnown32{.value = state.control, .known = state.known},
         SharcKnown32{.value = state.effective, .known = state.effective_known}}) {
@@ -111,15 +138,40 @@ void SharcControl::write(MemoryAccess access, std::uint64_t value) {
   if ((value & ~std::uint64_t{supported}) != 0) {
     throw std::runtime_error("SHARC SYSCTL reset/arbitration/mux/reserved write not implemented");
   }
-  auto &next = working();
+  auto next = working();
   next.control = static_cast<std::uint32_t>(value);
   next.known = all_bits;
   next.delayed = next.control;
+  working() = next;
+}
+
+std::optional<bool> SharcControl::dma_rotation() const {
+  if (staged_ || core_active_) {
+    throw std::logic_error("SYSCTL DMA arbitration during an active transaction");
+  }
+  return current_.dma_rotation;
+}
+
+void SharcControl::advance_half_pclk(unsigned int half_periods) {
+  if (staged_ || core_active_) {
+    throw std::logic_error("SYSCTL DMA clock advance during an active transaction");
+  }
+  const auto steps =
+      half_periods < current_.dma_commands.size() ? half_periods : current_.dma_commands.size();
+  for (unsigned int step = 0; step < steps; ++step) {
+    if (current_.dma_commands[0]) { current_.dma_rotation = current_.dma_commands[0]; }
+    for (unsigned int index = 1; index < current_.dma_commands.size(); ++index) {
+      current_.dma_commands[index - 1] = current_.dma_commands[index];
+    }
+    current_.dma_commands.back().reset();
+  }
 }
 
 void SharcControl::begin_core_instruction() {
   if (staged_) { throw std::logic_error("SHARC SYSCTL already owned by a transaction/core"); }
-  staged_ = current_;
+  auto next = current_;
+  if (next.delayed) { arm_dma(next, *next.delayed); }
+  staged_ = next;
   due_ = staged_->delayed;
   staged_->delayed.reset();
   core_active_ = true;
@@ -150,9 +202,12 @@ void SharcControl::advance_internal_clocks(unsigned int core_cycles) {
   const auto delayed = current_.delayed;
   if (core_cycles == 0 || !delayed) { return; }
   // PGR A-32/A-45: one extra internal processor clock, not a retired instruction.
-  current_.effective = *delayed;
-  current_.effective_known = all_bits;
-  current_.delayed.reset();
+  auto next = current_;
+  arm_dma(next, *delayed);
+  next.effective = *delayed;
+  next.effective_known = all_bits;
+  next.delayed.reset();
+  current_ = next;
 }
 
 void SharcControl::begin_instruction() {

@@ -1,0 +1,67 @@
+SHARC peripheral DMA arbitration and binding
+
+SharcDmaArbiter selects real normal32 peripheral RAM requests in two stages.
+HWR rev1.1 3-30/31,3-37..43,Table3-29 and PGR rev2.4 A-46 are pinned by
+reference/sharc.json. Stage1 selects the lowest documented channel ordinal
+within SPORT pairs, IDP and UART. Fixed stage2 selects the first requesting
+group A..N. MLB/link stage1 rotation and external SPORT/SPEP are unsupported;
+they must not be treated as the fixed-stage1 peripherals.
+
+SYSCTL bit7 DCPR controls fixed/rotating peripheral group priority. Raw register,
+one-extra-CCLK core effect and additional2-PCLK peripheral-mode effect are
+separate. The owner supplies actual half-PCLK events; retiring an instruction
+or reading SYSCTL cannot directly mature the peripheral effect. Commands retain
+fractional age and order across independent snapshots and transaction rollback.
+Same-half-PCLK conflicting commands reject rather than inventing ordering.
+DCPR also controls external SPEP arbitration, which remains unimplemented.
+
+The cyclic word-selection reference moves the winning group behind all others
+without rotating during idle. The explicit captured grant starts a memory
+request after one supplied PCLK and retains it until its real RAM operation
+and peripheral service succeed. This launch interval is an owned logical
+reference: HWR3-31 says next clock, while actual phase/pipelining/read throughput
+are NOT qualified here. Older ADI family descriptions corroborate cyclic
+rotation, but do not qualify2148x reset/history/mode-transition cursor phase.
+Every possible cursor is therefore retained by default and on mode changes.
+An ambiguous winner rejects with PC, operation, address, group and channel;
+a sole request can establish the next cursor under known rotating mode.
+Tests with a supplied single cursor are owned references, not Nord reset facts.
+
+SharcDmaFabric binds one control/RAM/SPI/PDAP and eight ordered SPORT owners.
+A tick is one explicitly supplied CCLK/half-PCLK. It ages the mode/captured
+request, submits ready IOD0 requests to SharcMemoryBus and calls the actual
+SPI/PDAP/SPORT RAM service. Failed RAM access retains FIFO/counters and its
+exact grant; retry consumes that grant without a new clock or selection.
+Source edges, SPORT synchronization/status/disable and CPU retirement are
+separate owner events. The fabric does not generate clocks, words or IRQs.
+A fabric retry alone does not qualify whole-board replay after a failed tick;
+the caller must preserve the other devices' elapsed-interval ownership too.
+SPORT TCB loads lock BOTH IOP buses (HWR3-49/50). Active loads fail explicitly
+with PC/address/read/SPORT context until dual-bus lock coupling is implemented;
+they are not interleaved as ordinary independently arbitrated words.
+
+The original clocked application now uses this same fabric and the existing
+peripherals/RAM. Earlier native loader/vector paths retain their separate
+functional SPI-group service; no complete clocked loader or CPU/bus arbitration
+is claimed. Fabric clocks equal bridge clocks since application entry. Without
+known source inputs there are no data requests, RAM transfers or completion
+IRQs. Original DCPR writes execute; all four programs retain exact mask effects,
+IDP state, SPORT parameters/TCBs, SPI/vector cursor and payload oracles.
+The next transport0 access is SPCTL2 read at+970 after MODE1 SET1800; its pending
+MODE1/IOP hold is not qualified. Transport1 stops at LIRPTL SET400 at+1033.
+Exact failures preserve CPU/fetch/control/receiver/bridge/fabric state.
+These are remaining emulator gaps, not firmware failures or complete boot.
+
+Owned tests independently enumerate fixed group/channel priorities and cyclic
+winner sequences, empty intervals, mode-change ambiguity, captured grant age,
+malformed inputs and independent continuations. Actual SPI serial words, SPORT
+serial reception and packed PDAP edges compete for the same RAM bus. Literal
+RAM contents, counters, distinct completion positions and failed-RAM repair
+check the real producers, rather than replacing them with scripted service.
+
+Open: physical cursor/grant phase and read throughput, pipelined selection,
+TCB dual-bus locks, MLB/link/SPEP, CPU/fetch port contention, full source/IRQ/
+board coupling, missing inputs and complete objective.txt acceptance.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^sharc_(dma_.*|control)$' --output-on-failure

@@ -18,9 +18,10 @@ See doc/arm-reference.txt, doc/arm-exceptions.txt and doc/aintc.txt.
 Native SHARC references load all ordinary records of four original DSP streams
 at two explicit serial cadences, with independent payload-cell checks. The
 clocked IOP profile additionally executes final vector DMA, original P1I/RTI,
-native/VISA transition and common clock initialization. It reaches358/431
+native/VISA transition and common clock initialization. It reaches417/442
 application instructions through SPI, DAI clock/frame/pin/enable/data and SPORT
-control/DMA and PICR setup, then fails at PCG_PW1 write or IDP_CTL1 DMA enable.
+control/DMA, PCG/PICR, IDP and DCPR setup. The next pending MODE1/IOP
+composition or LIRPTL access remains unsupported (doc/sharc-dma-arbitration.txt).
 These explicit reference inputs do not establish a complete cold boot, physical
 processor/slot wiring, MHz or playable audio. Other profiles retain independent
 execution boundaries. See doc/sharc-iop-bridge.txt, doc/sharc-dai-data.txt and

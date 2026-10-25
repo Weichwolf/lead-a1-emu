@@ -3,6 +3,7 @@
 #include "original_pcg_expectations.hpp"
 #include "original_picr_expectations.hpp"
 #include "original_sport_expectations.hpp"
+#include "sharc/board/sharc_dma_fabric.hpp"
 #include "sharc/core/sharc.hpp"
 #include "sharc/memory/sharc_iop_bridge.hpp"
 #include "sharc/memory/sharc_memory.hpp"
@@ -409,6 +410,7 @@ struct HeaderDevices {
   lead_a1::SharcPdap *pdap{};
   lead_a1::SharcPicr *priority{};
   lead_a1::SharcPcg *pcg{};
+  lead_a1::SharcDmaFabric *dma_fabric{};
   lead_a1::SharcIopBridge *bridge{};
   lead_a1::SharcDpiRouting *dpi_pin{};
   lead_a1::SharcDpiRouting *dpi_enable{};
@@ -465,6 +467,12 @@ void advance_bound_peripherals(HeaderDevices devices) {
     if (port == nullptr) { throw std::logic_error("Missing original SPORT owner"); }
     port->advance_cclk(1);
     port->advance_half_pclk(1);
+  }
+  if (devices.iop_epoch != 0) {
+    if (devices.dma_fabric == nullptr) { throw std::logic_error("Missing original DMA fabric"); }
+    devices.dma_fabric->tick();
+  } else {
+    devices.control.advance_half_pclk(1);
   }
   devices.bridge->tick(); // Age the elapsed interval before delivering its new writes.
 }
@@ -774,10 +782,13 @@ void advance_clocked_visa_devices(lead_a1::SharcMemory &memory,
       {.core_cycles = 1,
        .clkin_cycles = (devices.clock.device.state().control & pll_bypass) != 0 ? 1U : 0U});
   serial.advance(devices.spi, memory);
-  static_cast<void>(devices.spi.service_dma(memory));
-  original_spi_interrupt(cpu, devices);
+  if (devices.iop_epoch == 0) {
+    static_cast<void>(devices.spi.service_dma(memory));
+    original_spi_interrupt(cpu, devices);
+  }
   require(!devices.spi.state().overflow);
   advance_bound_peripherals(devices);
+  if (devices.iop_epoch != 0) { original_spi_interrupt(cpu, devices); }
 }
 
 void check_original_clocked_visa_common(lead_a1::SharcMemory &memory,
@@ -1692,6 +1703,52 @@ void check_original_idp_configuration(HeaderDevices devices) {
           devices.pdap->interrupts() == lead_a1::SharcPdapInterrupts{});
 }
 
+void original_dma_frontier(lead_a1::SharcMemory &memory,
+                           lead_a1::Sharc &cpu,
+                           lead_a1::SharcFetch &fetch,
+                           SerialInput &serial,
+                           HeaderDevices devices) {
+  original_application_prepare(memory, cpu, fetch, serial, devices);
+  const bool clocks = uses_clock_initializer(devices.placement);
+  constexpr unsigned int sport_read = 970;
+  constexpr unsigned int link_mask_set = 1033;
+  require(cpu.state().pc == devices.placement.second_call + (clocks ? sport_read : link_mask_set));
+  const auto core = cpu.state();
+  const auto transport = fetch.state();
+  const auto controller = devices.control.snapshot();
+  const auto receiver = devices.pdap->snapshot();
+  const auto bridge = devices.bridge->snapshot();
+  const auto spi = devices.spi.state();
+  constexpr std::uint32_t rotating = 0x84;
+  require(devices.dma_fabric != nullptr && controller.control == rotating &&
+          controller.effective == rotating && !controller.delayed);
+  const auto fabric = devices.dma_fabric->snapshot();
+  require(fabric.memory_bus.clocks == bridge.clocks - devices.iop_epoch &&
+          fabric.memory_bus.pending == lead_a1::SharcMemoryBusState{}.pending &&
+          fabric.memory_bus.granted == lead_a1::SharcMemoryBusState{}.granted &&
+          !fabric.arbiter.transfer && fabric.arbiter.mode == controller.dma_rotation &&
+          fabric.arbiter.heads == lead_a1::SharcDmaArbiterState::unknown_heads);
+  try {
+    if (clocks) {
+      static_cast<void>(fetch.peripheral_access(cpu));
+    } else {
+      static_cast<void>(cpu.step(fetch));
+    }
+  } catch (const std::exception &error) {
+    const std::string message(error.what());
+    const auto *reason = clocks ? "SHARC IOP hold with mode/branch/cache/loop/IRQ context"
+                                : "SHARC link-register read not implemented";
+    if (message.find(reason) == std::string::npos) { throw; }
+    require(!clocks || message.find("word-address=0x400 operation=read") != std::string::npos);
+    require(cpu.state() == core && fetch.state() == transport &&
+            devices.control.snapshot() == controller && devices.pdap->snapshot() == receiver &&
+            devices.bridge->snapshot() == bridge && devices.spi.state() == spi &&
+            devices.dma_fabric->snapshot() == fabric && !memory.active());
+    return;
+  }
+  throw std::runtime_error("Missing original MODE1/IOP or LIRPTL frontier failure");
+}
+
 void original_sport_failure(lead_a1::SharcMemory &memory,
                             lead_a1::Sharc &cpu,
                             lead_a1::SharcFetch &fetch,
@@ -1752,35 +1809,32 @@ void original_sport_failure(lead_a1::SharcMemory &memory,
   original_picr_ordinary(
       memory, cpu, fetch, serial, devices, control_set - (clocks ? offset_difference : 0U), 3);
   require(cpu.state().system[0] == (lead_a1::SharcKnown32{.value = rotating, .known = full32}));
-  original_application_prepare(memory, cpu, fetch, serial, devices);
-  const auto core = cpu.state();
-  const auto pipeline = fetch.state();
-  const auto queue = devices.bridge->snapshot();
-  const auto pdap = devices.pdap->snapshot();
-  const auto control = devices.control.snapshot();
   constexpr unsigned int control_write = 1027;
-  const auto failing_pc =
-      devices.placement.second_call + control_write - (clocks ? offset_difference : 0U);
-  require(core.pc == failing_pc && !fetch.peripheral_access(cpu));
-  std::ostringstream context;
-  context << "SHARC captured execution pc=0x" << std::hex << failing_pc;
-  bool stopped{};
-  try {
-    static_cast<void>(original_application_retire(memory, cpu, fetch, serial, devices));
-  } catch (const std::runtime_error &error) {
-    const std::string message(error.what());
-    if (!message.starts_with(context.str()) ||
-        message.find("word-address=0x30024") == std::string::npos ||
-        message.find("SHARC memory write") == std::string::npos ||
-        message.find("SHARC SYSCTL reset/arbitration/mux/reserved write not implemented") ==
-            std::string::npos) {
-      throw;
-    }
-    stopped = true;
+  original_picr_ordinary(
+      memory, cpu, fetch, serial, devices, control_write - (clocks ? offset_difference : 0U), 3);
+  require(devices.control.state().control == rotating);
+  constexpr unsigned int interrupt_mask_set = 1030;
+  const auto mask_before = cpu.state().system[11];
+  const auto mode_before = cpu.state().system[2];
+  original_picr_ordinary(memory,
+                         cpu,
+                         fetch,
+                         serial,
+                         devices,
+                         interrupt_mask_set - (clocks ? offset_difference : 0U),
+                         3);
+  const auto mask = clocks ? 0x5000U : 0x1000U;
+  require(cpu.state().system[11] == (lead_a1::SharcKnown32{.value = mask_before.value | mask,
+                                                           .known = mask_before.known | mask}));
+  if (clocks) {
+    constexpr unsigned int mode_set = 967;
+    constexpr std::uint32_t interrupt_modes = 0x1800;
+    original_picr_ordinary(memory, cpu, fetch, serial, devices, mode_set, 3);
+    require(cpu.state().system[2] ==
+            (lead_a1::SharcKnown32{.value = mode_before.value | interrupt_modes,
+                                   .known = mode_before.known | interrupt_modes}));
   }
-  require(stopped && cpu.state() == core && fetch.state() == pipeline &&
-          devices.bridge->snapshot() == queue && devices.pdap->snapshot() == pdap &&
-          devices.control.snapshot() == control && !memory.active());
+  original_dma_frontier(memory, cpu, fetch, serial, devices);
   check_original_idp_configuration(devices);
   lead_a1::SharcPcgState pcg_expected;
   if (clocks) { pcg_expected.registers = original_pcg::configured; }
@@ -2370,10 +2424,11 @@ void original_pin_boundary(lead_a1::SharcMemory &memory,
   constexpr unsigned int earlier_clock = 128;
   constexpr unsigned int earlier_other = 104;
   const auto instructions = (clocks ? earlier_clock : earlier_other) +
-                            (6 * (pins.size() + data.size())) + (clocks ? 136U : 138U);
-  std::cout << "  Clocked application:" << instructions
-            << " actual instructions; SPORT/PCG/PICR initialization; "
-            << "IDP DMA configured; next SYSCTL access unqualified; no source clock or audio\n";
+                            (6 * (pins.size() + data.size())) + (clocks ? 139U : 140U);
+  std::cout
+      << "  Clocked application:" << instructions
+      << " actual instructions; SPORT/PCG/PICR initialization; "
+      << "IDP DMA and DCPR configured; MODE1/IOP or LIRPTL unqualified; no source clock or audio\n";
 }
 
 void original_post_spi_routing(lead_a1::SharcMemory &memory,
@@ -3034,6 +3089,7 @@ struct OriginalRouting {
   lead_a1::SharcDpiRouting dpi_enable{lead_a1::SharcDpiGroup::enable};
   lead_a1::SharcMemory peripheral;
   std::optional<lead_a1::SharcIopBridge> bridge;
+  std::optional<lead_a1::SharcDmaFabric> dma_fabric;
   std::optional<lead_a1::SharcIopPort> sru;
   std::optional<lead_a1::SharcIopPort> dpi;
   std::optional<lead_a1::SharcIopPort> power_port;
@@ -3054,6 +3110,15 @@ struct OriginalRouting {
       if (port) { result[index] = &*port; }
     }
     return result;
+  }
+
+  lead_a1::SharcDmaFabric *bind_dma(lead_a1::SharcControl &control,
+                                    lead_a1::SharcMemory &memory,
+                                    lead_a1::SharcSpi &serial,
+                                    OriginalProfile profile) {
+    if (profile != OriginalProfile::clocked_iop) { return nullptr; }
+    return &dma_fabric.emplace(
+        control, memory, serial, pdap, sport_devices(), lead_a1::SharcDmaFabricState{});
   }
 
   void map_sports(lead_a1::SharcMemory &memory, lead_a1::SharcIopBridge &bus) {
@@ -3147,6 +3212,7 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
   lead_a1::SharcSpi spi(boot.state());
   auto *bus = routing.map(memory, profile, spi);
   memory.map_io({.first_word = sysctl, .words = 1}, control);
+  auto *fabric = routing.bind_dma(control, memory, spi, profile);
 
   lead_a1::Sharc cpu(memory, lead_a1::Sharc::reset_reference_214xx(reset), &control);
   lead_a1::SharcFetchState transport;
@@ -3223,6 +3289,7 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                           .pdap = &routing.pdap,
                           .priority = &routing.priority,
                           .pcg = &routing.pcg,
+                          .dma_fabric = fabric,
                           .bridge = bus,
                           .dpi_pin = &routing.dpi_pin,
                           .dpi_enable = &routing.dpi_enable,
