@@ -1,0 +1,82 @@
+SPORT control and external-clock serial reference
+
+SharcSport owns one port0..7, two SharcSportDma channels, raw control words,
+serial control sampling, signal knowledge and word phases. SharcSportPair maps
+native interleaved windows C00..C67,400..467,800..867,4800..4867. Physical
+Nord package, pad connections and clock sources are not identified by this map.
+HWR11-4..36/42..58,A-155..172,B-4..9 establish this family reference.
+
+Raw SPCTL/SPCTLN/SPMCTL, divisor, CS and CCS readback is separate from effects.
+The owner supplies actual elapsed SCLK periods: ordinary fields/selection take
+2 samples, enable readiness and MCEA/B take3. Register accesses, CCLK and PCLK
+never supply SCLK. DMA mode follows effective control; its parameters retain
+unknown state until written. SPCTLN FSED and ETDINTEN are independent fields.
+One-PCLK delayed DMA-active/chain status is shared by both SPMCTL pair views,
+with even A/B at24/25,odd A/B at26/27 and chain at28..31 (HWR3-29 and the
+already pinned VisualDSP def21489.h register definitions). Raw disable flushes
+buffers/shifters after6 supplied CCLK, separately from serial synchronization.
+
+observe() consumes explicit optional clock/frame/data-A/data-B levels. Linear
+standard and multichannel modes support3..32-bit words, both sampling edges,
+MSB/LSB order, zero/sign extension, early/late framing, continuous standard
+receive,0..15 TDM frame delay and128 slots with sparse CS masks. Unselected
+slots consume clocks without consuming buffers or requiring data. FSED1 waits
+for a known inactive-to-active frame edge; an active level at enable is not
+an invented edge. Pending frame delay can overlap the preceding frame.
+
+Late-frame external TX drives its first bit on the actual FS event, before
+another SCLK edge. Subsequent bits drive opposite the sampling edge. The
+primary datasheet RevI Table36/Figure21 explicitly times first-bit data and
+enable from external FS, including MCE with MFD0. This is a logical signal
+reference; nanosecond propagation, setup/hold and analog pins are unqualified.
+Data and output-enable knowledge are separate; unknown is no pull-up/down.
+Disabled/RX outputs are non-driving. Standard TX can be driving unknown initial
+data. TDM outside an observed frame retains unresolved output-enable knowledge.
+
+An unknown FS during standard framed or TDM transfer rejects: a new frame
+cannot be ruled out. Only an already-active continuous standard stream ignores
+later FS. Both lanes preflight before buffer changes; missing selected input or an
+unavailable second TX/RX buffer cannot partially consume the first lane.
+Core buffer reads/writes participate in instruction transactions. BHD empty
+RX reads require an actual previous read latch, not a zero/default value.
+TX buffer and shifter are distinct owners; terminal external DMA completion
+occurs only after the last bit samples. Non-DMA core IRQ events follow RX word
+completion/TX shifter loading. Board interrupt selection is not yet coupled.
+Snapshots preserve signal history, pending frames, bit/slot, selected word,
+control pipelines, buffers, DMA and delayed status for independently rebound
+owners. Malformed phases/widths, active-owner events and stopped pair clocks
+reject. No source clock, external memory or grant is synthesized.
+
+Owned tests include80 literal format cases, dual RX and atomic failure,
+TX two-buffer ownership, early overlapping TX frames, continuous early RX,
+TDM delay0/1/15 at slot31/32/127, sparse128-slot dual RX, separate restored
+control/partial-word/frame-delay owners, actual RAM-granted RX/TX DMA,
+last-bit terminal IRQ, one-PCLK pair status, six-CCLK flush, physical selection/
+companding register offsets, transactions, malformed input and clock gates.
+Fetched4/5-write7/8-read cases check captured CPU sources, unchanged SCLK state
+and genuine late-target rollback/same-clock retry.
+
+original_sharc_clocked_iop binds all eight SPORTs to the same existing IOP
+bridge and real RAM. All four original streams at both serial cadences execute
+SPCTLN SET4, six DMA parameter groups, CS/SPMCTL/SPCTL setup. Independent PC,
+width, register-result and posted-value expectations check each instruction;
+all24 pointed TCBs and cyclic partners retain literal values, odd indices and
+separate initial/next buffers. Transport0 writes SPORT2 SPCTL=020209f0 in
+main versus02020970 in part1 (SLEN31 versus23,32 versus24 bits); neither
+is normalized.
+Family reset control inputs are explicit.
+Without a modeled source clock, all SPORT sampled controls, DMA modes, wire
+history/buffers and IRQs remain inactive/unknown despite raw enable writes.
+The application reaches358/398 actual instructions. Transport0 fails at the
+real posted PCG_PW1/24c4 write; transport1 at PICR0/2200 read. All prior payload,
+vector, SPI and DAI checkpoint assertions remain. These are initialization
+prefixes, not full boot, serial firmware traffic or audio evidence.
+
+Remaining: internal clock/frame generators, I2S/packing/loopback/companding,
+error/overflow/underflow waveforms and acknowledgments, partial RX status,
+full buffer hang/overwrite behavior, live reconfiguration, per-word TCB/bus
+arbitration, interrupt routing, DAI/PCG/board coupling and physical timing.
+Full objective.txt acceptance remains required.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_sport_.*|original_sharc_clocked_iop)$' --output-on-failure

@@ -48,7 +48,7 @@ CPU/fetch/queue/target, and retry_due delivers at the same elapsed clock.
 The original clocked IOP owner now includes this backend and advances its
 half-PCLK intervals before new bus deliveries. Its extended application
 reference checks actual pin/frame/enable RMW groups before Group B data
-routing continues to the next unbound SPORT register (sharc-dai-data.txt).
+routing continues into SPORT initialization (sharc-dai-data.txt,sharc-sport.txt).
 Complete startup, SPORT/PCG/source coupling,
 physical comparisons, host MIDI/audio/USB and parameter readback remain open.
 

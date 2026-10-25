@@ -48,7 +48,8 @@ RX completion is independent of that option. HWR11-54's last-block prose is
 followed; its parenthetical nonzero-CP wording conflicts with chain termination
 and does not establish an alternative last-block definition. Serial bit timing,
 packing/companding, buffer-error behavior and original interrupt routing need
-the future SPORT serial/control owner. Acknowledge only consumes an event.
+the SPORT serial/control owner (sharc-sport.txt). Acknowledge only consumes
+an event.
 
 Parameters start unknown per HWR3-26; explicit family-reference inputs may
 supply reset values. Transactions isolate tentative configuration and parameter
@@ -73,10 +74,13 @@ parts. Each uses fresh USTAT1 reads/writes and Type18a SET mask4 with3/3/3
 short-word widths. Own pinned field scans agree. This is static code evidence,
 not executed SPORT behavior, reset readback or a Type17b extension proof.
 
-The original firmware frontier remains278/302 instructions at SPCTLN0/c1a.
-Next connect real SPORT control/serial clocks, DMA arbitration and delayed
-status. Full boot, firmware audio, host MIDI/USB/UI/storage/recovery and physical
-comparisons remain mandatory and incomplete.
+Original SPORT initialization now executes through real control/parameter
+backends, reaching358/398 instructions before PCG_PW1/PICR0 (sharc-sport.txt).
+Independent original execution checks all24 parameter groups and their actual
+TCBs/cyclic partners, preserving odd indices and distinct initial/next buffers.
+No source SCLK is supplied: programmed parameters do not create DMA grants or
+serial/audio data. DMA arbitration, full boot, firmware audio, host MIDI/USB/
+UI/storage/recovery and physical comparisons remain required and incomplete.
 
   cmake --build --preset strict
   ctest --preset strict -R '^(sharc_sport_dma_(channels|posted_parameters)|sharc_ram_bus_arbitration|sharc_spi_word_grants|native_build)$' --output-on-failure

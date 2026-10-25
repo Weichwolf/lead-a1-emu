@@ -49,10 +49,10 @@ enable checkpoint before later groups change it. Seventeen/twenty-seven
 further RMW groups check actual PC/width/R0/R1/post-value against independent
 original fields and explicit reset arithmetic. Compact Type17b upper16 mask
 extension remains an unproven model assumption (sharc-visa-execution.txt).
-The278/302-instruction application prefixes next reach SPCTLN0/0xc1a at
-second-CALL+601/+651. Its address view shares the existing queue; the absent
-SPORT backend fails on the real due read without a response, after previous
-writes drain/mature. This is incomplete startup, not working audio.
+The278/302-instruction application checkpoints next enter SPCTLN0/0xc1a at
+second-CALL+601/+651. Its real SPORT backend shares the existing queue and
+continues initialization (sharc-sport.txt). Earlier writes drain/mature and
+all routing expectations remain. This is incomplete startup, not audio.
 
   cmake --build --preset strict
   ctest --preset strict -R '^(sharc_dai_(serial_data_routing|data_posted_io)|original_sharc_clocked_iop|native_build)$' --output-on-failure

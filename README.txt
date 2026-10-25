@@ -18,17 +18,18 @@ See doc/arm-reference.txt, doc/arm-exceptions.txt and doc/aintc.txt.
 Native SHARC references load all ordinary records of four original DSP streams
 at two explicit serial cadences, with independent payload-cell checks. The
 clocked IOP profile additionally executes final vector DMA, original P1I/RTI,
-native/VISA transition and common clock initialization. It reaches278/302
-application instructions through actual SPI and DAI clock/frame/pin/enable/
-data setup, then fails visibly at the unimplemented SPORT0 SPCTLN0 register.
+native/VISA transition and common clock initialization. It reaches358/398
+application instructions through SPI, DAI clock/frame/pin/enable/data and SPORT
+control/DMA setup, then fails at PCG_PW1 write or PICR0 read delivery.
 These explicit reference inputs do not establish a complete cold boot, physical
 processor/slot wiring, MHz or playable audio. Other profiles retain independent
 execution boundaries. See doc/sharc-iop-bridge.txt, doc/sharc-dai-data.txt and
 doc/dsp-roles.txt. Compact Type17b sign extension remains an explicitly
 unproven model assumption; vendor-simulator/hardware qualification is pending.
-A separate SPORT DMA/word-buffer component has owned RAM/chain/completion and
-CPU parameter-access checks. Original SPORT control/serial binding is pending
-(doc/sharc-sport-dma.txt); it does not change the firmware boundary above.
+SPORT control and external-clock standard/TDM serial components have owned
+RAM/chain/buffer/framing/completion and CPU-access checks. Original initialization
+is bound, but its serial source clocks/data remain unknown: no firmware audio
+is claimed (doc/sharc-sport.txt, doc/sharc-sport-dma.txt).
 
 Build and checks (Linux, regular user)
 Requires LLVM 19 (clang++, clang-tidy, clang-format, sanitizer runtimes),

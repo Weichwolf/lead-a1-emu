@@ -49,13 +49,15 @@ struct SharcSportDmaState {
   std::optional<SharcSportDmaWord> transmit_buffer{std::nullopt};
   std::optional<SharcSportDmaWord> transmit_shift{std::nullopt};
   std::optional<std::uint32_t> receive_buffer{std::nullopt};
+  std::optional<std::uint32_t> transmit_latch{std::nullopt};
+  std::optional<std::uint32_t> receive_latch{std::nullopt};
   bool interrupt_pending{};
   bool operator==(const SharcSportDmaState &) const = default;
 };
 
 // One SPORT A/B DMA channel, HWR3-4..15/28..35/45..50,11-42/51..54.
 // Four relative32-bit parameter words: II,IM,count,CP. Not a SPORT-control or
-// serial-clock facade. Control timing/bit framing belong to the future SPORT.
+// serial-clock facade. Control timing/bit framing belong to SharcSport.
 // Internal transfers consume exact IO0 grants from the bound memory owner;
 // chained internal TCBs need four descending reads AND26 actual CCLK. The
 // owner must enforce the reported IOP-bus lock and channel arbitration.
@@ -76,6 +78,11 @@ public:
   // Serial owner supplies complete, actually formatted32-bit buffer words.
   // Taking/finishing a TX word represents distinct shifter ownership events.
   void receive_word(std::uint32_t value);
+  void transmit_word(std::uint32_t value);
+  [[nodiscard]] std::uint32_t read_transmit_word() const;
+  [[nodiscard]] std::uint32_t read_receive_word(bool hang_disabled = false);
+  // Called only after the SPORT owner's documented six-CCLK disable flush.
+  void flush_buffers();
   [[nodiscard]] std::uint32_t start_transmit();
   void finish_transmit();
   [[nodiscard]] bool interrupt_request() const;

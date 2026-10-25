@@ -262,6 +262,7 @@ void SharcSportDma::service(SharcMemoryBus &bus) {
     const bool interrupt = finish_word(next);
     if (transmit) {
       next.transmit_buffer = SharcSportDmaWord{.value = value, .interrupt_after_shift = interrupt};
+      next.transmit_latch = value;
     } else {
       next.receive_buffer.reset();
     }
@@ -288,6 +289,50 @@ void SharcSportDma::receive_word(std::uint32_t value) {
     throw std::runtime_error("SPORT DMA receive word requires its empty receive buffer");
   }
   current_.receive_buffer = value;
+}
+
+void SharcSportDma::transmit_word(std::uint32_t value) {
+  require_clock();
+  auto &state = working();
+  if (!state.mode.transmit || state.transmit_buffer) {
+    throw std::runtime_error("SPORT core TX requires its empty active-direction buffer");
+  }
+  state.transmit_buffer = SharcSportDmaWord{.value = value};
+  state.transmit_latch = value;
+}
+
+std::uint32_t SharcSportDma::read_transmit_word() const {
+  require_clock();
+  const auto &state = working();
+  if (!state.mode.transmit || !state.transmit_latch) {
+    throw std::runtime_error("SPORT core TX read requires known active-direction data");
+  }
+  return *state.transmit_latch;
+}
+
+std::uint32_t SharcSportDma::read_receive_word(bool hang_disabled) {
+  require_clock();
+  auto &state = working();
+  if (state.mode.transmit) { throw std::runtime_error("SPORT core RX direction is inactive"); }
+  if (!state.receive_buffer) {
+    if (!hang_disabled || !state.receive_latch) {
+      throw std::runtime_error("SPORT core RX buffer is empty or old data is unknown");
+    }
+    return *state.receive_latch;
+  }
+  state.receive_latch = state.receive_buffer;
+  state.receive_buffer.reset();
+  return *state.receive_latch;
+}
+
+void SharcSportDma::flush_buffers() {
+  external_event();
+  require_clock();
+  current_.transmit_buffer.reset();
+  current_.transmit_shift.reset();
+  current_.receive_buffer.reset();
+  current_.transmit_latch.reset();
+  current_.receive_latch.reset();
 }
 
 std::uint32_t SharcSportDma::start_transmit() {

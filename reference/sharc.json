@@ -19,7 +19,7 @@
       "local_copy_bytes": 18156850,
       "local_copy_sha256": "a9534d75e8946af83d5c9e250bb7e212224786b56977d6fec90d88e178f034dc",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified; no source reused.",
-      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals; A-4 reserved readback, A-8 PMCTL1 two-PCLK effect, A-11/13 shutdown/accelerator fields, 23-11 clocks enabled by default;12-8/16 PDAP clock/hold,masking,packing/core FIFO;12-20 full32-bit PDAP payload vs SIP tags;12-23/28 overflow/threshold/enable readiness;A-174/182 control/W1S/status fields,B-17 reset;3-4/15 SPORT index28/modifier16/count16/encodedCP29,3-26/35 unknown parameters/standard start/count0/chaining/index-address descending TCB,3-45/50 completion/PCI/26CCLK internalTCB,11-42/54 buffer+shifter/core-DMA/completion/insertion;11-58 second-SCLK control effects/three-SCLK readiness/four-SCLK internalFS remain unimplemented"
+      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals; A-4 reserved readback, A-8 PMCTL1 two-PCLK effect, A-11/13 shutdown/accelerator fields, 23-11 clocks enabled by default;12-8/16 PDAP clock/hold,masking,packing/core FIFO;12-20 full32-bit PDAP payload vs SIP tags;12-23/28 overflow/threshold/enable readiness;A-174/182 control/W1S/status fields,B-17 reset;3-4/15 SPORT index28/modifier16/count16/encodedCP29,3-26/35 unknown parameters/standard start/count0/chaining/index-address descending TCB,3-45/50 completion/PCI/26CCLK internalTCB,11-42/54 buffer+shifter/core-DMA/completion/insertion;11-4/36 standard and TDM framing/select/word formats,11-58 second-SCLK control effects/three-SCLK readiness, A-155/172 control/divisor/selection/error fields and six-CCLK disable flush,B-4/9 native pair map; internalFS four-SCLK activation remains unimplemented"
     },
     {
       "author": "Analog Devices",
@@ -36,7 +36,7 @@
       "title": "ADSP-21483/21486/21487/21488/21489 Data Sheet, Revision I, February 2024",
       "official_url": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADSP-21483_21486_21487_21488_21489.pdf",
       "provenance": "Official document consulted directly; local byte identity not yet pinned.",
-      "sections": "Table5 5-Mbit RAM geometry for ADSP-21486/21487/21489; not exact Nord part identification"
+      "sections": "Table5 5-Mbit RAM geometry for ADSP-21486/21487/21489; not exact Nord part identification; Table36/Figure21 page39 external late-FS/MCE MFD0 first data and enable timed from FS, subsequent serial drive/sample timing; logical ordering only, no nanosecond/pad qualification"
     },
     {
       "author": "Analog Devices",
@@ -825,5 +825,32 @@
       ]
     },
     "limits": "PDAP slice only. SIP/DMA/ping-pong,DAI_STAT1,IRQ controller,PDAP strobe,actual empty/full IOP wait coupling,BHD values,partial reconfiguration and full startup/command/clock-domain phase remain unqualified. Board producer/pad wiring,physical timing,full five-stage boot/audio/MIDI/USB/UI/update/storage/hardware acceptance remain open"
+  },
+  "sport_reference": {
+    "primary": "HWR11-4/36/42/58,A-155/172,B-4/9;3-29 DMA status; datasheet RevI Table36/Figure21",
+    "register_windows": {
+      "0/1": "0xc00..0xc67",
+      "2/3": "0x400..0x467",
+      "4/5": "0x800..0x867",
+      "6/7": "0x4800..0x4867"
+    },
+    "clocks": "Explicit elapsed SCLK periods for control: ordinary2,readiness/MCEA/B3; raw disable buffers6CCLK; DMA status1PCLK. No SCLK from MMIO/CCLK/PCLK",
+    "serial": "External-clock linear standard/TDM,3..32 bits,both CKRE,LSBF,zero/sign extension,early/late/continuous framing,MFD0..15,sparse128-slot CS,dual lanes. Late TX first bit follows FS itself",
+    "state": "Independent signal/data-enable knowledge,control pipelines,pending frames,word/slot/bit,core latches,DMA/shifter ownership; separately rebound snapshots and staged transactions",
+    "original_reference": {
+      "application_instructions": [
+        358,
+        398
+      ],
+      "scope": "Four original programs at two SPI cadences,explicit family reset inputs and5/8 IOP timing,unmodified firmware",
+      "checked": "Twelve SPCTLN groups,24 DMA parameter groups,24 TCBs plus cyclic partners,CS/SPMCTL/SPCTL setup; all original payload/vector/SPI/DAI checks retained",
+      "serial_inputs": "Unknown; no SCLK supplied, no effective mode/DMA activation or firmware serial data claimed",
+      "next_accesses": [
+        "PCG_PW1/0x24c4 posted write",
+        "PICR0/0x2200 read"
+      ]
+    },
+    "private_corroboration": "Static factual metadata at lead-a1-src dac415e5ddefafea6878f1139bd6b2b4b3881652 independently agrees for all24 DMA groups/TCBs/cyclic partners. No private source or original instruction bytes imported",
+    "limits": "Internal clocks/FS,I2S/packed/loopback/companding,buffer error/ack/partial RX status,live reconfiguration,full DMA arbitration/interrupt/DAI/PCG/board coupling and physical timing remain open; no boot/audio/MIDI/USB/UI readback/storage/recovery/hardware qualification"
   }
 }

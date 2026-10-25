@@ -192,12 +192,16 @@ The first actual read drains previous writes and checks all prior pin/frame/
 enable expectations before subsequent RMWs change them. Seventeen/twenty-seven
 further six-instruction groups retain independent original PC/width/operand
 and conditional Type17b arithmetic expectations. No input signal is invented.
-The278/302-instruction prefixes next read SPCTLN0/c1a at+601/+651. HWR B-4..6
-establishes this SPORT register; its address view shares the same bridge
-queue/clock and has no backend. The actual due read fails with unchanged
-CPU/IAB/exact request and no response, after earlier writes drain/mature.
-Final data/pin/frame/clock/enable words and retained SPI0/4d14/cursor92180 have
-literal expectations. This is incomplete application startup.
+The278/302-instruction checkpoints next read SPCTLN0/c1a at+601/+651 and
+now enter the real SPORT pair backends. Native pair maps and bit fields follow HWR.
+Twelve original secondary-control groups,24 DMA groups and subsequent CS/
+SPMCTL/SPCTL setup retain independent PC/width/result/post-value expectations.
+All eight cases reach358/398 instructions, then fail on a real PCG_PW1/24c4
+posted write or PICR0/2200 read. PCG holes are not mapped to the IDP control
+backend; PICR uses the same posted bridge with no invented backend/readback.
+All earlier checkpoints and final-cell/vector oracles remain. No source SCLK
+is supplied, so raw SPORT setup does not activate wire/DMA modes or audio.
+See sharc-sport.txt for the exact reference and remaining gaps.
 Earlier native PMCTL/core-IOP timing, independent prefetch/DMA holds, physical
 phase, SPI enable/flush timing and full board coupling remain separate gaps.
 

@@ -96,6 +96,9 @@ add_library(lead_a1_sharc STATIC
   src/sharc/peripherals/sharc_spi_bus.cpp
   src/sharc/peripherals/sharc_spi_port.cpp
   src/sharc/peripherals/sharc_sport_dma.cpp
+  src/sharc/peripherals/sharc_sport.cpp
+  src/sharc/peripherals/sharc_sport_serial.cpp
+  src/sharc/peripherals/sharc_sport_pair.cpp
   src/sharc/pipeline/sharc_fetch.cpp
   src/sharc/pipeline/sharc_fetch_arithmetic.cpp
   src/sharc/pipeline/sharc_fetch_branch.cpp
@@ -130,6 +133,12 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-sport-bus-test test/sharc_sport_bus_test.cpp)
+  target_link_libraries(lead-a1-sharc-sport-bus-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_sport_posted_control COMMAND lead-a1-sharc-sport-bus-test)
+  add_executable(lead-a1-sharc-sport-test test/sharc_sport_test.cpp)
+  target_link_libraries(lead-a1-sharc-sport-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_sport_control_and_serial COMMAND lead-a1-sharc-sport-test)
   add_executable(lead-a1-sharc-sport-dma-bus-test test/sharc_sport_dma_bus_test.cpp)
   target_link_libraries(lead-a1-sharc-sport-dma-bus-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_sport_dma_posted_parameters COMMAND lead-a1-sharc-sport-dma-bus-test)
@@ -614,6 +623,8 @@ if(BUILD_TESTING)
   add_custom_target(quality
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
     DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
+      lead-a1-sharc-sport-test
+      lead-a1-sharc-sport-bus-test
       lead-a1-sharc-sport-dma-test
       lead-a1-sharc-sport-dma-bus-test
       lead-a1-sharc-dai-data-test
