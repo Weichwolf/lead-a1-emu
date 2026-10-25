@@ -74,10 +74,12 @@ is still pending or delivered. No input edge/word or grant is supplied, so no
 transfer/IRQ is invented. The original SYSCTL read/SET80/write now executes
 through the bound peripheral DMA arbiter (sharc-dma-arbitration.txt), with4->84
 conditional on the explicit SYSCTL input. IMASK and transport0 MODE1 effects
-advance the prefixes to422/442 instructions with the MODE1 hold qualified
+advance the prefixes to422/446 instructions with the MODE1 hold qualified
 (sharc-mode-holds.txt). Transport0 also programs SPCTL2, clears FLAGS4 and tests
-FLAGS1; its NOTTF backedge+985 rejects unknown FLAG0. Transport1 LIRPTL
-SET400+1033 remains unsupported. Receiver state is unchanged through this tail.
+FLAGS1; its NOTTF backedge+985 rejects unknown FLAG0. Transport1 executes
+LIRPTL SET400+1033 under the known-clear-latch/no-service reference, MODE1
+SET1800+1036 and FLAGS clear4/test1+1039/+1042. Its NOTTF backedge+1045
+also rejects unknown FLAG0 (sharc-lirptl.txt). Receiver state is unchanged through this tail.
 Exact CPU/fetch/control/receiver/bridge/fabric snapshots survive these failures.
 The complete payload/vector/SPI/DAI/SPORT oracles remain; full boot/audio and
 objective.txt acceptance are still open.

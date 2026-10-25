@@ -51,7 +51,8 @@ std::optional<SharcInterruptStep> Sharc::service_interrupt(SharcFetch &fetch,
   message << "SHARC fetched interrupt pc=0x" << std::hex << state_.pc << " IVT=0x"
           << reference.vector_base << " IRPTL=0x" << state_.effective[10].value << "/0x"
           << state_.effective[10].known << " IMASK=0x" << state_.effective[11].value << "/0x"
-          << state_.effective[11].known << ": " << error.what();
+          << state_.effective[11].known << " LIRPTL=0x" << state_.effective[13].value << "/0x"
+          << state_.effective[13].known << ": " << error.what();
   throw std::runtime_error(message.str());
 }
 

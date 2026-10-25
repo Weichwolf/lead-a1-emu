@@ -5,6 +5,7 @@
 #include "sharc/core/sharc_dag_internal.hpp"
 #include "sharc/core/sharc_immediate_indexed.hpp"
 #include "sharc/core/sharc_internal.hpp"
+#include "sharc/core/sharc_interrupt_source.hpp"
 #include "sharc/memory/sharc_memory.hpp"
 #include "sharc/peripherals/sharc_control.hpp"
 #include "sharc/visa/sharc_visa.hpp"
@@ -46,6 +47,42 @@ struct Execution {
   bool fetched{};
 };
 
+bool writes_lirptl(const SharcState &state, std::uint64_t opcode) {
+  constexpr unsigned int lirptl_ureg = 0x7d;
+  constexpr std::uint64_t register_mask = 0xf00000000000;
+  constexpr std::uint64_t register_class = 0x700000000000;
+  if ((opcode & register_mask) == register_class) {
+    const auto destination = (opcode >> 23) & ureg_mask;
+    const auto condition = static_cast<unsigned int>((opcode >> 33) & 31);
+    return destination == lirptl_ureg && detail::sharc_condition(state, condition);
+  }
+  const auto type = opcode >> class_shift;
+  if (type == system_bit_class) {
+    constexpr unsigned int operation_shift = 37;
+    return ((opcode >> 32) & 15) == detail::sharc_lirptl && ((opcode >> operation_shift) & 7) <= 2;
+  }
+  return (type == 15 || type == dm_read_class || type == pm_read_class) &&
+         ((opcode >> ureg_shift) & ureg_mask) == lirptl_ureg;
+}
+
+void lirptl_pending_guard(const SharcState &state, std::uint64_t opcode) {
+  if ((!state.pending[detail::sharc_irptl] && !state.pending[detail::sharc_lirptl]) ||
+      !writes_lirptl(state, opcode)) {
+    return;
+  }
+  constexpr std::uint32_t global_enable = 0x1000;
+  const auto mode = state.effective[detail::sharc_mode1];
+  if ((mode.known & mode.value & global_enable) == 0) { return; }
+  for (const auto index : {detail::sharc_irptl, detail::sharc_lirptl}) {
+    const auto pending = state.pending[index];
+    const auto mask = index == detail::sharc_irptl ? 0xffffff7cU : detail::sharc_lirptl_latches;
+    if (pending && ((pending->value | ~pending->known) & mask) != 0) {
+      throw std::runtime_error(
+          "SHARC enabled LIRPTL write with possible interrupt overlap not qualified");
+    }
+  }
+}
+
 void validate(const SharcState &state) {
   detail::sharc_validate_registers(state);
   detail::sharc_validate_cache(state.cache);
@@ -55,7 +92,8 @@ void validate(const SharcState &state) {
   }
   for (unsigned int index = 0; index < state.system.size(); ++index) {
     if (state.pending[index] && index != detail::sharc_mode1 && index != detail::sharc_irptl &&
-        index != detail::sharc_imask && index != detail::sharc_flags) {
+        index != detail::sharc_imask && index != detail::sharc_flags &&
+        index != detail::sharc_lirptl) {
       throw std::invalid_argument("Unsupported inherited SHARC system effect");
     }
     for (const auto word : {state.system[index],
@@ -410,6 +448,7 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
       opcode = memory_.read({.address = state_.pc, .width = SharcWidth::wide48}, AccessKind::fetch);
     }
     detail::sharc_cache_guard(state_, *opcode);
+    lirptl_pending_guard(state_, *opcode);
     auto next = state_;
     next.idle_delay_word.reset();
     next.pending.fill({});

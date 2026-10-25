@@ -70,6 +70,7 @@ add_library(lead_a1_sharc STATIC
   src/sharc/core/sharc_immediate_indexed.cpp
   src/sharc/core/sharc_indexed.cpp
   src/sharc/core/sharc_interrupt.cpp
+  src/sharc/core/sharc_interrupt_source.cpp
   src/sharc/core/sharc_long_loop.cpp
   src/sharc/core/sharc_loop.cpp
   src/sharc/core/sharc_move.cpp
@@ -316,6 +317,9 @@ if(BUILD_TESTING)
   add_executable(lead-a1-sharc-interrupt-test test/sharc_interrupt_test.cpp)
   target_link_libraries(lead-a1-sharc-interrupt-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_p1i_interrupts COMMAND lead-a1-sharc-interrupt-test)
+  add_executable(lead-a1-sharc-lirptl-test test/sharc_lirptl_test.cpp)
+  target_link_libraries(lead-a1-sharc-lirptl-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_lirptl_programmable_interrupts COMMAND lead-a1-sharc-lirptl-test)
   add_executable(lead-a1-sharc-idle-test test/sharc_idle_test.cpp)
   target_link_libraries(lead-a1-sharc-idle-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_idle_dma COMMAND lead-a1-sharc-idle-test)
@@ -655,6 +659,7 @@ if(BUILD_TESTING)
   add_custom_target(quality
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
     DEPENDS lead-a1-sharc-dma-fabric-test lead-a1-sharc-dma-arbiter-test lead-a1-sharc-idp-dma-bus-test lead-a1-sharc-idp-dma-test lead-a1-sharc-pcg-bus-test lead-a1-sharc-pcg-test lead-a1-sharc-picr-test lead-a1-sharc-picr-bus-test format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
+      lead-a1-sharc-lirptl-test
       lead-a1-sharc-sport-test
       lead-a1-sharc-sport-bus-test
       lead-a1-sharc-sport-dma-test

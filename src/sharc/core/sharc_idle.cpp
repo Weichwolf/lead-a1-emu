@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "sharc/core/sharc.hpp"
 #include "sharc/core/sharc_internal.hpp"
+#include "sharc/core/sharc_interrupt_source.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -67,17 +68,9 @@ void sharc_begin_idle(SharcState &state, bool fetched) {
 bool sharc_wake_idle(SharcState &state) {
   if (!state.idle_pc) { return false; }
   sharc_interrupt_environment_guard(state);
-  constexpr std::uint32_t all_bits = 0xffffffff;
-  constexpr std::uint32_t p1i = 0x1000;
-  constexpr std::uint32_t global_enable = 0x1000;
-  constexpr std::uint32_t interrupt_bits = 0xffffff7c;
-  const auto latch = state.effective[sharc_irptl];
-  if (latch.known == all_bits && latch.value == 0) { return false; }
-  if (!bit(state.effective[sharc_mode1], global_enable)) { return false; }
-  const auto mask = state.effective[sharc_imask];
-  const auto possible = (latch.value | ~latch.known) & (mask.value | ~mask.known) & interrupt_bits;
-  if (possible == 0) { return false; }
-  if (possible != p1i || !bit(latch, p1i) || !bit(mask, p1i) || state.interrupt) {
+  const auto source = sharc_pending_interrupt(state);
+  if (!source) { return false; }
+  if (!sharc_programmable_source(*source) || state.interrupt) {
     throw std::runtime_error("SHARC other/nested IDLE wake source not qualified");
   }
   constexpr std::uint32_t nesting = 0x800;
@@ -85,7 +78,7 @@ bool sharc_wake_idle(SharcState &state) {
     throw std::runtime_error("SHARC nested IDLE wake source not qualified");
   }
   state.idle_pc.reset();
-  return true; // Wake does not clear IRPTL, push a frame or complete the pending branch.
+  return true; // Wake does not consume a latch, push a frame or complete the pending branch.
 }
 
 }
@@ -104,7 +97,8 @@ bool Sharc::wake_idle() try {
   std::ostringstream message;
   message << "SHARC IDLE wake pc=0x" << std::hex << state_.pc << " IRPTL=0x"
           << state_.effective[10].value << "/0x" << state_.effective[10].known << " IMASK=0x"
-          << state_.effective[11].value << "/0x" << state_.effective[11].known << ": "
+          << state_.effective[11].value << "/0x" << state_.effective[11].known << " LIRPTL=0x"
+          << state_.effective[13].value << "/0x" << state_.effective[13].known << ": "
           << error.what();
   throw std::runtime_error(message.str());
 }

@@ -1,0 +1,82 @@
+LIRPTL and programmable interrupt reference
+
+Primary evidence: ADI SHARC PGRrev2.4 A-31..34,A-37..44,B-2..4 and
+4-26..44 (reference/sharc.json). This is an instruction-order/internal-branch
+reference, not a Nord pin, processor identity or physical timing qualification.
+
+LIRPTL bits0..9 latch P6..13/P17..18; bits10..19 enable those sources.
+Bits20..29 are controller-owned pointers; bits30..31 remain reserved.
+The normal read view exposes latch/mask writes immediately; their execution
+effect takes one extra processor clock, including granted quiet clocks.
+Controller pointer readback has one extra clock of latency. Four internal
+entry clocks settle the new pointer before the first handler instruction.
+After RTI the old pointer can remain readable while the controller has already
+released service. A next pending interrupt may enter immediately; its real
+entry clocks settle the new pointer. No fictional foreground NOP is required.
+The nonnested delayed read view must contain exactly one old source pointer;
+an inconsistent multi-source snapshot rejects instead of discarding its state.
+Direct writes which change pointer value/knowledge reject; reserved fields
+are retained. Unknown latch/mask bits remain unknown.
+
+latch_programmable_interrupt accepts logical PICR priority P0..18 and maps it
+to the correct register/bit. It is an explicit owner event, not automatic
+peripheral polling. It does not fabricate pad levels, source edges, sampling
+latency or peripheral acknowledgement. Masked events still latch. Repeated
+events for the active source remain clear in its own bank; unrelated requests
+are retained, including requests in the other register.
+
+Priority arbitration follows vector offsets, not a numerical OR of both banks:
+P0..5 (IRPTL), P6..13 (LIRPTL), P14..16 (IRPTL), P17..18 (LIRPTL).
+Known higher requests can win despite unknown lower sources. An unknown higher
+eligible source rejects rather than choosing a guessed winner. Other core
+interrupts participate in arbitration but their entry semantics remain guarded.
+
+All19 programmable priorities use the existing nonnested native internal
+recognition/bit25-PC-frame/immediate-RTI reference. They do not automatically
+push status or apply MMASK. Frame/event metadata names the bank explicitly;
+a low LIRPTL source bit is never treated as a low IRPTL bit. PGR4-43 supplies
+the active-source pointer rule. Nested temporary masks, delayed/parallel RTI,
+full synchronization and general loop/VISA entry remain unqualified.
+
+PGR4-43/44 warns of duplicate service for LIRPTL bit manipulation with IRPTEN
+set. The older ADSP-21161N anomaly04000030 (NR002446P page29) describes a
+write overlapping the start of interrupt service, not every future interrupt.
+This does not identify the Nord silicon or establish that anomaly's applicability
+to214xx. Our bounded nonoverlap inference permits enabled mask-only changes
+only with both banks' raw/effective/pending latches known clear and no service.
+An event arriving while the write effect is pending still rejects recognition.
+Unknown latch bits, active/pending requests, enabled latch/pointer bit mutation
+and unqualified overlap reject atomically. This applies to direct register
+writes as well as BIT SET/CLR/TGL; no alternate write form bypasses it.
+BIT TST/COMP remain reads. Unknown IRPTEN rejects mutation. Duplicate-service
+behavior itself still needs independent target qualification.
+
+The complete original startup, DAI/DPI source controller, peripheral level
+sampling and MCU/FLAG board coupling remain separate work. This register/core
+implementation alone establishes neither boot nor audio.
+
+Owned expectations list all19 routes independently and exercise all171 ordered
+priority pairs through real handlers/RTI and immediate next-source recognition.
+Ten secondary routes additionally execute through the sequenced fetch owner
+with independent RAM/core/transport restoration. Masks, software latch changes,
+pending event merges, pointer read latency, higher/lower unknowns, malformed
+service snapshots and rejected writes retain explicit state assertions.
+Thirty enabled mask-only SET/CLR/TGL cases cover all ten sources. A real
+primary event arriving during the pending effect interval rejects entry with
+unchanged state. Equal numerical source bits in different banks stay distinct.
+Inherited pending-latch knowledge is checked before instruction handoff clears
+the old pending array. Bit, immediate, register and direct DM/PM read forms
+reject unsafe writes before effects. A false conditional register transfer
+still retires normally and matures the old pending effect.
+
+All four original programs at both serial cadences retain their complete
+payload/vector/SPI/DAI/SPORT/IDP oracles. Transport1 executes LIRPTL SET400 at
+second-CALL+1033, MODE1 SET1800+1036, FLAGS clear4+1039 and test1+1042.
+Its LIRPTL mask is raw/effective400 with known-zero pointers/latches; the real
+NOTTF backedge+1045 to+1042 rejects unknown FLAG0/BTF. Transport0 retains its
+separate+985 backedge and SPORT2 enable. Prefixes are422/446 application
+instructions, with full CPU/fetch/device state retained on both missing-input
+failures. No FLAG0 release, source clock, DMA word, IRQ or audio is invented.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^sharc_(lirptl_programmable_interrupts|p1i_interrupts|idle_dma|delayed_idle_and_interrupt_fetch|loop_idle_dma_interrupt_return)$' --output-on-failure

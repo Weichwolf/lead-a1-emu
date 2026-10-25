@@ -86,6 +86,13 @@
       "official_url": "https://ez.analog.com/dsp/sharc-processors/f/q-a/62312/questions-on-details-of-dma-on-the-adsp-21489",
       "provenance": "Manufacturer-hosted primary employee explanation, consulted online; no posted source/example implementation reused or local-byte identity claimed. No physical Nord timing/part identification.",
       "sections": "Explicit CP,CP-1,CP-2,CP-3 load order II/IM/count/CP;28 external address bits plus PCI require29-bit CP. Generic internal-offset discussion conflicts with HWR3-4/28 SPORT index exception: low-index interpretation stays guarded, not silently resolved."
+    },
+    {
+      "author": "Analog Devices",
+      "title": "ADSP-21161N Silicon Anomaly List, NR002446P, Revision P, September 2009",
+      "official_url": "https://www.analog.com/media/en/dsp-documentation/integrated-circuit-anomalies/ADSP-21161N_anomaly_Rev.P.pdf",
+      "provenance": "Official PDF consulted online; local download unsuccessful, no local byte identity claimed. Older-family evidence only; no source reused and no Nord or214xx silicon applicability inferred.",
+      "sections": "Page29 anomaly04000030: duplicate service requires LIRPTL/IMASKP write overlap with interrupt-service start. Together with PGRrev2.4 4-43/44 this motivates only a bounded no-request/no-service mask-write reference, not a qualified214xx anomaly model."
     }
   ],
   "spi_slave_reference": {
@@ -263,14 +270,14 @@
     "limits": "Complete cache/pipeline integration, data arbitration/DAG operand capture, full control interlocks, complete indirect/loop/IDLE/IRQ composition and global/physical timing remain unqualified; bounded direct/RTS decisions are in fetch_flow_reference/branch_pipeline_reference; bounded immediate single loops are in single_loop_fetch_reference; full original record streams use the separate functional instruction-order path"
   },
   "interrupt_reference": {
-    "primary": "PGRrev2.4 4-22/23,4-26/43,9-44/46,10-17,A-10,A-31/34,A-37/42",
-    "source": "Explicitly routed P1I; aligned internal native IVT supplied by owner, offset0x30",
-    "entry": "Bit25 interrupt PC frame with CALL bit24 clear; IMASKP0x1000; own source held clear, other latches retained; no P1I automatic status/MMASK push/pop",
+    "primary": "PGRrev2.4 4-22/23,4-26/44,9-44/46,10-17,A-10,A-31/34,A-37/44,B-2/4",
+    "source": "Explicit logical PICR priorities P0..18; aligned internal native IVT supplied by owner; vector offsets0x2c..0x74 across IRPTL and LIRPTL",
+    "entry": "Bit25 interrupt PC frame with CALL bit24 clear; bank-qualified source/pointer and interleaved priority; active latch held clear, other latches retained; no programmable IRQ automatic status/MMASK push/pop",
     "clock_effects": "Four internal branch-overhead minimum clocks, no guest NOP or instruction retirement; pending supported core/SYSCTL effects settle before the first handler operation",
     "delayed_branch": "Ordinary unlooped internal JUMP/CALL/RTS defers explicit delivery until both real delay slots finish; target-boundary effective controls decide entry; physical earlier recognition/pipeline latch remains unqualified",
     "return": "Actual immediate conditional RTI through matched interrupt frame; ISR results retained; SIMD AND condition",
     "idle": "Ordinary Type22a IDLE holds core while actual owned SPI reception/DMA proceeds; explicitly routed completion, actual ISR/RTI and dependent foreground continuation",
-    "limits": "Arithmetic-loop IDLE/interrupted loop reentry, other/nested sources, automatic board routing, synchronization, full cache/fetch composition, complete boot and physical timing remain unqualified; bounded unlooped fetched wake/redirect/RTI is in delayed_idle_fetch_reference"
+    "limits": "Nonprogrammable/nested entry, automatic board routing, synchronization, general loop/VISA/cache/fetch composition, complete boot and physical timing remain unqualified; bounded arithmetic-loop wake/RTI and native fetched paths remain separately qualified"
   },
   "compute_reference": {
     "primary": "PGRrev2.4 9-10/11,10-6,11-15/19,12-2/3,A-17/20",
@@ -886,5 +893,15 @@
       "next_access": "Posted IDP_CTL1/24b2=0x10101 write at secondCall+987 fails after later indexB+999/2418 store retires; all3 writes remain,CPU/fetch retained at+1002,no core request"
     },
     "limits": "No general core priority entry/level sampling/DAI-DPI aggregation/physical mux phase,PCG/IDP DMA,full cold boot,audio/MIDI/USB/observedUI/storage/recovery/hardware qualification"
+  },
+  "lirptl_reference": {
+    "primary": "PGRrev2.4 4-43/44,A-31/34,A-41/44,B-2/4",
+    "fields": "Latches0..9=P6..13/P17..18, masks10..19, controller pointers20..29, reserved30..31 retained",
+    "latency": "Latch/mask read latency0, effect latency1; pointer read latency1. Granted quiet and accepted entry clocks mature pending effects. RTI controller release is distinct from delayed pointer readback",
+    "arbitration": "Full fixed vector ordering includes both banks. Known lower candidates cannot bypass an unknown eligible higher source; unknown lower candidates do not veto a known winner",
+    "events": "Explicit latch_programmable_interrupt(P0..18); masks do not prevent latching; in-service source held clear in its own bank without acknowledging peripheral state",
+    "limits": "Enabled mask-only writes require all raw/effective/pending latches known clear and no service. Possible overlaps, enabled latch mutation, pointer writes, nesting, nonprogrammable entry, automatic peripheral level sampling and physical timing remain unqualified. Older21161N anomaly04000030 is conditional evidence, not target-silicon qualification",
+    "tests": "Independent19-route table,171 ordered priority pairs, real native handlers/RTI, immediate next-source entry,38 mask/IDLE cases,10 independently restored sequenced secondary handlers, software latch/mask latency and fault/snapshot checks;30 enabled mask-only changes, pending-write/event overlap rejection and same numerical bit in distinct banks; inherited pending knowledge before handoff across five write forms and false conditional register transfer; malformed multiple-source RTI pointer read view rejects before new entry",
+    "original": "All4 original placements x2 serial cadences retain payload/vector/peripheral oracles and reach422/446 application instructions. Transport1 actual LIRPTL mask0x400, MODE1/FLAGS setup and NOTTF+1045 reject unknown FLAG0; transport0 retains+985. No fabricated source/clock/IRQ or complete boot claim"
   }
 }

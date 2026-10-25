@@ -367,7 +367,7 @@ void masked_unknown_and_wrong_idle_context() {
   state.effective[11] = state.system[11];
   lead_a1::Sharc unknown(memory, state);
   const auto before = unknown.state();
-  rejected([&] { static_cast<void>(unknown.wake_idle()); }, "Unknown SHARC IDLE wake control");
+  rejected([&] { static_cast<void>(unknown.wake_idle()); }, "unknown interrupt eligibility");
   require(unknown.state() == before);
   state = cpu.state();
   if (!state.branch) { throw std::logic_error("Missing owned IDLE entry branch"); }

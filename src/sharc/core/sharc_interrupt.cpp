@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "sharc/core/sharc.hpp"
 #include "sharc/core/sharc_internal.hpp"
+#include "sharc/core/sharc_interrupt_source.hpp"
 #include "sharc/memory/sharc_memory.hpp"
 #include "sharc/peripherals/sharc_control.hpp"
 
+#include <bit>
 #include <cstdint>
 #include <exception>
 #include <ios>
@@ -15,13 +17,9 @@ namespace lead_a1::detail {
 namespace {
 
 constexpr std::uint32_t all_bits = 0xffffffff;
-constexpr std::uint32_t p1i = 0x1000;
-constexpr std::uint32_t global_enable = 0x1000;
 constexpr std::uint32_t nesting = 0x800;
-constexpr std::uint32_t interrupt_bits = 0xffffff7c;
 constexpr std::uint32_t native_begin = 0x80000;
 constexpr std::uint32_t native_end = 0x100000;
-constexpr std::uint32_t vector_offset = 0x30;
 constexpr unsigned int imaskp = 12;
 constexpr unsigned int before_almost_full = 28;
 
@@ -40,16 +38,29 @@ void nonnesting(const SharcState &state) {
   }
 }
 
-void clear_source(SharcState &state, std::uint32_t mask) {
-  for (auto *latch : {&state.system[sharc_irptl], &state.effective[sharc_irptl]}) {
-    latch->value &= ~mask;
-    latch->known |= mask;
-  }
-  auto &pending = state.pending[sharc_irptl];
-  if (pending) {
-    pending->value &= ~mask;
-    pending->known |= mask;
-  }
+void clear_source(SharcState &state, const SharcInterruptFrame &frame) {
+  sharc_latch_source(state, frame.bank, frame.source, false);
+}
+
+std::uint32_t pointer(SharcInterruptSource source) {
+  constexpr unsigned int pointer_shift = 20;
+  return source.bank == SharcInterruptBank::lirptl ? source.mask << pointer_shift : 0;
+}
+
+void secondary_pointer(SharcState &state, std::uint32_t value) {
+  auto &word = state.system[sharc_lirptl];
+  word.value = (word.value & ~sharc_lirptl_pointers) | value;
+  word.known |= sharc_lirptl_pointers;
+}
+
+bool return_pointer_delay(const SharcState &state) {
+  const auto raw = state.system[sharc_lirptl];
+  const auto effective = state.effective[sharc_lirptl];
+  const auto pending = state.pending[sharc_lirptl];
+  const auto changed = (raw.value ^ effective.value) | (raw.known ^ effective.known);
+  return pending && *pending == raw && (changed & ~sharc_lirptl_pointers) == 0 &&
+         std::has_single_bit(effective.value & sharc_lirptl_pointers) &&
+         (effective.known & sharc_lirptl_pointers) == sharc_lirptl_pointers;
 }
 
 void settle_entry_effects(SharcState &state) {
@@ -99,8 +110,17 @@ recognition_boundary(const SharcState &state, SharcInterruptReference reference,
   if (sharc_value(state.system[imaskp]) != 0 || state.system[imaskp] != state.effective[imaskp]) {
     throw std::runtime_error("SHARC existing/unknown interrupt mask pointer not qualified");
   }
-  if (state.pending[sharc_irptl]) {
-    throw std::runtime_error("SHARC pending IRPTL write at recognition not qualified");
+  const bool pointer_read_pending = return_pointer_delay(state);
+  for (const auto word :
+       {state.system[sharc_lirptl],
+        pointer_read_pending ? state.system[sharc_lirptl] : state.effective[sharc_lirptl]}) {
+    if ((word.known & sharc_lirptl_pointers) != sharc_lirptl_pointers ||
+        (word.value & sharc_lirptl_pointers) != 0) {
+      throw std::runtime_error("SHARC existing/unknown LIRPTL mask pointer not qualified");
+    }
+  }
+  if (state.pending[sharc_irptl] || (state.pending[sharc_lirptl] && !pointer_read_pending)) {
+    throw std::runtime_error("SHARC pending IRPTL/LIRPTL write at recognition not qualified");
   }
   return *state.depth;
 }
@@ -119,22 +139,32 @@ void sharc_validate_interrupt(const SharcState &state) {
   if (!state.interrupt) { return; }
   const auto frame = *state.interrupt;
   constexpr std::uint32_t vector_low = 255;
-  if (frame.source != p1i || !internal(frame.vector) ||
-      (frame.vector & vector_low) != vector_offset || !internal(frame.return_pc) ||
+  const SharcInterruptSource source{
+      .bank = frame.bank, .mask = frame.source, .offset = frame.vector & vector_low};
+  const auto primary_pointer = frame.bank == SharcInterruptBank::irptl ? frame.source : 0;
+  if (!sharc_programmable_source(source) || !internal(frame.vector) || !internal(frame.return_pc) ||
       frame.saved_depth >= before_almost_full || !state.depth ||
       *state.depth <= frame.saved_depth ||
       state.pc_stack[frame.saved_depth] != (sharc_special_frame | frame.return_pc) ||
-      state.system[imaskp] != (SharcKnown32{.value = p1i, .known = all_bits}) ||
-      state.effective[imaskp] != state.system[imaskp] ||
-      (state.system[sharc_irptl].known & p1i) == 0 ||
-      (state.system[sharc_irptl].value & p1i) != 0 ||
-      (state.effective[sharc_irptl].known & p1i) == 0 ||
-      (state.effective[sharc_irptl].value & p1i) != 0) {
-    throw std::invalid_argument("Invalid SHARC P1I service/frame state");
+      state.system[imaskp] != (SharcKnown32{.value = primary_pointer, .known = all_bits}) ||
+      state.effective[imaskp] != state.system[imaskp]) {
+    throw std::invalid_argument("Invalid SHARC programmable service/frame state");
   }
-  const auto pending = state.pending[sharc_irptl];
-  if (pending && ((pending->known & p1i) == 0 || (pending->value & p1i) != 0)) {
-    throw std::invalid_argument("Invalid SHARC P1I pending service latch");
+  const auto index = sharc_latch_register(frame.bank);
+  for (const auto word : {state.system[index],
+                          state.effective[index],
+                          state.pending[index].value_or(state.system[index])}) {
+    if ((word.known & frame.source) == 0 || (word.value & frame.source) != 0) {
+      throw std::invalid_argument("Invalid SHARC programmable pending service latch");
+    }
+  }
+  for (const auto word : {state.system[sharc_lirptl],
+                          state.effective[sharc_lirptl],
+                          state.pending[sharc_lirptl].value_or(state.system[sharc_lirptl])}) {
+    if ((word.known & sharc_lirptl_pointers) != sharc_lirptl_pointers ||
+        (word.value & sharc_lirptl_pointers) != pointer(source)) {
+      throw std::invalid_argument("Invalid SHARC programmable service mask pointer");
+    }
   }
 }
 
@@ -150,38 +180,43 @@ sharc_service_interrupt(SharcState &state, SharcInterruptReference reference, bo
     nonnesting(state);
     return {}; // NESTM0 masks all sources; other requests remain latched.
   }
-  const auto latch = state.effective[sharc_irptl];
-  if (latch.known == all_bits && latch.value == 0) { return {}; }
-  if (!selected(state.effective[sharc_mode1], global_enable)) { return {}; }
-  const auto mask = state.effective[sharc_imask];
-  const auto possible = (latch.value | ~latch.known) & (mask.value | ~mask.known) & interrupt_bits;
-  if (possible == 0) { return {}; }
   if (sharc_interrupt_deferred(state)) { return {}; }
-  if (possible != p1i || !selected(latch, p1i) || !selected(mask, p1i)) {
+  const auto source = sharc_pending_interrupt(state);
+  if (!source) { return {}; }
+  if (!sharc_programmable_source(*source)) {
     throw std::runtime_error("SHARC unknown/other interrupt source not qualified");
   }
   nonnesting(state);
   const auto saved_depth = recognition_boundary(state, reference, fetched);
-  const auto vector = reference.vector_base + vector_offset;
+  const auto vector = reference.vector_base + source->offset;
   const auto return_pc = state.pc;
   // PGR A-10: interrupt push sets bit25, with CALL bit24 clear.
   state.pc_stack[saved_depth] = sharc_special_frame | return_pc;
   state.depth = saved_depth + 1;
-  state.interrupt = SharcInterruptFrame{
-      .source = p1i, .vector = vector, .return_pc = return_pc, .saved_depth = saved_depth};
+  state.interrupt = SharcInterruptFrame{.source = source->mask,
+                                        .vector = vector,
+                                        .return_pc = return_pc,
+                                        .saved_depth = saved_depth,
+                                        .bank = source->bank};
   if (state.arithmetic_loop) {
     state.arithmetic_loop->phase = SharcArithmeticPhase::fetched_suspended;
   }
-  state.system[imaskp] = {.value = p1i, .known = all_bits};
+  settle_entry_effects(state);
+  state.system[imaskp] = {.value = source->bank == SharcInterruptBank::irptl ? source->mask : 0,
+                          .known = all_bits};
   state.effective[imaskp] = state.system[imaskp];
-  clear_source(state, p1i);
+  secondary_pointer(state, pointer(*source));
+  state.effective[sharc_lirptl] = state.system[sharc_lirptl];
+  clear_source(state, *state.interrupt);
   state.pc = vector;
   state.idle_pc.reset();
-  settle_entry_effects(state);
   sharc_stack_status(state);
   // PGR4-30/31 branch phase, after explicit latching/recognition boundary.
-  return SharcInterruptStep{
-      .source = p1i, .return_pc = return_pc, .vector = vector, .minimum_core_cycles = 4};
+  return SharcInterruptStep{.source = source->mask,
+                            .return_pc = return_pc,
+                            .vector = vector,
+                            .minimum_core_cycles = 4,
+                            .bank = source->bank};
 }
 
 std::optional<std::uint32_t>
@@ -197,7 +232,7 @@ sharc_return_interrupt(SharcState &state, std::uint64_t opcode, std::optional<bo
   if (!state.interrupt || state.branch || state.count_loop ||
       (state.arithmetic_loop && !suspended)) {
     throw std::runtime_error(
-        "SHARC RTI requires a qualified non-loop P1I frame or suspended arithmetic frame");
+        "SHARC RTI requires a qualified programmable frame or suspended arithmetic frame");
   }
   sharc_validate_arithmetic_loop(state);
   const auto frame = *state.interrupt;
@@ -208,16 +243,21 @@ sharc_return_interrupt(SharcState &state, std::uint64_t opcode, std::optional<bo
   state.depth = frame.saved_depth;
   state.system[imaskp] = {.known = all_bits};
   state.effective[imaskp] = state.system[imaskp];
-  clear_source(state, frame.source);
+  clear_source(state, frame);
+  if (frame.bank == SharcInterruptBank::lirptl) {
+    secondary_pointer(state, 0);
+    // A-33: controller mask-pointer readback has one extra clock of latency.
+    state.pending[sharc_lirptl] = state.system[sharc_lirptl];
+  }
   state.interrupt.reset();
   if (state.arithmetic_loop) { state.arithmetic_loop->phase = SharcArithmeticPhase::fetched; }
-  // P1I does not push/pop ASTATx/y or MODE1 status (PGR4-28,9-45).
+  // Programmable IRQs do not push/pop ASTATx/y or MODE1 (PGR4-28,9-45).
   return frame.return_pc;
 }
 
 void sharc_interrupt_finish(const SharcState &previous, SharcState &next) {
   // PGR4-34/36: keep the active source latch clear on every service cycle.
-  if (previous.interrupt) { clear_source(next, previous.interrupt->source); }
+  if (previous.interrupt) { clear_source(next, *previous.interrupt); }
 }
 
 }
@@ -245,7 +285,8 @@ std::optional<SharcInterruptStep> Sharc::service_interrupt(SharcInterruptReferen
           << state_.effective[11].known << " MODE1=0x" << state_.effective[2].value << "/0x"
           << state_.effective[2].known << " MODE2=0x" << state_.effective[4].value << "/0x"
           << state_.effective[4].known << " IMASKP=0x" << state_.effective[12].value << "/0x"
-          << state_.effective[12].known << ": " << error.what();
+          << state_.effective[12].known << " LIRPTL=0x" << state_.effective[13].value << "/0x"
+          << state_.effective[13].known << ": " << error.what();
   throw std::runtime_error(message.str());
 }
 

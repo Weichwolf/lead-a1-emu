@@ -53,7 +53,7 @@ ringB=A+80. Actual IDP_CTL0/CTL1 programming follows. All PCs/widths/results/
 post-values are checked against original fields/PGR encodings, not recorded
 emulator output, and independently corroborated by factual handoff6400242285.
 
-Transport0/1 reach422/442 application instructions. All19 IDP setup
+Transport0/1 reach422/446 application instructions. All19 IDP setup
 instructions execute through real control/parameter owners (sharc-idp-dma.txt).
 The actual+933/+999 indexB retirement retains its three-queued-write checkpoint.
 SYSCTL read/SET80/write now succeeds through a real peripheral group arbiter;
@@ -61,7 +61,10 @@ sharc-dma-arbitration.txt describes the explicit mode/cursor/timing limits.
 Original IMASK SET5000/1000 and transport0 MODE1 SET1800 are checked. The next
 SPCTL2 read/OR/write and FLAGS clear4/test1 now execute through the qualified
 MODE1/IOP hold (sharc-mode-holds.txt). Its NOTTF backedge+985 needs the still
-unknown FLAG0 input; transport1 reaches unsupported LIRPTL SET400+1033.
+unknown FLAG0 input. Transport1 executes LIRPTL SET400+1033, MODE1 SET1800+1036
+and FLAGS clear4/test1+1039/+1042, then its NOTTF backedge+1045 also rejects
+unknown FLAG0. Enabled mask-only LIRPTL writes require known-clear latches
+and no service; possible write/entry overlap remains guarded (sharc-lirptl.txt).
 Both failures preserve exact CPU/fetch/device state.
 All four original programs at two serial cadences retain earlier payload/
 vector/SPI/SPORT/DAI checks. No SCLK, IDP data/grant, audio, boot or physical

@@ -445,13 +445,16 @@ void rti_predicate_and_stack_guards() {
   require(cpu.state() == before);
   auto state = before;
   state.pc_stack[1] = foreground; // Missing hardware bit25.
-  rejected([&] { const lead_a1::Sharc invalid(memory, state); }, "P1I service/frame state");
+  rejected([&] { const lead_a1::Sharc invalid(memory, state); },
+           "programmable service/frame state");
   state = before;
   state.system[12].value = 0;
-  rejected([&] { const lead_a1::Sharc invalid(memory, state); }, "P1I service/frame state");
+  rejected([&] { const lead_a1::Sharc invalid(memory, state); },
+           "programmable service/frame state");
   state = before;
   state.pending[10] = lead_a1::SharcKnown32{.value = p1i, .known = full32};
-  rejected([&] { const lead_a1::Sharc invalid(memory, state); }, "P1I pending service latch");
+  rejected([&] { const lead_a1::Sharc invalid(memory, state); },
+           "programmable pending service latch");
 }
 
 void spi_preserves_simd_and_ands_return_condition() {

@@ -103,16 +103,19 @@ struct SharcFlagDrive {
   bool operator==(const SharcFlagDrive &) const = default;
 };
 
+enum class SharcInterruptBank : std::uint8_t { irptl, lirptl };
+
 struct SharcInterruptFrame {
   std::uint32_t source{};
   std::uint32_t vector{};
   std::uint32_t return_pc{};
   unsigned int saved_depth{};
+  SharcInterruptBank bank{};
   bool operator==(const SharcInterruptFrame &) const = default;
 };
 
 struct SharcInterruptReference {
-  // Explicit internal IVT base; P1I routing and the physical board remain separate.
+  // Explicit internal IVT base; peripheral routing and the physical board are separate.
   std::uint32_t vector_base{};
 };
 
@@ -122,6 +125,7 @@ struct SharcInterruptStep {
   std::uint32_t vector{};
   // Internal branch overhead only; no guest instruction retires here.
   unsigned int minimum_core_cycles{};
+  SharcInterruptBank bank{};
   bool operator==(const SharcInterruptStep &) const = default;
 };
 
@@ -192,12 +196,14 @@ public:
   // Explicit externally routed IRPTL maskable request. Latches even if masked;
   // Enabled requests require explicit qualified recognition by the owner.
   void latch_interrupt(std::uint32_t mask);
+  // Logical PICR priority P0..18, not an IRPTL/LIRPTL bit or physical input.
+  void latch_programmable_interrupt(unsigned int priority);
 
-  // Qualified enabled P1I wakes IDLE without servicing it or consuming its latch.
+  // Qualified programmable IRQ wakes IDLE without servicing or consuming its latch.
   // A first-delay-slot IDLE keeps its captured final slot and pending branch.
   [[nodiscard]] bool wake_idle();
 
-  // Explicit recognition of an already latched P1I at a qualified boundary.
+  // Explicit recognition of a latched programmable IRQ at a qualified boundary.
   // Ordinary internal delayed branches defer delivery until both slots finish.
   // Physical synchronization and loop entry remain unqualified.
   [[nodiscard]] std::optional<SharcInterruptStep>

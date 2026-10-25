@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "sharc/core/sharc.hpp"
 #include "sharc/core/sharc_internal.hpp"
+#include "sharc/core/sharc_interrupt_source.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <limits>
@@ -12,21 +14,26 @@ namespace lead_a1 {
 
 void Sharc::latch_interrupt(std::uint32_t mask) {
   constexpr std::uint32_t maskable = 0xffffff7c;
-  constexpr unsigned int irptl = 10;
   if (memory_.active() || (mask & ~maskable) != 0) {
     throw std::runtime_error(
         "SHARC interrupt event requires idle transaction and maskable IRPTL bits");
   }
-  if (state_.interrupt) { mask &= ~state_.interrupt->source; }
-  for (auto *latch : {&state_.system[irptl], &state_.effective[irptl]}) {
-    latch->value |= mask;
-    latch->known |= mask;
+  if (state_.interrupt && state_.interrupt->bank == SharcInterruptBank::irptl) {
+    mask &= ~state_.interrupt->source;
   }
-  auto &pending = state_.pending[irptl];
-  if (pending) {
-    pending->value |= mask;
-    pending->known |= mask;
+  detail::sharc_latch_source(state_, SharcInterruptBank::irptl, mask, true);
+}
+
+void Sharc::latch_programmable_interrupt(unsigned int priority) {
+  if (memory_.active()) {
+    throw std::runtime_error("SHARC programmable interrupt requires idle transaction");
   }
+  const auto source = detail::sharc_programmable_source(priority);
+  if (state_.interrupt && state_.interrupt->bank == source.bank &&
+      state_.interrupt->source == source.mask) {
+    return;
+  }
+  detail::sharc_latch_source(state_, source.bank, source.mask, true);
 }
 
 }
@@ -37,7 +44,7 @@ namespace {
 constexpr std::uint32_t all_bits = std::numeric_limits<std::uint32_t>::max();
 constexpr std::uint32_t interrupt_writable = 0xffffff7c;
 constexpr std::uint32_t mode1_writable = 0x01e1fcff;
-constexpr std::uint32_t global_interrupt_enable = 0x1000;
+constexpr std::uint32_t lirptl_masks = 0xffc00;
 constexpr unsigned int sreg_base = 0x70;
 constexpr unsigned int pc_ureg = 0x63;
 constexpr unsigned int stack_ureg = 0x64;
@@ -54,6 +61,32 @@ bool known_bit(SharcKnown32 value, std::uint32_t mask) {
     throw std::runtime_error("Unknown SHARC control/status bits");
   }
   return (value.value & mask) != 0;
+}
+
+bool clear_latches(const SharcState &state, SharcInterruptBank bank) {
+  const auto index = sharc_latch_register(bank);
+  const auto mask = bank == SharcInterruptBank::irptl ? interrupt_writable : sharc_lirptl_latches;
+  const std::array words{state.system[index],
+                         state.effective[index],
+                         state.pending[index].value_or(state.system[index])};
+  return std::ranges::all_of(words, [mask](SharcKnown32 word) {
+    return (word.known & mask) == mask && (word.value & mask) == 0;
+  });
+}
+
+void lirptl_write_guard(const SharcState &state, SharcKnown32 value) {
+  constexpr std::uint32_t global_enable = 0x1000;
+  if (!known_bit(state.effective[sharc_mode1], global_enable)) { return; }
+  const auto previous = state.system[sharc_lirptl];
+  const auto changed = (value.value ^ previous.value) | (value.known ^ previous.known);
+  if (state.interrupt || (changed & ~lirptl_masks) != 0 ||
+      !clear_latches(state, SharcInterruptBank::irptl) ||
+      !clear_latches(state, SharcInterruptBank::lirptl)) {
+    throw std::runtime_error(
+        "SHARC enabled LIRPTL write with possible interrupt overlap not qualified");
+  }
+  // Bounded owner reference: masks only, all latches known clear, no service.
+  // Recognition still rejects a request arriving while this effect is pending.
 }
 
 bool user_status(unsigned int index) {
@@ -86,6 +119,15 @@ void system_write(SharcState &state, unsigned int index, SharcKnown32 value) {
     mask = mode1_writable;
   } else if (index == sharc_irptl || index == sharc_imask) {
     mask = interrupt_writable;
+  } else if (index == sharc_lirptl) {
+    const auto previous = state.system[index];
+    if ((((previous.value ^ value.value) | (previous.known ^ value.known)) &
+         sharc_lirptl_pointers) != 0) {
+      throw std::runtime_error("SHARC controller-owned LIRPTL pointer write not qualified");
+    }
+    lirptl_write_guard(state, value);
+    constexpr std::uint32_t latch_and_mask = 0xfffff;
+    mask = latch_and_mask;
   } else {
     throw std::runtime_error("SHARC system register write semantics not implemented");
   }
@@ -159,7 +201,9 @@ SharcKnown32 sharc_ureg(const SharcState &state, unsigned int ureg) {
     const auto index = ureg - sreg_base;
     if (user_status(index) || (index >= sharc_astat_x && index <= 9)) { require_sisd(state); }
     if (index == sharc_flags) { return sharc_flags_read(state); }
-    if (index == 13) { throw std::runtime_error("SHARC link-register read not implemented"); }
+    if (index == sharc_lirptl) {
+      return merge(state.system[index], state.effective[index], sharc_lirptl_pointers);
+    }
     return state.system[index];
   }
   if (ureg == pc_ureg) { return {.value = state.pc, .known = all_bits}; }
@@ -217,6 +261,12 @@ void sharc_bit_operation(SharcState &state, std::uint64_t opcode) {
     throw std::runtime_error("SHARC FLAGS level toggle timing not qualified");
   }
   auto value = sharc_ureg(state, sreg_base + index);
+  if (index == sharc_lirptl && operation <= 2) {
+    constexpr std::uint32_t global_enable = 0x1000;
+    if (known_bit(state.effective[sharc_mode1], global_enable) && (mask & ~lirptl_masks) != 0) {
+      throw std::runtime_error("SHARC enabled LIRPTL bit operation outside masks not qualified");
+    }
+  }
   switch (operation) {
     case 0:
       value.value |= mask;
@@ -273,13 +323,7 @@ void sharc_interrupt_guard(const SharcState &state) {
     sharc_interrupt_service_guard(state);
     return;
   }
-  const auto latch = state.effective[sharc_irptl];
-  if (latch.known == all_bits && latch.value == 0) { return; }
-  if (!known_bit(state.effective[sharc_mode1], global_interrupt_enable)) { return; }
-  const auto mask = state.effective[sharc_imask];
-  const auto possible =
-      (latch.value | ~latch.known) & (mask.value | ~mask.known) & interrupt_writable;
-  if (possible != 0 && !sharc_interrupt_deferred(state)) {
+  if (!sharc_interrupt_deferred(state) && sharc_pending_interrupt(state)) {
     throw std::runtime_error("SHARC pending interrupt delivery not implemented");
   }
 }

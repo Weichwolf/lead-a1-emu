@@ -1113,10 +1113,9 @@ void check_original_control_hold(const lead_a1::SharcState &core,
     const auto old = core.effective[mode1];
     require((((mode->value ^ old.value) | (mode->known ^ old.known)) & ~interrupt_modes) == 0);
   } else {
-    constexpr unsigned int flag_test = 982;
-    constexpr unsigned int flag_branch = 985;
-    require(uses_clock_initializer(devices.placement) &&
-            core.pc == devices.placement.second_call + flag_test && before.address &&
+    const auto flag_test = uses_clock_initializer(devices.placement) ? 982U : 1042U;
+    const auto flag_branch = flag_test + 3;
+    require(core.pc == devices.placement.second_call + flag_test && before.address &&
             before.address->address == core.pc && before.decode &&
             before.decode->address == devices.placement.second_call + flag_branch);
   }
@@ -1762,8 +1761,8 @@ void original_flags_branch_input(lead_a1::SharcMemory &memory,
                                  lead_a1::SharcFetch &fetch,
                                  SerialInput &serial,
                                  HeaderDevices devices) {
-  constexpr unsigned int wait_test = 982;
-  constexpr unsigned int wait_branch = 985;
+  const auto wait_test = uses_clock_initializer(devices.placement) ? 982U : 1042U;
+  const auto wait_branch = wait_test + 3;
   constexpr unsigned int limit = 16;
   constexpr unsigned int class_shift = 40;
   constexpr unsigned int condition_shift = 33;
@@ -1792,15 +1791,11 @@ void original_startup_frontier(lead_a1::SharcMemory &memory,
                                SerialInput &serial,
                                HeaderDevices devices) {
   const bool clocks = uses_clock_initializer(devices.placement);
-  if (clocks) {
-    original_flags_branch_input(memory, cpu, fetch, serial, devices);
-  } else {
-    original_application_prepare(memory, cpu, fetch, serial, devices);
-  }
+  original_flags_branch_input(memory, cpu, fetch, serial, devices);
   constexpr unsigned int flags_branch = 985;
-  constexpr unsigned int link_mask_set = 1033;
+  constexpr unsigned int other_flags_branch = 1045;
   require(cpu.state().pc ==
-          devices.placement.second_call + (clocks ? flags_branch : link_mask_set));
+          devices.placement.second_call + (clocks ? flags_branch : other_flags_branch));
   const auto core = cpu.state();
   const auto transport = fetch.state();
   const auto controller = devices.control.snapshot();
@@ -1816,7 +1811,7 @@ void original_startup_frontier(lead_a1::SharcMemory &memory,
           fabric.memory_bus.granted == lead_a1::SharcMemoryBusState{}.granted &&
           !fabric.arbiter.transfer && fabric.arbiter.mode == controller.dma_rotation &&
           fabric.arbiter.heads == lead_a1::SharcDmaArbiterState::unknown_heads);
-  if (clocks) {
+  {
     constexpr std::uint32_t btf = 0x40000;
     constexpr std::uint32_t modes = 0x1800;
     require((core.flag_inputs.known & 1) == 0 && (core.system[6].known & btf) == 0 &&
@@ -1824,17 +1819,15 @@ void original_startup_frontier(lead_a1::SharcMemory &memory,
             (core.effective[2].value & core.effective[2].known & modes) == modes &&
             (core.system[5].known & 4) == 4 && (core.system[5].value & 4) == 0);
   }
+  constexpr std::uint32_t p6_mask = 0x400;
+  require(core.system[13] ==
+              (lead_a1::SharcKnown32{.value = clocks ? 0U : p6_mask, .known = full32}) &&
+          core.effective[13] == core.system[13] && !core.pending[13]);
   try {
-    if (clocks) {
-      original_application_prepare(memory, cpu, fetch, serial, devices);
-    } else {
-      static_cast<void>(cpu.step(fetch));
-    }
+    original_application_prepare(memory, cpu, fetch, serial, devices);
   } catch (const std::exception &error) {
     const std::string message(error.what());
-    const auto *reason =
-        clocks ? "Unknown SHARC control/status bits" : "SHARC link-register read not implemented";
-    if (message.find(reason) == std::string::npos) { throw; }
+    if (message.find("Unknown SHARC control/status bits") == std::string::npos) { throw; }
     std::ostringstream context;
     context << "pc=0x" << std::hex << core.pc;
     require(message.find(context.str()) != std::string::npos);
@@ -1844,7 +1837,7 @@ void original_startup_frontier(lead_a1::SharcMemory &memory,
             devices.dma_fabric->snapshot() == fabric && !memory.active());
     return;
   }
-  throw std::runtime_error("Missing original unknown-FLAG0 or LIRPTL frontier failure");
+  throw std::runtime_error("Missing original unknown-FLAG0 frontier failure");
 }
 
 void original_dma_frontier(lead_a1::SharcMemory &memory,
@@ -1852,7 +1845,8 @@ void original_dma_frontier(lead_a1::SharcMemory &memory,
                            lead_a1::SharcFetch &fetch,
                            SerialInput &serial,
                            HeaderDevices devices) {
-  if (uses_clock_initializer(devices.placement)) {
+  const bool clocks = uses_clock_initializer(devices.placement);
+  if (clocks) {
     using Operation = original_sport::Operation;
     constexpr std::array<original_sport::Step, 3> sport{
         {{.offset = 970,
@@ -1873,14 +1867,30 @@ void original_dma_frontier(lead_a1::SharcMemory &memory,
     for (const auto &step : sport) {
       original_sport_step(memory, cpu, fetch, serial, devices, step);
     }
-    constexpr unsigned int flags_clear = 979;
-    constexpr unsigned int flags_test = 982;
-    const auto flags = cpu.state().system[5];
-    original_picr_ordinary(memory, cpu, fetch, serial, devices, flags_clear, 3);
-    require(cpu.state().system[5] ==
-            (lead_a1::SharcKnown32{.value = flags.value & ~4U, .known = flags.known | 4U}));
-    original_picr_ordinary(memory, cpu, fetch, serial, devices, flags_test, 3);
+  } else {
+    constexpr unsigned int link_mask = 1033;
+    constexpr unsigned int mode_set = 1036;
+    constexpr std::uint32_t p6_mask = 0x400;
+    constexpr std::uint32_t modes = 0x1800;
+    constexpr std::uint32_t global_enable = 0x1000;
+    require(cpu.state().system[13] == (lead_a1::SharcKnown32{.known = full32}) &&
+            cpu.state().effective[13] == cpu.state().system[13] &&
+            (cpu.state().effective[2].value & global_enable) != 0);
+    original_picr_ordinary(memory, cpu, fetch, serial, devices, link_mask, 3);
+    require(cpu.state().system[13] == (lead_a1::SharcKnown32{.value = p6_mask, .known = full32}) &&
+            cpu.state().pending[13] == cpu.state().system[13]);
+    const auto mode = cpu.state().system[2];
+    original_picr_ordinary(memory, cpu, fetch, serial, devices, mode_set, 3);
+    require(cpu.state().system[2] ==
+            (lead_a1::SharcKnown32{.value = mode.value | modes, .known = mode.known | modes}));
   }
+  const auto flags_clear = clocks ? 979U : 1039U;
+  const auto flags_test = flags_clear + 3;
+  const auto flags = cpu.state().system[5];
+  original_picr_ordinary(memory, cpu, fetch, serial, devices, flags_clear, 3);
+  require(cpu.state().system[5] ==
+          (lead_a1::SharcKnown32{.value = flags.value & ~4U, .known = flags.known | 4U}));
+  original_picr_ordinary(memory, cpu, fetch, serial, devices, flags_test, 3);
   original_startup_frontier(memory, cpu, fetch, serial, devices);
 }
 
@@ -2560,12 +2570,12 @@ void original_pin_boundary(lead_a1::SharcMemory &memory,
           routed.routes[1] == (clocks ? second_clock_data : second_other_data));
   constexpr unsigned int earlier_clock = 128;
   constexpr unsigned int earlier_other = 104;
-  const auto instructions = (clocks ? earlier_clock : earlier_other) +
-                            (6 * (pins.size() + data.size())) + (clocks ? 144U : 140U);
-  std::cout
-      << "  Clocked application:" << instructions
-      << " actual instructions; SPORT/PCG/PICR initialization; "
-      << "SPORT2/IDP/DCPR configured; FLAG0 input or LIRPTL unresolved; no source clock or audio\n";
+  const auto instructions =
+      (clocks ? earlier_clock : earlier_other) + (6 * (pins.size() + data.size())) + 144U;
+  std::cout << "  Clocked application:" << instructions
+            << " actual instructions; SPORT/PCG/PICR initialization; "
+            << "SPORT/IDP/DCPR and interrupt masks configured; FLAG0 input unresolved; no source "
+               "clock or audio\n";
 }
 
 void original_post_spi_routing(lead_a1::SharcMemory &memory,

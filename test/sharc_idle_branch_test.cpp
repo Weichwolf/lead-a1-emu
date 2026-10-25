@@ -254,7 +254,7 @@ void masked_and_unknown_wake() {
   lead_a1::Sharc unknown(memory, state);
   unknown.latch_interrupt(p1i);
   const auto before = unknown.state();
-  rejected([&] { static_cast<void>(unknown.wake_idle()); }, "Unknown SHARC IDLE wake control");
+  rejected([&] { static_cast<void>(unknown.wake_idle()); }, "unknown interrupt eligibility");
   require(unknown.state() == before);
 }
 

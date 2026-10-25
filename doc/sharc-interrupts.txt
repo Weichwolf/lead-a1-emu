@@ -1,17 +1,20 @@
-P1I recognition and immediate RTI reference
+Programmable interrupt recognition and immediate RTI reference
 
-An explicit owner operation recognizes an already latched, enabled P1I at a
+An explicit owner operation recognizes a latched, enabled programmable IRQ at a
 qualified native internal instruction boundary. The owner supplies an aligned
-internal IVT base; P1I uses offset30. This is a core programmable-interrupt
+internal IVT base; P0..18 use offsets2c..74 (P1I is30). This is a core programmable-interrupt
 reference, not proof of the Nord board's PICR routing, IVT/reset selection,
 interrupt synchronization, SPI acknowledgement or complete pipeline timing.
-Other enabled/unknown sources, nonmaskable state, active/unknown timer,
+Other core sources, ambiguous priority, nonmaskable state, active/unknown timer,
 nesting, foreground loops, unknown/full stack, unknown existing
-IMASKP and pending IRPTL writes are explicitly guarded before any mutation.
+IMASKP/LIRPTL pointers and pending software latch writes are guarded before mutation.
+Both banks, their interleaved priority and pointer read latency are described
+in sharc-lirptl.txt. Existing P1I-specific numerical tests remain unchanged.
 
 Recognition checks effective MODE1/IMASK/IRPTL before the accepted branch.
 It pushes the interrupted PC with bit25 set and CALL bit24 clear (PGR A-10),
-sets P1I in IMASKP and clears that source in IRPTL. It publishes a recognition
+sets the source pointer in IMASKP or LIRPTL and clears that source's latch.
+It publishes a recognition
 event with four internal branch-overhead minimum clocks. No guest instruction
 or NOP retires. The complete synchronization/recognition/fetch pipeline is not
 inferred from this lower bound or the functional owner placement.
@@ -46,7 +49,7 @@ also covers pending IRPTL effects. Peripheral-source acknowledgement remains
 a separate owner/device action; a core latch clear is not a fabricated SPI
 acknowledgement or readiness reply.
 
-Native immediate conditional RTI returns through the matched interrupt frame,
+Native immediate conditional RTI returns through the bank-qualified interrupt frame,
 pops its PC resource, clears the mask pointer/source and retains ISR results.
 The physical popped PC-stack entry remains observable. SIMD uses the normal
 AND of both PE conditions. False RTI conditions preserve service state; RTS
