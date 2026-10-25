@@ -1,0 +1,69 @@
+SRU2 pin and output-enable routing
+
+SharcDpiRouting models separate PIN and PBEN groups at1c10..1c12 and
+1c20..1c22. HWRrev1.1 A-213..220/B-15 defines14 destinations, five six-bit
+fields in each first/second word and four in the third. Reserved high bits
+remain stored/read back independently. The explicit family reset words are
+18017556/004db699/00450000 and0d00c28b/002103ce/00185964 respectively; these
+are register references, not observed Nord pad levels or boot-mode outputs.
+
+PIN selectors0/1 are LOW/HIGH. Selectors2..50 cover external DPI inputs,
+timers, UART, SPI/SPIB, FLAG/PWM and PCG outputs, except reserved18/20.
+PBEN selectors0/1 are constants and2..43 cover miscellaneous, timer, UART,
+SPI/SPIB, FLAG and TWI enables, except reserved7/9. Missing dynamic inputs
+remain unknown. Reserved/nonexistent source inputs reject even when their
+supplied Boolean value is false. Source clocks and physical pad feedback
+belong to their owning peripherals/board; no reset input voltage is guessed.
+
+HWR10-33 specifies2..3 PCLK configuration-effect latency after a delivered
+write. Before two periods, outputs use the old route; during the uncertain
+interval they remain known only if both live old/new possibilities agree.
+After three periods the new route is guaranteed. Full/half-PCLK APIs retain
+fractional ages per word, including snapshots and mixed calls. The core/IOP
+bridge latency and fundamental DAI/DPI PCLK/4 timing are separate constraints.
+The router consumes explicit elapsed PCLK grants; no unproved PMCTL1 DAI gate
+is applied to DPI. Peripheral owners supply their separately gated sources.
+
+PIN.drives(PBEN) composes14 high/low/high-impedance/unresolved masks, bit0
+for pin1. A disabled driver is high impedance even with unknown data; an
+unknown enable remains unresolved. Driving a pad does not feed an invented
+sample back into its input. INPUT-group routing, pad sampling/status,
+interrupt latches and complete peripheral/board coupling remain open.
+
+Transactions stage register effects; committed outputs do not expose a
+tentative write. External source/clock events and snapshots reject active
+transactions. Snapshots validate raw selections, pending intervals and all
+source slots. Overlapping same-word writes and unsettled register readback
+are explicit unqualified cases, not assertions that silicon rejects them;
+the emulator must support valid original behavior before full acceptance.
+Normal routing, clock and drive operations use fixed state without allocation.
+
+Owned tests independently list both source tables, six reset words and all14
+reset source identities. They cover every valid selector/destination and
+low/high/missing input, reserved fields/sources, literal half-period effect
+phases, equal/unequal live routes, fractional independent word restores,
+large clock grants, transactions and pin-driver composition. Real fetched
+native stores/reads use both4/5 write and7/8 read bridge bounds. Actual CPU
+source changes precede delivery, and an injected late backend write failure
+rolls back the real router while preserving the already-retired CPU store.
+Repair/retry_due adds no time; subsequent actual core execution reads the
+correct settled route. These tests do not establish physical Nord timing.
+
+The separate original_sharc_clocked_iop fixture executes both actual6-instruction
+RMW groups, followed by zero USTAT1. A separate static field decoder over all
+four pinned original slices and PGR12-12/Type15b establish maskFFFFF03F and
+OR operands0540/0280: the PIN/PBEN field6..11 selects SPI_CLK_O/SPI_CLK_PBEN_O.
+Literal AND results18017016/0d00c00b and final18017556/0d00c28b are checked,
+including every R0/R1 value, mixed width/PC and real posted write. These are
+idempotent changes for the explicit family inputs, not observed Nord pad levels.
+The profile reaches95 application instructions/240 local CCLK with the last
+PBEN0 write still posted. The next actual SPIDMAC1084 store requires a timed
+SPI binding; its precise failure preserves CPU/IAB/queue/SPI/router state.
+See sharc-iop-bridge.txt for timing inputs and earlier-stage gaps.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^sharc_dpi_' --output-on-failure
+
+Primary document identities are pinned in reference/sharc.json. Complete
+original boot/instrument/audio/MIDI/USB/UI/storage/update/recovery and stock
+hardware comparisons remain mandatory and incomplete.

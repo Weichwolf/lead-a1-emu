@@ -101,14 +101,20 @@ DAI/DPI. Each elapsed half-PCLK precedes newly due deliveries. This profile
 starts a stated local clock epoch after the common call and supplies5/8-clock
 inputs; earlier native/core-IOP/PMCTL timing and physical Nord phase remain
 separate gaps. It neither runs the functional fork first nor seeds its device
-state from that fork. All eight placements/cadences retire82 further actual
-instructions, including the18-instruction power/modifier prefix and64 routing/
-PP_CTL instructions. Their next real SRU2_PIN0 read at1c10 fails in the backend
-with CPU, every fetch/IAB field, SYSCTL and SPI unchanged; all12 earlier posted
-writes (including PMCTL1) have drained. Observed local elapsed time is217 CCLK
-under the stated5/8 inputs:82 retired instructions, one faulting read, six
-refill clocks, twelve seven-clock read extensions and eleven four-clock
-posted-store drains. This is not a physical Nord timing measurement.
+state from that fork. All eight placements/cadences retire95 further actual
+instructions:18 power/modifier,64 routing/PP_CTL, twelve SRU2 PIN0/PBEN0 RMW
+instructions and compact zero USTAT1. The first PIN0 read now succeeds at217
+local CCLK. Static original fields and PGR short-compute semantics establish
+each R0/R1 intermediate, PC/width and real posted target/value independently.
+The explicit family reset words are restored idempotently (sharc-dpi.txt).
+After95 instructions the local epoch is240 CCLK:95 retirement clocks, six
+refills, thirteen seven-clock read extensions and twelve four-clock posted
+drains. The final PBEN0 store remains genuinely posted. The next actual
+SPIDMAC1084 store at second-CALL target+207 is guarded because the existing
+SPI DMA mapping is not yet bound through this timed bridge. CPU/IAB/queue,
+SPI and both routers remain unchanged by that failure. No immediate-success
+fallback, extra guest polling or SPI reset is supplied. This is not a physical
+Nord timing measurement or complete original startup.
 
   cmake --build --preset strict
   ctest --preset strict -R '^(sharc_fetched_iop_waits|sharc_iop_posted_control_transfers|original_sharc_clocked_iop)$' --output-on-failure

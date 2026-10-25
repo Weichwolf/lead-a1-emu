@@ -85,6 +85,9 @@ Explicit5/8-clock inputs give193 bridge clocks including that failed read.
 CPU/IAB/SYSCTL/SPI and prior routing state are checked. This is instruction-
 order evidence; full five-stage boot, board links and instrument acceptance
 in objective.txt remain unchanged and incomplete.
+The separate clocked application fixture now maps the DPI routers and executes
+this read and both following RMW groups; its next SPI binding gap is described
+in sharc-dpi.txt. The earlier instruction-order fixture remains separate.
 
   cmake --build --preset strict --target lead-a1-sharc-pdap-test format-check
   ctest --preset strict -R '^sharc_pdap_acquisition_fifo$' --output-on-failure

@@ -102,7 +102,13 @@ ID  State    Evidence / remaining work
              optional source levels, correct distinct code27 behavior and2..3
              PCLK effects. CLK4's conflicting PLL field stays explicitly guarded.
              Full pad/IDP/SPORT/clock/board coupling remains open
-             (sharc-dai-timing.txt). A separate PDAP receiver now captures
+             (sharc-dai-timing.txt). SRU2 PIN/PBEN references now route14
+             destinations from the distinct documented source sets, with six
+             reset words, live missing inputs,2..3-PCLK effects, fractional
+             state and high/low/high-impedance/unresolved drive composition.
+             No guessed DAI gate or pad feedback is applied to DPI. INPUT/pad
+             sampling/interrupts and full peripheral coupling remain open
+             (sharc-dpi.txt). A separate PDAP receiver now captures
              explicit known DAI/AMI inputs on selected clock edges, preserves
              HOLD/partial words and implements four pack formats, an eight-word
              FIFO, overflow/threshold requests, W1S commands and delayed disable.
@@ -731,15 +737,28 @@ ID  State    Evidence / remaining work
              independent saved-owner continuation and unsupported preview modes
              retain explicit state expectations (sharc-iop-bridge.txt).
              original_sharc_clocked_iop separately continues the actual common
-             RTS through the second CALL and82 further original instructions.
+             RTS through the second CALL and95 further original instructions.
              PMCTL1 and all routing/PP_CTL traffic share one posted bridge;
              effects advance before new deliveries. All8 placements/cadences
-             reach the actual SRU2_PIN0 read at1c10 after217 local-epoch CCLK
-             under explicit5/8 timing inputs. The failed due read retains the
-             real CPU/fetch/IAB/SYSCTL/SPI; prior stores have drained. No
+             execute the actual SRU2_PIN0 read at1c10 after217 local-epoch CCLK
+             under explicit5/8 timing inputs. Independent static operand/width
+             checks establish both6-instruction PIN0/PBEN0 RMW groups and
+             zero USTAT1. Every actual R0/R1 result, PC/width and posted value
+             is checked; the family reset routes are restored idempotently.
+             After95 instructions/240 local CCLK, the next original SPIDMAC1084
+             write at second-CALL target+207 needs a qualified SPI bridge binding.
+             That failure retains CPU/IAB/queue/SPI/routing and the pending
+             PBEN0 write; no guessed delivery or polling is supplied. No
              functional fork seeds this fixture. Earlier native/core-IOP/PMCTL
              timing, independent prefetch/DMA holds and physical phase remain
-             separate gaps. No clocked VISA boot or complete application is
+             separate gaps.
+             DPI tests add independent source/reset tables for all14 outputs,
+             literal half-period phases, live equal/unknown routes, reserved
+             inputs/readback, fractional independent restore, transactions and
+             drive masks. Real fetched native4/5-write7/8-read compositions and
+             late actual target faults/retry preserve source capture and state
+             (sharc-dpi.txt).
+             No clocked VISA boot or complete application is
              qualified.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

@@ -86,6 +86,7 @@ add_library(lead_a1_sharc STATIC
   src/sharc/peripherals/sharc_control.cpp
   src/sharc/peripherals/sharc_dai_enable.cpp
   src/sharc/peripherals/sharc_dai_timing.cpp
+  src/sharc/peripherals/sharc_dpi_routing.cpp
   src/sharc/peripherals/sharc_pdap.cpp
   src/sharc/peripherals/sharc_pdap_input.cpp
   src/sharc/peripherals/sharc_power.cpp
@@ -125,6 +126,12 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-dpi-bus-test test/sharc_dpi_bus_test.cpp)
+  target_link_libraries(lead-a1-sharc-dpi-bus-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_dpi_posted_io COMMAND lead-a1-sharc-dpi-bus-test)
+  add_executable(lead-a1-sharc-dpi-test test/sharc_dpi_routing_test.cpp)
+  target_link_libraries(lead-a1-sharc-dpi-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_dpi_pin_output_enable_routing COMMAND lead-a1-sharc-dpi-test)
   add_executable(lead-a1-sharc-fetch-iop-test test/sharc_fetch_iop_test.cpp)
   target_link_libraries(lead-a1-sharc-fetch-iop-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_fetched_iop_waits COMMAND lead-a1-sharc-fetch-iop-test)
@@ -581,6 +588,8 @@ if(BUILD_TESTING)
     DEPENDS format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
       lead-a1-sharc-fetch-test
       lead-a1-sharc-fetch-iop-test
+      lead-a1-sharc-dpi-test
+      lead-a1-sharc-dpi-bus-test
       lead-a1-sharc-fetch-visa-test
       lead-a1-sharc-fetch-visa-loop-test
       lead-a1-sharc-fetch-cache-test

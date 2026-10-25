@@ -8,6 +8,7 @@
 #include "sharc/peripherals/sharc_control.hpp"
 #include "sharc/peripherals/sharc_dai_enable.hpp"
 #include "sharc/peripherals/sharc_dai_timing.hpp"
+#include "sharc/peripherals/sharc_dpi_routing.hpp"
 #include "sharc/peripherals/sharc_pdap.hpp"
 #include "sharc/peripherals/sharc_power.hpp"
 #include "sharc/peripherals/sharc_spi.hpp"
@@ -26,6 +27,7 @@
 #include <optional>
 #include <source_location>
 #include <span>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -393,6 +395,8 @@ struct HeaderDevices {
   lead_a1::SharcDaiTiming *frame_routes{};
   lead_a1::SharcPdap *pdap{};
   lead_a1::SharcIopBridge *bridge{};
+  lead_a1::SharcDpiRouting *dpi_pin{};
+  lead_a1::SharcDpiRouting *dpi_enable{};
 };
 
 void check_frontier(const lead_a1::Sharc &cpu,
@@ -765,6 +769,9 @@ void original_routing_clock(HeaderDevices devices) {
   devices.clock_routes->advance_half_pclk(1);
   devices.frame_routes->advance_half_pclk(1);
   devices.pdap->advance_cclk(1);
+  require(devices.dpi_pin != nullptr && devices.dpi_enable != nullptr);
+  devices.dpi_pin->advance_half_pclk(1);
+  devices.dpi_enable->advance_half_pclk(1);
   devices.bridge->tick();
 }
 
@@ -1023,6 +1030,9 @@ void original_application_clock(lead_a1::SharcMemory &memory,
   devices.clock_routes->advance_half_pclk(1);
   devices.frame_routes->advance_half_pclk(1);
   devices.pdap->advance_cclk(1);
+  require(devices.dpi_pin != nullptr && devices.dpi_enable != nullptr);
+  devices.dpi_pin->advance_half_pclk(1);
+  devices.dpi_enable->advance_half_pclk(1);
   devices.bridge->tick(); // Deliver new writes after the elapsed device interval.
 }
 
@@ -1052,7 +1062,13 @@ lead_a1::SharcStep original_application_retire(lead_a1::SharcMemory &memory,
   const auto access = fetch.peripheral_access(cpu);
   const bool read = access && access->operation == lead_a1::AccessKind::read;
   if (access) {
-    require(devices.bridge->bound_to(memory, access->address));
+    if (!devices.bridge->bound_to(memory, access->address)) {
+      std::ostringstream message;
+      message << "Original IOP owner pc=0x" << std::hex << access->pc << " word-address=0x"
+              << access->address << " operation=" << (read ? "read" : "write")
+              << ": no qualified bridge mapping";
+      throw std::runtime_error(message.str());
+    }
     devices.bridge->issue({.pc = access->pc,
                            .address = access->address,
                            .operation = access->operation,
@@ -1072,53 +1088,132 @@ lead_a1::SharcStep original_application_retire(lead_a1::SharcMemory &memory,
   return step;
 }
 
-void original_application_fault(lead_a1::SharcMemory &memory,
-                                lead_a1::Sharc &cpu,
-                                lead_a1::SharcFetch &fetch,
-                                SerialInput &serial,
-                                HeaderDevices devices) {
-  require(devices.bridge != nullptr && devices.dai != nullptr);
+void original_application_spi_boundary(lead_a1::SharcMemory &memory,
+                                       lead_a1::Sharc &cpu,
+                                       lead_a1::SharcFetch &fetch,
+                                       SerialInput &serial,
+                                       HeaderDevices devices) {
   original_application_prepare(memory, cpu, fetch, serial, devices);
-  const auto core = cpu.state();
-  const auto transport = fetch.state();
-  const auto control = devices.control.snapshot();
-  const auto spi = devices.spi.state();
+  constexpr unsigned int spi_offset = 207;
+  constexpr std::uint32_t spi_dma = 0x1084;
+  const auto pc = devices.placement.second_call + spi_offset;
   const auto access = fetch.peripheral_access(cpu);
-  constexpr unsigned int prefix_words = 181;
-  constexpr std::uint32_t sru2_pin0 = 0x1c10;
-  require(access && access->pc == devices.placement.second_call + prefix_words &&
-          access->address == sru2_pin0 && access->operation == lead_a1::AccessKind::read);
+  require(access == (lead_a1::SharcFetchIopAccess{
+                        .pc = pc, .address = spi_dma, .operation = lead_a1::AccessKind::write}));
+  require(cpu.state().system[0] == (lead_a1::SharcKnown32{.known = full32}));
+  const auto before = cpu.state();
+  const auto pipeline = fetch.state();
+  const auto queue = devices.bridge->snapshot();
+  const auto spi = devices.spi.state();
+  const auto pins = devices.dpi_pin->snapshot();
+  const auto enables = devices.dpi_enable->snapshot();
+  std::ostringstream expected;
+  expected << "Original IOP owner pc=0x" << std::hex << pc
+           << " word-address=0x1084 operation=write: no qualified bridge mapping";
+  bool stopped{};
   try {
     static_cast<void>(original_application_retire(memory, cpu, fetch, serial, devices));
-  } catch (const std::exception &error) {
-    const std::string message(error.what());
-    if (message.find("word-address=0x1c10 operation=read") == std::string::npos ||
-        message.find("Unmapped SHARC IOP register") == std::string::npos) {
-      throw std::runtime_error("Unexpected clocked original IOP frontier: " + message);
-    }
-    require(cpu.state() == core && fetch.state() == transport &&
-            devices.control.snapshot() == control && devices.spi.state() == spi &&
-            !memory.active());
-    constexpr std::array<std::uint32_t, 4> routes{0x0e2482ca, 0x1348d30f, 0x000005d6, 0};
-    const auto dai = devices.dai->snapshot();
-    require(dai.routes == routes);
-    for (const auto &pending : dai.pending) { require(!pending); }
-    const auto bus = devices.bridge->snapshot();
-    // 82 retired + one faulting access + six refill clocks + twelve seven-clock
-    // read extensions + eleven four-clock drains of preceding posted stores.
-    constexpr unsigned int expected_clocks = 82 + 1 + 6 + (12 * 7) + (11 * 4);
-    require(bus.clocks == expected_clocks && bus.write_count == 0 && bus.read &&
-            !bus.read->response && bus.request && bus.request->pc == core.pc &&
-            !devices.bridge->waiting() && !devices.bridge->ready());
-    check_original_power_outputs(cpu, devices);
-    check_original_timing_routes(devices);
-    check_original_pdap(devices);
-    std::cout << "  Clocked original application:82 further instructions; posted PMCTL1, ten "
-                 "routing groups/PP_CTL; actual SRU2_PIN0 read fault after "
-              << bus.clocks << " explicit-phase CCLK; real Execute/IAB/PC retained\n";
-    return;
+  } catch (const std::runtime_error &error) {
+    if (error.what() != expected.str()) { throw; }
+    stopped = true;
   }
-  throw std::runtime_error("Missing clocked original SRU2_PIN0 read fault");
+  require(stopped && cpu.state() == before && fetch.state() == pipeline &&
+          devices.bridge->snapshot() == queue && devices.spi.state() == spi &&
+          devices.dpi_pin->snapshot() == pins && devices.dpi_enable->snapshot() == enables &&
+          !memory.active());
+}
+
+void original_application_dpi(lead_a1::SharcMemory &memory,
+                              lead_a1::Sharc &cpu,
+                              lead_a1::SharcFetch &fetch,
+                              SerialInput &serial,
+                              HeaderDevices devices) {
+  require(devices.bridge != nullptr && devices.dpi_pin != nullptr && devices.dpi_enable != nullptr);
+  // Static original fields checked independently against PGR12-12/Type15b:
+  // R1=-4033, R0&=R1, R1=1344/640, R0|=R1. These restore field6..11.
+  constexpr std::uint32_t mask = 0xfffff03f;
+  constexpr std::uint32_t pin_select = 0x540;
+  constexpr std::uint32_t enable_select = 0x280;
+  constexpr std::uint32_t pin_reset = 0x18017556;
+  constexpr std::uint32_t enable_reset = 0x0d00c28b;
+  constexpr std::uint32_t pin_cleared = 0x18017016;
+  constexpr std::uint32_t enable_cleared = 0x0d00c00b;
+  constexpr std::array<unsigned int, 13> offsets{
+      181, 184, 186, 187, 189, 190, 193, 196, 198, 199, 201, 202, 205};
+  constexpr std::array<unsigned int, 13> widths{3, 2, 1, 2, 1, 3, 3, 2, 1, 2, 1, 3, 2};
+  constexpr std::array<std::uint32_t, 13> r0{pin_reset,
+                                             pin_reset,
+                                             pin_cleared,
+                                             pin_cleared,
+                                             pin_reset,
+                                             pin_reset,
+                                             enable_reset,
+                                             enable_reset,
+                                             enable_cleared,
+                                             enable_cleared,
+                                             enable_reset,
+                                             enable_reset,
+                                             enable_reset};
+  constexpr std::array<std::uint32_t, 13> r1{0,
+                                             mask,
+                                             mask,
+                                             pin_select,
+                                             pin_select,
+                                             pin_select,
+                                             pin_select,
+                                             mask,
+                                             mask,
+                                             enable_select,
+                                             enable_select,
+                                             enable_select,
+                                             enable_select};
+  const auto initial_pins = devices.dpi_pin->snapshot();
+  const auto initial_enables = devices.dpi_enable->snapshot();
+  require(initial_pins.routes[0] == pin_reset && initial_enables.routes[0] == enable_reset);
+  for (unsigned int index = 0; index < offsets.size(); ++index) {
+    original_application_prepare(memory, cpu, fetch, serial, devices);
+    const auto access = fetch.peripheral_access(cpu);
+    const bool transfer = index == 0 || index == 5 || index == 6 || index == 11;
+    require(access.has_value() == transfer);
+    const bool write = index == 5 || index == 11;
+    constexpr std::uint32_t pin_word = 0x1c10;
+    constexpr std::uint32_t enable_word = 0x1c20;
+    if (access) {
+      require(access->address == (index < 6 ? pin_word : enable_word) &&
+              access->operation ==
+                  (write ? lead_a1::AccessKind::write : lead_a1::AccessKind::read));
+    }
+    const auto step = original_application_retire(memory, cpu, fetch, serial, devices);
+    require(step.pc == devices.placement.second_call + offsets[index] &&
+            step.address_units == widths[index]);
+    constexpr std::uint64_t full40 = 0xffffffffff;
+    require(cpu.state().data[0][0] ==
+            (lead_a1::SharcKnown40{.value = std::uint64_t{r0[index]} << 8, .known = full40}));
+    if (index != 0) {
+      require(cpu.state().data[0][1] ==
+              (lead_a1::SharcKnown40{.value = std::uint64_t{r1[index]} << 8, .known = full40}));
+    }
+    if (write) {
+      const auto queue = devices.bridge->snapshot();
+      const auto posted = queue.writes[0];
+      require(queue.write_count == 1 && posted && access && posted->value == r0[index] &&
+              posted->intent.pc == step.pc && posted->intent.address == access->address);
+    }
+    if (index == 0) {
+      constexpr unsigned int first_read_clock = 217;
+      require(devices.bridge->state().clocks == first_read_clock);
+      check_original_power_outputs(cpu, devices);
+      check_original_timing_routes(devices);
+      check_original_pdap(devices);
+    }
+  }
+  constexpr unsigned int elapsed = 95 + 6 + (13 * 7) + (12 * 4);
+  require(devices.bridge->state().clocks == elapsed &&
+          devices.dpi_pin->snapshot() == initial_pins &&
+          devices.dpi_enable->snapshot() == initial_enables);
+  original_application_spi_boundary(memory, cpu, fetch, serial, devices);
+  std::cout << "  Clocked application:95 actual instructions; two original SRU2 RMW groups "
+               "and zero USTAT1; explicit5/8 IOP timing; next SPIDMAC write needs binding\n";
 }
 
 void original_clocked_application(lead_a1::SharcMemory &memory,
@@ -1140,7 +1235,7 @@ void original_clocked_application(lead_a1::SharcMemory &memory,
   }
   constexpr unsigned int prefix_words = 181;
   require(cpu.state().pc == devices.placement.second_call + prefix_words);
-  original_application_fault(memory, cpu, fetch, serial, devices);
+  original_application_dpi(memory, cpu, fetch, serial, devices);
 }
 
 lead_a1::SharcState original_visa_instruction_reference(lead_a1::SharcMemory &memory,
@@ -1576,6 +1671,8 @@ struct OriginalRouting {
   lead_a1::SharcDaiTiming clocks{power, lead_a1::SharcDaiTimingGroup::clock};
   lead_a1::SharcDaiTiming frames{power, lead_a1::SharcDaiTimingGroup::frame};
   lead_a1::SharcPdap pdap{power};
+  lead_a1::SharcDpiRouting dpi_pin{lead_a1::SharcDpiGroup::pin};
+  lead_a1::SharcDpiRouting dpi_enable{lead_a1::SharcDpiGroup::enable};
   lead_a1::SharcMemory peripheral;
   std::optional<lead_a1::SharcIopBridge> bridge;
   std::optional<lead_a1::SharcIopPort> sru;
@@ -1604,6 +1701,10 @@ struct OriginalRouting {
     if (profile == OriginalProfile::clocked_iop) {
       constexpr lead_a1::SharcIoMapping power_window{.first_word = 0x2001, .words = 1};
       peripheral.map_io(power_window, power);
+      constexpr std::uint32_t dpi_pin0 = 0x1c10;
+      constexpr std::uint32_t dpi_pben0 = 0x1c20;
+      peripheral.map_io({.first_word = dpi_pin0, .words = 3}, dpi_pin);
+      peripheral.map_io({.first_word = dpi_pben0, .words = 3}, dpi_enable);
       memory.map_io(power_window, power_port.emplace(bound, power_window));
     }
     return &bound;
@@ -1700,7 +1801,9 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                           .clock_routes = &routing.clocks,
                           .frame_routes = &routing.frames,
                           .pdap = &routing.pdap,
-                          .bridge = bus});
+                          .bridge = bus,
+                          .dpi_pin = &routing.dpi_pin,
+                          .dpi_enable = &routing.dpi_enable});
   check_cells(memory, expected);
   std::cout << "  Sequenced final payload cells: " << expected.size() << " matched\n";
 }
