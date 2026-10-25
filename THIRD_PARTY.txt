@@ -8,8 +8,8 @@ The GTK directory watcher follows the same public project's directory identity
 and replacement-monitoring approach. The implementation is adapted for this
 project's versioned parameter snapshot contract.
 Source: https://github.com/Weichwolf/blofeld-emu
-The one-instruction executor in src/arm.cpp adapts that public project's generic
-SLEIGH execution/ownership approach. patches/ghidra-byte-memory.patch retains its
+The one-instruction executor in src/arm/core/arm.cpp adapts that public project's
+generic SLEIGH execution/ownership approach. patches/ghidra-byte-memory.patch retains its
 correction for byte-backed memory. No HCS12 semantics or board behavior is reused.
 No Blofeld firmware or manufacturer assets are copied.
 

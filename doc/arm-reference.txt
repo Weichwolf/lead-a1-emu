@@ -21,6 +21,12 @@ effects in the same instruction transaction (aintc.txt). Functional ARM-state
 exception delivery and return are described in arm-exceptions.txt; board IRQ
 sources remain pending.
 
+The complete register-byte rollback snapshot retains its allocation between
+successful instructions. Every step still copies all known register bytes;
+failures restore that exact map, including internal registers and unknowns.
+Owned checks cover consecutive partial LDM failures after successful register
+growth, input repair/retry, later arithmetic and another partial failure.
+
 Host decode cache
 At most 128 translations are retained, keyed by ARM PC and the fetched word.
 Every instruction still performs the guest fetch and executes its p-code with
@@ -200,7 +206,7 @@ private reconstruction sources are not embedded in public tests.
   python3 tools/dependencies.py --fetch --ghidra
   cmake --preset strict
   cmake --build --preset strict
-  ctest --test-dir build/strict -R 'arm_mmu|arm_system|arm_status_banks|arm_instructions|reference_memory|original_images|native_build' --output-on-failure
+  ctest --test-dir build/strict -R 'arm_mmu|arm_system|arm_status_banks|arm_instructions|reference_memory|original_images|original_arm_|native_build' --output-on-failure
 
 Original checks skip explicitly without local firmware. Owned instruction/RAM
 tests remain mandatory. Native checks audit actual compile commands, all three

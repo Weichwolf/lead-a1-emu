@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "lead_a1/image.hpp"
+#include "firmware/image.hpp"
 
 #include <array>
 #include <cstddef>

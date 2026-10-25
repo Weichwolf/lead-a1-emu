@@ -14,6 +14,8 @@
   establish MCU/DSP roles or Lead A1/A1R variants.
 - Unsupported accesses must fail with address, operation, PC and execution
   context. Distinguish observations, hypotheses and hardware-verified behavior.
+- Keep owned C++ headers beside implementations under src/ in their component
+  directories. Include them by module path; do not recreate a separate include/.
 - Separate CPU/DSP cores, board/scheduler, host MIDI/audio and UI. Future audio
   callbacks must not allocate or throw. Run as a regular user.
 - SIMD acceleration and multiple host cores are optional design choices; the

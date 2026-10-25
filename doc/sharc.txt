@@ -64,8 +64,8 @@ DMA count and final instruction, and rejects unknown input/invalid handoffs.
 
 With the optional original bundle, original_images freshly extracts and verifies
 all six section hashes and all four identical 1536-byte kernel hashes. The
-original SPI regression additionally executes the actual factory/heap/GPIO and
-ARM block writer for both images and both transport arguments. Each sends the
+original_arm_spi controller and kernel cases additionally execute the actual
+factory/heap/GPIO and ARM block writer for both images and both transport arguments. Each sends the
 unchanged kernel from its read-only CODE placement through 768 16-bit transfers,
 actual serial edges and the selected boot reference. GPIO bank 2 pins 11/12
 provide selection in this explicit fixture. Every transmitted halfword, all 256

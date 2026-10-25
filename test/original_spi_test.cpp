@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "lead_a1/arm.hpp"
-#include "lead_a1/arm_system.hpp"
-#include "lead_a1/gpio.hpp"
-#include "lead_a1/memory.hpp"
-#include "lead_a1/sharc.hpp"
-#include "lead_a1/sharc_boot.hpp"
-#include "lead_a1/sharc_clock.hpp"
-#include "lead_a1/sharc_control.hpp"
-#include "lead_a1/sharc_memory.hpp"
-#include "lead_a1/sharc_spi.hpp"
-#include "lead_a1/spi.hpp"
+#include "arm/core/arm.hpp"
+#include "arm/core/arm_system.hpp"
+#include "arm/peripherals/gpio.hpp"
+#include "arm/peripherals/spi.hpp"
+#include "common/memory.hpp"
+#include "sharc/core/sharc.hpp"
+#include "sharc/memory/sharc_memory.hpp"
+#include "sharc/peripherals/sharc_boot.hpp"
+#include "sharc/peripherals/sharc_clock.hpp"
+#include "sharc/peripherals/sharc_control.hpp"
+#include "sharc/peripherals/sharc_spi.hpp"
 
 #include <array>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -25,6 +26,8 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -319,8 +322,11 @@ lead_a1::ArmState call(Fixture &fixture,
   initial.registers[15] = entry;
   lead_a1::Arm cpu(fixture.memory, spec, initial, profile());
   unsigned int count{};
-  while (cpu.state().registers[15] != sentinel && count < limit) {
-    require(!cpu.step().exception);
+  auto pc = entry;
+  while (pc != sentinel && count < limit) {
+    const auto step = cpu.step();
+    require(!step.exception);
+    pc = step.after;
     fixture.progress();
     if (fixture.cooperative_dsp != nullptr) {
       static_cast<void>(fixture.cooperative_dsp->step());
@@ -1152,9 +1158,15 @@ void clock_setup(Fixture &fixture, const std::filesystem::path &spec, HeaderInpu
   require(fixture.clock.device.state() == clock);
 }
 
+struct KernelCase {
+  unsigned int part{};
+  unsigned int channel{};
+};
+
 void kernel_transfer(std::span<const std::byte> image,
                      const std::filesystem::path &spec,
-                     unsigned int part) {
+                     KernelCase selected) {
+  const auto [part, channel] = selected;
   constexpr std::array<std::array<std::uint32_t, 2>, 2> offsets{
       {{0x2c6d78, 0x2ab0f8}, {0x71bc8, 0x701d8}}};
   constexpr std::array<std::array<std::uint32_t, 2>, 2> lengths{{{114112, 113788}, {11476, 6636}}};
@@ -1164,80 +1176,113 @@ void kernel_transfer(std::span<const std::byte> image,
   constexpr unsigned int instruction_bytes = 6;
   constexpr std::uint32_t reset_word = 0x8c000;
   constexpr std::uint32_t destination = 0x92000;
-  for (unsigned int channel = 0; channel < 2; ++channel) {
-    Fixture fixture(image, placements[part]);
-    const auto endpoint = factory(fixture, spec, placements[part], false);
-    fixture.dsp.emplace(lead_a1::SharcSpiBoot::slave_reference_214xx());
-    fixture.dsp_memory.map_2148x_5mbit_ram();
-    fixture.dsp_channel = channel;
-    fixture.spi0.events.clear();
-    fixture.gpio.events.clear();
-    fixture.transmitted.clear();
-    constexpr unsigned int limit = 200000;
-    static_cast<void>(call(fixture,
-                           spec,
-                           placements[part].endpoint + write_block_entry,
-                           {endpoint, channel, code + offsets[part][channel], kernel_words},
-                           limit));
-    require(fixture.dsp->entry() == reset_word && fixture.dsp->state().remaining == 0);
-    require(!fixture.dsp->state().selected && fixture.dsp->state().bits == 0);
-    require(fixture.transmitted.size() == kernel_bytes / 2);
-    const auto kernel = image.subspan(offsets[part][channel], kernel_bytes);
-    for (unsigned int offset = 0; offset < kernel_bytes; offset += 2) {
-      const auto expected = std::to_integer<std::uint32_t>(kernel[offset]) |
-                            (std::to_integer<std::uint32_t>(kernel[offset + 1]) << 8);
-      require(fixture.transmitted[offset / 2] == expected);
-    }
-    for (unsigned int offset = 0; offset < kernel_bytes; offset += instruction_bytes) {
-      std::uint64_t expected{};
-      for (unsigned int index = 0; index < instruction_bytes; ++index) {
-        expected |= std::to_integer<std::uint64_t>(kernel[offset + index]) << (index * 8);
-      }
-      require(fixture.dsp_memory.read({.address = reset_word + (offset / instruction_bytes),
-                                       .width = lead_a1::SharcWidth::wide48},
-                                      lead_a1::AccessKind::fetch) == expected);
-    }
-    require(fixture.dsp->state().next_word == destination + kernel_words);
-    const auto select = 1U << (11 + channel);
-    require(fixture.gpio.events.size() == 2 && fixture.gpio.events[0].value == select &&
-            fixture.gpio.events[1].value == select);
-    require(fixture.gpio.events.front().offset == gpio_clear &&
-            fixture.gpio.events.back().offset == 0x40);
-    constexpr std::uint16_t pullup_halfword = 0xffff;
-    require(fixture.memory.read({.address = placements[part].scratch, .size = 2}) ==
-            pullup_halfword);
-    kernel_prefix(fixture.dsp_memory, reset_word);
-    clock_setup(fixture,
-                spec,
-                {.routine = placements[part].endpoint + write_block_entry,
-                 .endpoint = endpoint,
-                 .source = code + offsets[part][channel] + kernel_bytes,
-                 .end = code + offsets[part][channel] + lengths[part][channel],
-                 .records = records[part][channel]});
-    std::cout << "Part " << part << " transport " << channel
-              << ": original ARM/SPI first code record stored through native SW reads and indexed "
-                 "writes; cooperative vector DMA armed, deferred branch frontier\n";
+  Fixture fixture(image, placements[part]);
+  const auto endpoint = factory(fixture, spec, placements[part], false);
+  fixture.dsp.emplace(lead_a1::SharcSpiBoot::slave_reference_214xx());
+  fixture.dsp_memory.map_2148x_5mbit_ram();
+  fixture.dsp_channel = channel;
+  fixture.spi0.events.clear();
+  fixture.gpio.events.clear();
+  fixture.transmitted.clear();
+  constexpr unsigned int limit = 200000;
+  static_cast<void>(call(fixture,
+                         spec,
+                         placements[part].endpoint + write_block_entry,
+                         {endpoint, channel, code + offsets[part][channel], kernel_words},
+                         limit));
+  require(fixture.dsp->entry() == reset_word && fixture.dsp->state().remaining == 0);
+  require(!fixture.dsp->state().selected && fixture.dsp->state().bits == 0);
+  require(fixture.transmitted.size() == kernel_bytes / 2);
+  const auto kernel = image.subspan(offsets[part][channel], kernel_bytes);
+  for (unsigned int offset = 0; offset < kernel_bytes; offset += 2) {
+    const auto expected = std::to_integer<std::uint32_t>(kernel[offset]) |
+                          (std::to_integer<std::uint32_t>(kernel[offset + 1]) << 8);
+    require(fixture.transmitted[offset / 2] == expected);
   }
+  for (unsigned int offset = 0; offset < kernel_bytes; offset += instruction_bytes) {
+    std::uint64_t expected{};
+    for (unsigned int index = 0; index < instruction_bytes; ++index) {
+      expected |= std::to_integer<std::uint64_t>(kernel[offset + index]) << (index * 8);
+    }
+    require(fixture.dsp_memory.read({.address = reset_word + (offset / instruction_bytes),
+                                     .width = lead_a1::SharcWidth::wide48},
+                                    lead_a1::AccessKind::fetch) == expected);
+  }
+  require(fixture.dsp->state().next_word == destination + kernel_words);
+  const auto select = 1U << (11 + channel);
+  require(fixture.gpio.events.size() == 2 && fixture.gpio.events[0].value == select &&
+          fixture.gpio.events[1].value == select);
+  require(fixture.gpio.events.front().offset == gpio_clear &&
+          fixture.gpio.events.back().offset == 0x40);
+  constexpr std::uint16_t pullup_halfword = 0xffff;
+  require(fixture.memory.read({.address = placements[part].scratch, .size = 2}) == pullup_halfword);
+  kernel_prefix(fixture.dsp_memory, reset_word);
+  clock_setup(fixture,
+              spec,
+              {.routine = placements[part].endpoint + write_block_entry,
+               .endpoint = endpoint,
+               .source = code + offsets[part][channel] + kernel_bytes,
+               .end = code + offsets[part][channel] + lengths[part][channel],
+               .records = records[part][channel]});
+  std::cout << "Part " << part << " transport " << channel
+            << ": original ARM/SPI first code record stored through native SW reads and indexed "
+               "writes; cooperative vector DMA armed, deferred branch frontier\n";
+}
+
+enum class SpiCheckMode : std::uint8_t { all, controllers, kernel };
+
+struct SpiCheck {
+  SpiCheckMode mode{SpiCheckMode::all};
+  KernelCase selected{};
+};
+
+unsigned int check_index(std::string_view text) {
+  unsigned int value{};
+  const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+  if (error != std::errc{} || end != text.data() + text.size() || value >= 2) {
+    throw std::runtime_error("Original SPI check index must be0 or1");
+  }
+  return value;
+}
+
+SpiCheck check_mode(int argc, char **argv) {
+  if (argc == 3) { return {}; }
+  if (argc == 5 && std::string_view(argv[3]) == "--controllers") {
+    return {.mode = SpiCheckMode::controllers, .selected = {.part = check_index(argv[4])}};
+  }
+  if (argc == 6 && std::string_view(argv[3]) == "--kernel") {
+    return {.mode = SpiCheckMode::kernel,
+            .selected = {.part = check_index(argv[4]), .channel = check_index(argv[5])}};
+  }
+  throw std::runtime_error("Usage: original-spi-test spec images "
+                           "[--controllers part | --kernel part channel]");
 }
 
 }
 
 int main(int argc, char **argv) {
-  if (argc != 3) { return 1; }
   try {
+    const auto check = check_mode(argc, argv);
     for (unsigned int part = 0; part < placements.size(); ++part) {
+      if (check.mode != SpiCheckMode::all && part != check.selected.part) { continue; }
       const auto placement = placements[part];
       const auto image =
           read_image(std::filesystem::path(argv[2]) / (std::to_string(part) + "-CODE.bin"));
-      Fixture fixture(image, placement);
-      controllers(fixture, argv[1], placement);
-      static_cast<void>(factory(fixture, argv[1], placement, false));
-      const auto endpoint = factory(fixture, argv[1], placement, true);
-      transport(fixture, argv[1], placement, endpoint);
-      kernel_transfer(image, argv[1], part);
-      std::cout << "Part " << part
-                << ": original SPI controllers/format/factory/heap/GPIO and transport"
-                   " execute against clocked serial loopback and real buffer backpressure\n";
+      if (check.mode != SpiCheckMode::kernel) {
+        Fixture fixture(image, placement);
+        controllers(fixture, argv[1], placement);
+        static_cast<void>(factory(fixture, argv[1], placement, false));
+        const auto endpoint = factory(fixture, argv[1], placement, true);
+        transport(fixture, argv[1], placement, endpoint);
+        std::cout << "Part " << part
+                  << ": original SPI controllers/format/factory/heap/GPIO and transport"
+                     " execute against clocked serial loopback and real buffer backpressure\n";
+      }
+      if (check.mode == SpiCheckMode::controllers) { continue; }
+      for (unsigned int channel = 0; channel < 2; ++channel) {
+        if (check.mode == SpiCheckMode::kernel && channel != check.selected.channel) { continue; }
+        kernel_transfer(image, argv[1], {.part = part, .channel = channel});
+      }
     }
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

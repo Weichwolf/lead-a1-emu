@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "arm_data.hpp"
-#include "arm_mmu.hpp"
-#include "lead_a1/arm_mmu.hpp"
-#include "lead_a1/arm_system.hpp"
-#include "lead_a1/memory.hpp"
+#include "arm/core/arm_data_internal.hpp"
+#include "arm/core/arm_mmu.hpp"
+#include "arm/core/arm_mmu_internal.hpp"
+#include "arm/core/arm_system.hpp"
+#include "common/memory.hpp"
 
 #include <array>
 #include <cstddef>

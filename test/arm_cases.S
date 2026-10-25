@@ -89,3 +89,11 @@ bx lr
 call_done:
 mov r2, #7
 b call_done
+
+.balign 256
+/* 14: warm rollback snapshots across register growth, failures and retries. */
+mov r0, #7
+mov r1, #0x100
+ldmia r1!, {r0, r2}
+adds r2, r2, #1
+ldmia r1!, {r0, r3}

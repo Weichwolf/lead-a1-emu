@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "lead_a1/spi.hpp"
+#include "arm/peripherals/spi.hpp"
 
 #include <array>
 #include <cstdint>

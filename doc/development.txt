@@ -1,15 +1,27 @@
 Development baseline
 
-Structure follows public blofeld-emu revision
-057d3411b88b746c8bbf97c69958054e8a77d509; retained original build policies are
-listed in THIRD_PARTY.txt. Do not copy its processor or board assumptions.
+Build policies originate from public blofeld-emu revision
+057d3411b88b746c8bbf97c69958054e8a77d509 and are listed in THIRD_PARTY.txt.
+Processor and board behavior require independent Lead A1 evidence.
 
-include/lead_a1/, src/  Owned C++ container/core/board implementation.
-gui/                   Native GTK4 snapshot consumer, independent of cores/audio.
-tools/                 Explicit reference preparation and UI launcher.
-test/                  Synthetic owned fixtures and optional original checks.
-reference/             URLs, sizes, identities, manual-derived parameter facts.
-doc/local/             Ignored originals, raw analysis and run artifacts.
+Owned C++ headers live beside their implementations under src/. Includes use
+module paths relative to src/; internal ARM helpers have distinct names.
+
+src/app/                Command-line application entry.
+src/common/             Shared memory/device interfaces.
+src/firmware/           Container and image decoding.
+src/arm/core/           ARM execution, data/cache/MMU/system state.
+src/arm/peripherals/    AINTC, GPIO and SPI.
+src/sharc/core/         SHARC instruction execution and architectural state.
+src/sharc/memory/       Memory views, arbitration and IOP bridge.
+src/sharc/peripherals/  Boot SPI, clocks, control, DAI and PDAP.
+src/sharc/pipeline/     Captured fetch, sequencer and pipeline holds.
+src/sharc/visa/         VISA alignment, decoding and execution reference.
+gui/                    Native GTK4 snapshot consumer, independent of cores/audio.
+tools/                  Explicit reference preparation and UI launcher.
+test/                   Synthetic owned fixtures and optional original checks.
+reference/              URLs, sizes, identities, manual-derived parameter facts.
+doc/local/              Ignored originals, raw analysis and run artifacts.
 doc/objective.txt       Full acceptance scope; coverage.txt records current gaps.
 
 First integration sequence
@@ -33,6 +45,13 @@ Quality commands
   xvfb-run -a dbus-run-session -- /usr/bin/python3 test/gui_smoke.py
 
 Builds are offline and do not need originals or private GitHub access.
+Original checks verify bundle/section/kernel identities for every selected
+native group. CTest registers each native program independently; SPI has two
+controller cases and all four part/transport kernel cases. Each retains its
+complete assertions, guest instruction bounds and normal per-test time bound.
+The original script's aggregate native interface remains available for manual
+runs. Synthetic checks require no manufacturer inputs.
+
 The quality target runs format, CTest and Python bootstrap regressions. Optional
 reference identity checks skip explicitly if local originals are absent.
 GTK integration runs separately and requires GTK4 plus an isolated display.

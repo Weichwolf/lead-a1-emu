@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "lead_a1/memory.hpp"
+#include "common/memory.hpp"
 
 #include <array>
 #include <cstddef>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "lead_a1/arm.hpp"
-#include "lead_a1/memory.hpp"
-#include "lead_a1/spi.hpp"
+#include "arm/core/arm.hpp"
+#include "arm/peripherals/spi.hpp"
+#include "common/memory.hpp"
 
 #include <cstddef>
 #include <cstdint>

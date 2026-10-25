@@ -26,40 +26,102 @@ include(cmake/Dependencies.cmake)
 include(cmake/ArmCore.cmake)
 set(CMAKE_CXX_CLANG_TIDY "${LEAD_A1_CLANG_TIDY};--warnings-as-errors=*")
 
-add_library(lead_a1_core STATIC src/firmware.cpp src/image.cpp)
-target_include_directories(lead_a1_core PUBLIC include)
+add_library(lead_a1_core STATIC
+  src/firmware/firmware.cpp
+  src/firmware/image.cpp
+)
+target_include_directories(lead_a1_core PUBLIC src)
 target_link_libraries(lead_a1_core PUBLIC lead_a1_quality PRIVATE lead_a1_lzo)
-add_library(lead_a1_arm STATIC src/memory.cpp src/arm.cpp src/arm_status.cpp src/arm_system.cpp src/arm_mmu.cpp src/arm_data.cpp src/arm_exception.cpp src/arm_fault.cpp src/aintc.cpp src/gpio.cpp src/spi.cpp src/spi_shift.cpp)
-target_include_directories(lead_a1_arm PUBLIC include)
+
+add_library(lead_a1_arm STATIC
+  src/arm/core/arm.cpp
+  src/arm/core/arm_data.cpp
+  src/arm/core/arm_exception.cpp
+  src/arm/core/arm_fault.cpp
+  src/arm/core/arm_mmu.cpp
+  src/arm/core/arm_status.cpp
+  src/arm/core/arm_system.cpp
+  src/arm/peripherals/aintc.cpp
+  src/arm/peripherals/gpio.cpp
+  src/arm/peripherals/spi.cpp
+  src/arm/peripherals/spi_shift.cpp
+  src/common/memory.cpp
+)
+target_include_directories(lead_a1_arm PUBLIC src)
 target_link_libraries(lead_a1_arm PUBLIC lead_a1_quality PRIVATE lead_a1_sleigh)
-add_library(lead_a1_sharc STATIC src/sharc_memory.cpp src/sharc_boot.cpp src/sharc_spi.cpp src/sharc.cpp src/sharc_system.cpp src/sharc_clock.cpp src/sharc_loop.cpp src/sharc_long_loop.cpp src/sharc_four_loop.cpp src/sharc_calls.cpp src/sharc_flags.cpp src/sharc_control.cpp src/sharc_registers.cpp src/sharc_move.cpp src/sharc_compute.cpp src/sharc_shift.cpp src/sharc_short.cpp src/sharc_indexed.cpp src/sharc_px.cpp src/sharc_bit_shift.cpp src/sharc_arithmetic_loop.cpp src/sharc_cache.cpp src/sharc_dual_move.cpp src/sharc_interrupt.cpp src/sharc_idle.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch.cpp src/sharc_fetch_cache.cpp src/sharc_fetch_clock.cpp src/sharc_fetch_flow.cpp src/sharc_fetch_branch.cpp src/sharc_fetch_hazard.cpp src/sharc_fetch_effect.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_loop.cpp src/sharc_fetch_loop_state.cpp src/sharc_fetch_loop_retirement.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_dag.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_dag.cpp src/sharc_fetch_operand.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_memory_view.cpp src/sharc_memory_bus.cpp src/sharc_spi_bus.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_compare.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_fixed.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_interrupt.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_long.cpp src/sharc_fetch_long_state.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_arithmetic.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_immediate_indexed.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_memory.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_visa.cpp src/sharc_visa_length.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_visa_decode.cpp src/sharc_visa_execute.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_visa.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_visa_loop.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_iop.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_power.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_dai_enable.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_dai_timing.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_pdap.cpp src/sharc_pdap_input.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_iop_bridge.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_iop_port.cpp)
-target_sources(lead_a1_sharc PRIVATE src/sharc_float.cpp src/sharc_float_compute.cpp src/sharc_fetch_multiplier.cpp)
-target_include_directories(lead_a1_sharc PUBLIC include)
+
+add_library(lead_a1_sharc STATIC
+  src/sharc/core/sharc.cpp
+  src/sharc/core/sharc_arithmetic_loop.cpp
+  src/sharc/core/sharc_bit_shift.cpp
+  src/sharc/core/sharc_cache.cpp
+  src/sharc/core/sharc_calls.cpp
+  src/sharc/core/sharc_compare.cpp
+  src/sharc/core/sharc_compute.cpp
+  src/sharc/core/sharc_dag.cpp
+  src/sharc/core/sharc_dual_move.cpp
+  src/sharc/core/sharc_flags.cpp
+  src/sharc/core/sharc_float.cpp
+  src/sharc/core/sharc_float_compute.cpp
+  src/sharc/core/sharc_four_loop.cpp
+  src/sharc/core/sharc_idle.cpp
+  src/sharc/core/sharc_immediate_indexed.cpp
+  src/sharc/core/sharc_indexed.cpp
+  src/sharc/core/sharc_interrupt.cpp
+  src/sharc/core/sharc_long_loop.cpp
+  src/sharc/core/sharc_loop.cpp
+  src/sharc/core/sharc_move.cpp
+  src/sharc/core/sharc_px.cpp
+  src/sharc/core/sharc_registers.cpp
+  src/sharc/core/sharc_shift.cpp
+  src/sharc/core/sharc_short.cpp
+  src/sharc/core/sharc_system.cpp
+  src/sharc/memory/sharc_iop_bridge.cpp
+  src/sharc/memory/sharc_iop_port.cpp
+  src/sharc/memory/sharc_memory.cpp
+  src/sharc/memory/sharc_memory_bus.cpp
+  src/sharc/memory/sharc_memory_view.cpp
+  src/sharc/peripherals/sharc_boot.cpp
+  src/sharc/peripherals/sharc_clock.cpp
+  src/sharc/peripherals/sharc_control.cpp
+  src/sharc/peripherals/sharc_dai_enable.cpp
+  src/sharc/peripherals/sharc_dai_timing.cpp
+  src/sharc/peripherals/sharc_pdap.cpp
+  src/sharc/peripherals/sharc_pdap_input.cpp
+  src/sharc/peripherals/sharc_power.cpp
+  src/sharc/peripherals/sharc_spi.cpp
+  src/sharc/peripherals/sharc_spi_bus.cpp
+  src/sharc/pipeline/sharc_fetch.cpp
+  src/sharc/pipeline/sharc_fetch_arithmetic.cpp
+  src/sharc/pipeline/sharc_fetch_branch.cpp
+  src/sharc/pipeline/sharc_fetch_cache.cpp
+  src/sharc/pipeline/sharc_fetch_clock.cpp
+  src/sharc/pipeline/sharc_fetch_dag.cpp
+  src/sharc/pipeline/sharc_fetch_effect.cpp
+  src/sharc/pipeline/sharc_fetch_fixed.cpp
+  src/sharc/pipeline/sharc_fetch_flow.cpp
+  src/sharc/pipeline/sharc_fetch_hazard.cpp
+  src/sharc/pipeline/sharc_fetch_interrupt.cpp
+  src/sharc/pipeline/sharc_fetch_iop.cpp
+  src/sharc/pipeline/sharc_fetch_long.cpp
+  src/sharc/pipeline/sharc_fetch_long_state.cpp
+  src/sharc/pipeline/sharc_fetch_loop.cpp
+  src/sharc/pipeline/sharc_fetch_loop_retirement.cpp
+  src/sharc/pipeline/sharc_fetch_loop_state.cpp
+  src/sharc/pipeline/sharc_fetch_memory.cpp
+  src/sharc/pipeline/sharc_fetch_multiplier.cpp
+  src/sharc/pipeline/sharc_fetch_operand.cpp
+  src/sharc/pipeline/sharc_fetch_visa.cpp
+  src/sharc/pipeline/sharc_fetch_visa_loop.cpp
+  src/sharc/visa/sharc_visa.cpp
+  src/sharc/visa/sharc_visa_decode.cpp
+  src/sharc/visa/sharc_visa_execute.cpp
+  src/sharc/visa/sharc_visa_length.cpp
+)
+target_include_directories(lead_a1_sharc PUBLIC src)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
-add_executable(lead-a1-emu src/main.cpp)
+
+add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
@@ -441,7 +503,9 @@ if(BUILD_TESTING)
   target_link_libraries(lead-a1-image-test PRIVATE lead_a1_core)
   add_test(NAME image_sections COMMAND lead-a1-image-test)
   add_test(NAME original_images COMMAND "${Python3_EXECUTABLE}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>)
+  set_tests_properties(original_images PROPERTIES SKIP_RETURN_CODE 77)
+  set(LEAD_A1_ORIGINAL_NATIVE_CHECK_ARGS
     $<TARGET_FILE:lead-a1-original-arm-test> "${CMAKE_CURRENT_BINARY_DIR}/share/ARM5_le.sla"
     $<TARGET_FILE:lead-a1-original-cache-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-cache-call.bin"
     $<TARGET_FILE:lead-a1-original-exception-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-exception-cases.bin"
@@ -449,7 +513,30 @@ if(BUILD_TESTING)
     $<TARGET_FILE:lead-a1-original-aintc-test>
     $<TARGET_FILE:lead-a1-original-abort-test> "${CMAKE_CURRENT_BINARY_DIR}/generated/arm-abort-cases.bin"
     $<TARGET_FILE:lead-a1-original-gpio-test> $<TARGET_FILE:lead-a1-original-spi-test> $<TARGET_FILE:lead-a1-sharc-boot-test>)
-  set_tests_properties(original_images PROPERTIES SKIP_RETURN_CODE 77)
+  function(lead_a1_add_original_check name check)
+    add_test(NAME "${name}" COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>
+      ${LEAD_A1_ORIGINAL_NATIVE_CHECK_ARGS} --native-check "${check}")
+    set_tests_properties("${name}" PROPERTIES SKIP_RETURN_CODE 77)
+  endfunction()
+  # The checks already own separate processes/state. Preserve every executable,
+  # fixture and instruction expectation while keeping CTest's default per-test
+  # time bound for each group instead of one cumulative ARM/DSP aggregate.
+  lead_a1_add_original_check(original_arm_initialization arm)
+  lead_a1_add_original_check(original_arm_cache cache)
+  lead_a1_add_original_check(original_arm_exceptions exceptions)
+  lead_a1_add_original_check(original_arm_interrupts interrupts)
+  lead_a1_add_original_check(original_arm_aintc aintc)
+  lead_a1_add_original_check(original_arm_aborts aborts)
+  lead_a1_add_original_check(original_arm_gpio gpio)
+  foreach(part RANGE 0 1)
+    lead_a1_add_original_check("original_arm_spi_controls_${part}" "spi-controls-${part}")
+    foreach(channel RANGE 0 1)
+      lead_a1_add_original_check("original_arm_spi_kernel_${part}_${channel}"
+        "spi-kernel-${part}-${channel}")
+    endforeach()
+  endforeach()
+  lead_a1_add_original_check(original_sharc_boot_images boot)
   add_test(NAME original_sharc_images COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>
     --sharc-only $<TARGET_FILE:lead-a1-original-sharc-test>)
@@ -484,7 +571,7 @@ if(BUILD_TESTING)
 endif()
 
 file(GLOB_RECURSE LEAD_A1_FORMAT_SOURCES CONFIGURE_DEPENDS
-  "include/*.hpp" "src/*.hpp" "src/*.cpp" "test/*.cpp")
+  "src/*.hpp" "src/*.cpp" "test/*.cpp")
 add_custom_target(format-check
   COMMAND "${LEAD_A1_CLANG_FORMAT}" --dry-run --Werror ${LEAD_A1_FORMAT_SOURCES}
   VERBATIM)

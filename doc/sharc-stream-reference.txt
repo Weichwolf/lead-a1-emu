@@ -57,9 +57,9 @@ Reproduce after preparing the pinned local bundle:
   cmake --build --preset strict --target lead-a1-original-sharc-test lead-a1-emu
   ctest --test-dir build/strict -R '^original_sharc_images$' --output-on-failure
 
-The existing original_images aggregate and original ARM/SPI/DSP composition
-remain separate integration gates; the direct test does not execute the ARM
-uploader, GPIO or TI master. These two cadences and the original composition's
+The original_arm_spi_kernel part/transport cases retain the original
+ARM/SPI/DSP composition as independent integration gates; the direct test does
+not execute the ARM uploader, GPIO or TI master. These two cadences and the original composition's
 one-DSP-step-per-ARM-step profile are owned functional schedules, not physical
 wiring, readiness/FLAG timing or CPU-frequency ratios. Passing them does not
 establish a completed outer upload, cold boot, slot allocation or audio.

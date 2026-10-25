@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "lead_a1/arm.hpp"
-#include "lead_a1/memory.hpp"
+#include "arm/core/arm.hpp"
+#include "common/memory.hpp"
 
 #include <array>
 #include <cstddef>
@@ -106,6 +106,44 @@ void rollback(const std::filesystem::path &spec, std::span<const std::byte> byte
     if (index == 4) { require(memory.read({.address = data_base, .size = 4}) == 11); }
     rejected([&cpu] { static_cast<void>(cpu.step()); }, message);
   }
+}
+
+void reused_snapshot_rollback(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
+  constexpr std::uint32_t second_first_word = 19;
+  constexpr std::uint32_t second_last_word = 23;
+  constexpr std::uint32_t program_bytes = 20;
+  lead_a1::Memory memory;
+  map_program(memory, bytes);
+  memory.write({.address = data_base, .size = 4}, 11);
+  memory.write({.address = data_base + 8, .size = 4}, second_first_word);
+  lead_a1::Arm cpu(memory, spec, initial(14));
+  static_cast<void>(cpu.step());
+  static_cast<void>(cpu.step());
+  require(cpu.state().registers[0] == 7 && cpu.state().registers[1] == data_base);
+  require(!cpu.state().registers[2] && !cpu.state().registers[3]);
+  const auto first = cpu.state();
+  for (unsigned int attempt = 0; attempt < 2; ++attempt) {
+    rejected([&cpu] { static_cast<void>(cpu.step()); }, "uninitialized");
+    require(cpu.state() == first);
+  }
+  memory.write({.address = data_base + 4, .size = 4}, 13);
+  static_cast<void>(cpu.step());
+  require(cpu.state().registers[0] == 11 && cpu.state().registers[2] == 13);
+  require(cpu.state().registers[1] == data_base + 8 && !cpu.state().registers[3]);
+  static_cast<void>(cpu.step());
+  require(cpu.state().registers[2] == 14 && cpu.state().cpsr == initial_cpsr);
+  const auto second = cpu.state();
+  for (unsigned int attempt = 0; attempt < 2; ++attempt) {
+    rejected([&cpu] { static_cast<void>(cpu.step()); }, "uninitialized");
+    require(cpu.state() == second);
+  }
+  memory.write({.address = data_base + 12, .size = 4}, second_last_word);
+  static_cast<void>(cpu.step());
+  require(cpu.state().registers[0] == second_first_word &&
+          cpu.state().registers[3] == second_last_word);
+  require(cpu.state().registers[1] == data_base + 16 && cpu.state().registers[2] == 14);
+  require(cpu.state().registers[pc_index] == code_base + (14 * case_spacing) + program_bytes);
+  require(cpu.state().cpsr == initial_cpsr);
 }
 
 void mutations(const std::filesystem::path &spec, std::span<const std::byte> bytes) {
@@ -234,6 +272,7 @@ int main(int argc, char **argv) {
     const auto bytes = read_program(argv[2]);
     arithmetic(argv[1], bytes);
     rollback(argv[1], bytes);
+    reused_snapshot_rollback(argv[1], bytes);
     mutations(argv[1], bytes);
     interworking(argv[1], bytes);
     decode_equivalence(argv[1], bytes);

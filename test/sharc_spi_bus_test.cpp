@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "lead_a1/memory.hpp"
-#include "lead_a1/sharc_boot.hpp"
-#include "lead_a1/sharc_memory.hpp"
-#include "lead_a1/sharc_memory_bus.hpp"
-#include "lead_a1/sharc_spi.hpp"
+#include "common/memory.hpp"
+#include "sharc/memory/sharc_memory.hpp"
+#include "sharc/memory/sharc_memory_bus.hpp"
+#include "sharc/peripherals/sharc_boot.hpp"
+#include "sharc/peripherals/sharc_spi.hpp"
 
 #include <array>
 #include <cstdint>

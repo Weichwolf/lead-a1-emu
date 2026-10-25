@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "lead_a1/aintc.hpp"
-#include "lead_a1/memory.hpp"
+#include "arm/peripherals/aintc.hpp"
+#include "common/memory.hpp"
 
 #include <array>
 #include <cstdint>
