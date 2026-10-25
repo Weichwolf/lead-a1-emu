@@ -210,6 +210,9 @@ void reset_and_invalid_state() {
   constexpr std::uint64_t reserved_bit = std::uint64_t{1} << 63;
   state.cache.instructions[0].known |= reserved_bit;
   rejected([&] { const lead_a1::Sharc cpu(memory, state); }, "cache address/instruction knowledge");
+  state = initial();
+  state.cache.flush_effect_applied = true;
+  rejected([&] { const lead_a1::Sharc cpu(memory, state); }, "without its follower guard");
 }
 
 void stack_and_reserved_guards() {

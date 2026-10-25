@@ -1,0 +1,73 @@
+MODE1 interrupt-control stalls and held IOP transfers
+
+PGRrev2.4 A-5 defines NESTM/IRPTEN at bits11/12; A-32..34 specifies
+one extra internal processor clock and a Decode stall after MODE1 writes,
+including bit operations. reference/sharc.json pins the primary document.
+This component qualifies writes whose value/knowledge changes are confined
+to those two bits, with both resulting controls known and unchanged known
+SISD selection. Unchanged writes still require the stall. Other mode bits,
+including unknown bank selections, are preserved rather than invented.
+
+The sequenced native/VISA clock holds F1/F2/Decode, the complete IAB and flow
+cursor for one control-stall event. The older Address word can reach Execute;
+Address becomes a bubble. A real following instruction still uses the old
+represented mode until its pending effect matures. A quiet clock or actual
+IOP hold matures that effect without executing a NOP or advancing the held
+instruction, its operands or the pipeline. Real read response and posted-store
+latencies remain separate owner events. Enabling interrupts does not synthesize
+an interrupt entry, clear a latch or consume a captured peripheral response.
+
+General Decode/operand interlocks for bank/SIMD/compute/addressing changes
+remain unqualified. A pending supported non-SIMD change can settle in a quiet
+clock when all already decoded words are NOPs or register-only system
+operations (bit/immediate/unbanked copies), with a validated sequenced owner.
+Memory transfers, compute, banked destinations and changed SIMD/broadcast/bus
+controls still reject. No existing operand is recaptured under the new mode.
+Owned CBUFEN/RND32/data-bank write and MODE1-to-USTAT copy cases check exact
+maturation; twelve sensitive-word cases preserve all state on rejection.
+This preserves transport1's actual RND32-clear/CBUFEN-set/save sequence across
+an IAB bubble. It does not qualify circular memory addressing or general bank
+switch timing. Simultaneous DAG/compute/conditional
+branch/cache/PM stalls, active ISR/branch/loop contexts and deferred memory
+responses retain their existing failures. A validated deferred arithmetic loop
+outside its future body can hold without sampling termination, entering that
+body or changing native frames. This is a bounded logical timing reference,
+not a physical Nord phase measurement or complete MODE1 pipeline model.
+
+FLUSH CACHE has a separate internal-cycle effect (PGR4-86/9-70). A granted
+quiet clock invalidates all32 valid bits while retaining tags/data/LRU and
+the instruction-follower prohibition. flush_effect_applied distinguishes that
+completed timed effect from pending_flush, which guards the actual next
+instruction. A following PM-data encoding still rejects after quiet clocks;
+a successful non-PM follower releases the guard without invalidating entries
+that were actually filled after the effect. Outstanding lookup/fill/deferred
+response at initial invalidation remains explicitly unqualified. Invalid
+applied-without-pending snapshots reject. CPU/cache/controller changes commit
+only after all ownership/clock checks succeed.
+
+Owned instruction tests enumerate SET/CLR/immediate and unchanged mode writes
+in native/VISA form, both7/8-clock reads and4/5-clock posted writes. Literal
+mode/data/timing expectations, independent CPU/fetch/bridge continuations,
+late backend faults/no-time retry, latched IRQ retention and unknown-bank/SIMD
+cases accompany the existing loop and transfer tests. Actual deferred DO/PCSTK
+and mode/read instructions preserve explicit frames and unknown termination.
+Cache tests execute real flush, quiet maturation, prohibited PM follower and
+post-effect cache reservation/F2/Decode fill, proving that successful follower
+retirement retains the newly filled entry. A controller ownership failure and
+an overlapping cache miss preserve all state.
+
+The hash-checked original kernel sets MODE1.IRPTEN at native8c008 and again
+at8c087, immediately followed by FLUSH CACHE8c088. Unchanged MODE1 writes
+still stall. Native first-header/finalizer references include those two extra
+Decode holds. All original program/vector payload oracles remain mandatory.
+Transport0 now executes SPCTL2 read/OR/write+970/+973/+976 and FLAGS clear4/
+test1+979/+982, reaching its original NOTTF backedge+985 with unknown FLAG0
+and BTF. No sampled input or release is invented. Transport1's LIRPTL SET400
+at+1033 remains unsupported. Exact failure snapshots and pending/delivered
+SPORT2 write checks retain the missing-input distinction from a working boot.
+
+Full boot, board/source/interrupt timing, data/audio and objective.txt
+acceptance remain open.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^sharc_(fetched_iop_waits|quiet_clock|cache.*)$' --output-on-failure

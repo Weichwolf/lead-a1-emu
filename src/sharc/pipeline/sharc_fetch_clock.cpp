@@ -5,6 +5,7 @@
 #include "sharc/peripherals/sharc_control.hpp"
 #include "sharc/pipeline/sharc_fetch.hpp"
 #include "sharc/pipeline/sharc_fetch_internal.hpp"
+#include "sharc/pipeline/sharc_fetch_mode.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -67,6 +68,19 @@ SharcFetchEvent stalled_clock(const SharcFetchState &previous,
   next.address.reset();
   if (!control) { detail::sharc_fetch_reserve(cache, next); }
   return {.stalled = true, .control_stall = control};
+}
+
+SharcFetchEvent interrupt_mode_clock(const SharcState &cpu,
+                                     const SharcFetchState &previous,
+                                     SharcFetchState &next,
+                                     SharcCacheState &cache,
+                                     SharcFetchBus bus,
+                                     bool interlocked) {
+  if (interlocked) {
+    throw std::runtime_error("SHARC MODE1 with simultaneous control stall not qualified");
+  }
+  detail::sharc_fetch_interrupt_mode_guard(cpu, previous);
+  return stalled_clock(previous, next, cache, bus, true);
 }
 
 SharcFetchEvent normal_clock(SharcMemory &memory,
@@ -153,6 +167,9 @@ SharcFetchEvent clock_transport(SharcMemory &memory,
   const auto interlock =
       sequenced ? detail::sharc_fetch_interlock(cpu, previous) : detail::SharcFetchInterlock::none;
   const bool interlocked = interlock != detail::SharcFetchInterlock::none;
+  if (sequenced && detail::sharc_fetch_interrupt_mode(cpu)) {
+    return interrupt_mode_clock(cpu, previous, next, cache, bus, interlocked);
+  }
   const bool cache_stall = previous.lookup && previous.lookup->wait;
   if (sequenced && detail::sharc_fetch_loop_stall(previous)) {
     return loop_startup_clock(previous, next, bus, interlocked, cache_stall);
@@ -192,6 +209,7 @@ bool SharcFetch::address_pm_request(const Sharc &cpu) const try {
   }
   if (state_.flow) {
     detail::sharc_fetch_flow_guard(cpu.state_, state_);
+    if (detail::sharc_fetch_interrupt_mode(cpu.state_)) { return false; }
     if (detail::sharc_fetch_dag_stall(cpu.state_, state_, SharcFetchBus::available) ||
         detail::sharc_fetch_interlock(cpu.state_, state_) != detail::SharcFetchInterlock::none ||
         detail::sharc_fetch_loop_stall(state_)) {

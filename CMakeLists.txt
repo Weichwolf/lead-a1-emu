@@ -118,6 +118,7 @@ add_library(lead_a1_sharc STATIC
   src/sharc/pipeline/sharc_fetch_hazard.cpp
   src/sharc/pipeline/sharc_fetch_interrupt.cpp
   src/sharc/pipeline/sharc_fetch_iop.cpp
+  src/sharc/pipeline/sharc_fetch_mode.cpp
   src/sharc/pipeline/sharc_fetch_long.cpp
   src/sharc/pipeline/sharc_fetch_long_state.cpp
   src/sharc/pipeline/sharc_fetch_loop.cpp

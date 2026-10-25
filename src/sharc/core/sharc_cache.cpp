@@ -54,6 +54,9 @@ bool sharc_cache_pm_request(const SharcState &state, std::uint64_t opcode) {
 }
 
 void sharc_validate_cache(const SharcCacheState &cache) {
+  if (cache.flush_effect_applied && !cache.pending_flush) {
+    throw std::invalid_argument("SHARC completed flush effect without its follower guard");
+  }
   if ((cache.valid.value & ~cache.valid.known) != 0 || (cache.lru.value & ~cache.lru.known) != 0 ||
       ((cache.lru.value | cache.lru.known) & ~lru_bits) != 0) {
     throw std::invalid_argument("Invalid SHARC cache validity/LRU knowledge");
@@ -82,8 +85,9 @@ void sharc_cache_flush(SharcState &state, std::uint64_t opcode) {
   if (state.pc < normal_begin || state.pc >= normal_end) {
     throw std::runtime_error("SHARC non-internal cache-flush effect latency not implemented");
   }
-  // PGR4-86/9-70: independent of CADIS/CAFRZ, effective after one follower.
+  // PGR4-86/9-70: one internal-cycle effect, with a separate PM-follower guard.
   state.cache.pending_flush = true;
+  state.cache.flush_effect_applied = false;
 }
 
 void sharc_cache_guard(const SharcState &state, std::uint64_t opcode) {
@@ -106,12 +110,16 @@ void sharc_cache_program_access(SharcState &state) {
   // Fetch1/2/Decode fills are not qualified by this instruction-only reference.
   // Forget their possible effects, rather than exposing a fabricated empty cache.
   const bool pending = state.cache.pending_flush;
+  const bool applied = state.cache.flush_effect_applied;
   state.cache = {};
   state.cache.pending_flush = pending;
+  state.cache.flush_effect_applied = applied;
 }
 
 void sharc_cache_finish(const SharcState &previous, SharcState &next) {
-  if (previous.cache.pending_flush) { next.cache.valid = {.known = all_bits}; }
+  if (previous.cache.pending_flush && !previous.cache.flush_effect_applied) {
+    next.cache.valid = {.known = all_bits};
+  }
 }
 
 }

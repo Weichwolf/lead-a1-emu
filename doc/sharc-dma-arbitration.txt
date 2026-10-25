@@ -47,9 +47,12 @@ is claimed. Fabric clocks equal bridge clocks since application entry. Without
 known source inputs there are no data requests, RAM transfers or completion
 IRQs. Original DCPR writes execute; all four programs retain exact mask effects,
 IDP state, SPORT parameters/TCBs, SPI/vector cursor and payload oracles.
-The next transport0 access is SPCTL2 read at+970 after MODE1 SET1800; its pending
-MODE1/IOP hold is not qualified. Transport1 stops at LIRPTL SET400 at+1033.
-Exact failures preserve CPU/fetch/control/receiver/bridge/fabric state.
+MODE1/IOP composition is now qualified separately (sharc-mode-holds.txt).
+Transport0 additionally programs SPCTL2 and clears/tests FLAGS before its
+NOTTF backedge+985 rejects unknown FLAG0. Transport1 still stops at LIRPTL
+SET400+1033. Exact failures preserve CPU/fetch/control/receiver/bridge/fabric
+state. Pending versus delivered SPORT2 enable follows the actual posted write;
+without SCLK no sampled control, DMA data or completion is invented.
 These are remaining emulator gaps, not firmware failures or complete boot.
 
 Owned tests independently enumerate fixed group/channel priorities and cyclic

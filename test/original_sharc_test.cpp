@@ -1100,6 +1100,32 @@ void original_application_clock(lead_a1::SharcMemory &memory,
   advance_clocked_visa_devices(memory, cpu, serial, devices);
 }
 
+bool uses_clock_initializer(Placement placement);
+
+void check_original_control_hold(const lead_a1::SharcState &core,
+                                 const lead_a1::SharcFetchState &before,
+                                 const lead_a1::SharcFetch &fetch,
+                                 HeaderDevices devices) {
+  constexpr unsigned int mode1 = 2;
+  constexpr std::uint32_t interrupt_modes = 0x1800;
+  const auto mode = core.pending[mode1];
+  if (mode) {
+    const auto old = core.effective[mode1];
+    require((((mode->value ^ old.value) | (mode->known ^ old.known)) & ~interrupt_modes) == 0);
+  } else {
+    constexpr unsigned int flag_test = 982;
+    constexpr unsigned int flag_branch = 985;
+    require(uses_clock_initializer(devices.placement) &&
+            core.pc == devices.placement.second_call + flag_test && before.address &&
+            before.address->address == core.pc && before.decode &&
+            before.decode->address == devices.placement.second_call + flag_branch);
+  }
+  auto expected = before;
+  expected.execute = before.address;
+  expected.address.reset();
+  require(fetch.state() == expected);
+}
+
 void original_application_prepare(lead_a1::SharcMemory &memory,
                                   lead_a1::Sharc &cpu,
                                   lead_a1::SharcFetch &fetch,
@@ -1109,8 +1135,11 @@ void original_application_prepare(lead_a1::SharcMemory &memory,
   for (unsigned int clock = 0; clock < limit; ++clock) {
     const auto bus = fetch.address_pm_request(cpu) ? lead_a1::SharcFetchBus::pm_data
                                                    : lead_a1::SharcFetchBus::available;
+    const auto core = cpu.state();
+    const auto input = fetch.state();
     const auto event = fetch.advance_sequenced(cpu, bus);
-    require(!event.compute_stall && !event.control_stall && !event.dag_stall && !event.loop_stall);
+    require(!event.compute_stall && !event.dag_stall && !event.loop_stall);
+    if (event.control_stall) { check_original_control_hold(core, input, fetch, devices); }
     if (fetch.state().execute) { return; }
     original_application_clock(memory, cpu, serial, devices);
   }
@@ -1416,11 +1445,40 @@ void check_original_sport_parameters(lead_a1::SharcMemory &memory, HeaderDevices
   }
 }
 
+bool original_sport2_enable_pending(HeaderDevices devices) {
+  const auto queue = devices.bridge->snapshot();
+  require(queue.write_count <= 1 && !queue.request && !queue.read);
+  if (queue.write_count == 0) { return false; }
+  const auto write = queue.writes[0];
+  if (!write) { throw std::runtime_error("Missing posted original SPORT2 enable"); }
+  constexpr unsigned int offset = 976;
+  constexpr std::uint32_t address = 0x400;
+  constexpr std::uint32_t main_value = 0x033e09f1;
+  constexpr std::uint32_t part1_value = 0x033e0971;
+  const auto value = original_sport_part1(devices.placement) ? part1_value : main_value;
+  require(write->intent.pc == devices.placement.second_call + offset &&
+          write->intent.address == address &&
+          write->intent.operation == lead_a1::AccessKind::write &&
+          write->intent.delivery_cycles == 5 && write->value == value &&
+          queue.clocks < write->posted_at + 5);
+  return true;
+}
+
+std::array<std::uint32_t, 4> original_sport_control_words(HeaderDevices devices) {
+  constexpr std::array<std::uint32_t, 4> first{0x023c21f0, 0x003c21f0, 0x020209f0, 0};
+  constexpr std::array<std::uint32_t, 4> other{0x023c21f0, 0x003c21f0, 0x020c21f0, 0x000c21f0};
+  if (!uses_clock_initializer(devices.placement)) { return other; }
+  auto expected = first;
+  constexpr std::uint32_t part1_sport2 = 0x02020970;
+  constexpr std::uint32_t enable_mask = 0x013c0001;
+  if (original_sport_part1(devices.placement)) { expected[2] = part1_sport2; }
+  if (!original_sport2_enable_pending(devices)) { expected[2] |= enable_mask; }
+  return expected;
+}
+
 void check_original_sport_controls(HeaderDevices devices) {
   const bool clocks = uses_clock_initializer(devices.placement);
-  constexpr std::array<std::uint32_t, 4> first_controls{0x023c21f0, 0x003c21f0, 0x020209f0, 0};
-  constexpr std::array<std::uint32_t, 4> other_controls{
-      0x023c21f0, 0x003c21f0, 0x020c21f0, 0x000c21f0};
+  const auto controls = original_sport_control_words(devices);
   constexpr std::uint32_t dual_tdm = 0x00800161;
   constexpr std::uint32_t single_tdm = 0x161;
   constexpr std::uint32_t selected = 0xfff;
@@ -1436,15 +1494,11 @@ void check_original_sport_controls(HeaderDevices devices) {
               !dma.transmit_buffer && !dma.transmit_shift && !dma.receive_buffer &&
               !dma.interrupt_pending);
     }
-    if (index >= first_controls.size()) {
+    if (index >= controls.size()) {
       require(state.control == std::array<std::uint32_t, 3>{});
       continue;
     }
-    constexpr std::uint32_t part1_sport2 = 0x02020970;
-    const auto clock_control = index == 2 && original_sport_part1(devices.placement)
-                                   ? part1_sport2
-                                   : first_controls[index];
-    require(state.control[0] == (clocks ? clock_control : other_controls[index]));
+    require(state.control[0] == controls[index]);
     require(state.control[1] == (index < 2 || !clocks ? 4U : 0U));
     const auto later_tdm = clocks ? 0U : single_tdm;
     require(state.control[2] == (index < 2 ? dual_tdm : later_tdm));
@@ -1703,16 +1757,50 @@ void check_original_idp_configuration(HeaderDevices devices) {
           devices.pdap->interrupts() == lead_a1::SharcPdapInterrupts{});
 }
 
-void original_dma_frontier(lead_a1::SharcMemory &memory,
-                           lead_a1::Sharc &cpu,
-                           lead_a1::SharcFetch &fetch,
-                           SerialInput &serial,
-                           HeaderDevices devices) {
-  original_application_prepare(memory, cpu, fetch, serial, devices);
+void original_flags_branch_input(lead_a1::SharcMemory &memory,
+                                 lead_a1::Sharc &cpu,
+                                 lead_a1::SharcFetch &fetch,
+                                 SerialInput &serial,
+                                 HeaderDevices devices) {
+  constexpr unsigned int wait_test = 982;
+  constexpr unsigned int wait_branch = 985;
+  constexpr unsigned int limit = 16;
+  constexpr unsigned int class_shift = 40;
+  constexpr unsigned int condition_shift = 33;
+  constexpr unsigned int not_tf = 29;
+  constexpr unsigned int condition_mask = 31;
+  constexpr std::uint32_t address_mask = 0xffffff;
+  for (unsigned int clock = 0; clock < limit; ++clock) {
+    const auto decode = fetch.state().decode;
+    if (decode && decode->address == devices.placement.second_call + wait_branch) {
+      require(decode->opcode >> class_shift == 6 &&
+              ((decode->opcode >> condition_shift) & condition_mask) == not_tf &&
+              (decode->opcode & address_mask) == devices.placement.second_call + wait_test);
+      return;
+    }
+    const auto event = fetch.advance_sequenced(cpu);
+    require(!event.stalled && !fetch.state().execute &&
+            cpu.state().pc == devices.placement.second_call + wait_branch);
+    original_application_clock(memory, cpu, serial, devices);
+  }
+  throw std::runtime_error("Missing original FLAGS wait branch in Decode");
+}
+
+void original_startup_frontier(lead_a1::SharcMemory &memory,
+                               lead_a1::Sharc &cpu,
+                               lead_a1::SharcFetch &fetch,
+                               SerialInput &serial,
+                               HeaderDevices devices) {
   const bool clocks = uses_clock_initializer(devices.placement);
-  constexpr unsigned int sport_read = 970;
+  if (clocks) {
+    original_flags_branch_input(memory, cpu, fetch, serial, devices);
+  } else {
+    original_application_prepare(memory, cpu, fetch, serial, devices);
+  }
+  constexpr unsigned int flags_branch = 985;
   constexpr unsigned int link_mask_set = 1033;
-  require(cpu.state().pc == devices.placement.second_call + (clocks ? sport_read : link_mask_set));
+  require(cpu.state().pc ==
+          devices.placement.second_call + (clocks ? flags_branch : link_mask_set));
   const auto core = cpu.state();
   const auto transport = fetch.state();
   const auto controller = devices.control.snapshot();
@@ -1728,25 +1816,72 @@ void original_dma_frontier(lead_a1::SharcMemory &memory,
           fabric.memory_bus.granted == lead_a1::SharcMemoryBusState{}.granted &&
           !fabric.arbiter.transfer && fabric.arbiter.mode == controller.dma_rotation &&
           fabric.arbiter.heads == lead_a1::SharcDmaArbiterState::unknown_heads);
+  if (clocks) {
+    constexpr std::uint32_t btf = 0x40000;
+    constexpr std::uint32_t modes = 0x1800;
+    require((core.flag_inputs.known & 1) == 0 && (core.system[6].known & btf) == 0 &&
+            (core.effective[6].known & btf) == 0 &&
+            (core.effective[2].value & core.effective[2].known & modes) == modes &&
+            (core.system[5].known & 4) == 4 && (core.system[5].value & 4) == 0);
+  }
   try {
     if (clocks) {
-      static_cast<void>(fetch.peripheral_access(cpu));
+      original_application_prepare(memory, cpu, fetch, serial, devices);
     } else {
       static_cast<void>(cpu.step(fetch));
     }
   } catch (const std::exception &error) {
     const std::string message(error.what());
-    const auto *reason = clocks ? "SHARC IOP hold with mode/branch/cache/loop/IRQ context"
-                                : "SHARC link-register read not implemented";
+    const auto *reason =
+        clocks ? "Unknown SHARC control/status bits" : "SHARC link-register read not implemented";
     if (message.find(reason) == std::string::npos) { throw; }
-    require(!clocks || message.find("word-address=0x400 operation=read") != std::string::npos);
+    std::ostringstream context;
+    context << "pc=0x" << std::hex << core.pc;
+    require(message.find(context.str()) != std::string::npos);
     require(cpu.state() == core && fetch.state() == transport &&
             devices.control.snapshot() == controller && devices.pdap->snapshot() == receiver &&
             devices.bridge->snapshot() == bridge && devices.spi.state() == spi &&
             devices.dma_fabric->snapshot() == fabric && !memory.active());
     return;
   }
-  throw std::runtime_error("Missing original MODE1/IOP or LIRPTL frontier failure");
+  throw std::runtime_error("Missing original unknown-FLAG0 or LIRPTL frontier failure");
+}
+
+void original_dma_frontier(lead_a1::SharcMemory &memory,
+                           lead_a1::Sharc &cpu,
+                           lead_a1::SharcFetch &fetch,
+                           SerialInput &serial,
+                           HeaderDevices devices) {
+  if (uses_clock_initializer(devices.placement)) {
+    using Operation = original_sport::Operation;
+    constexpr std::array<original_sport::Step, 3> sport{
+        {{.offset = 970,
+          .words = 3,
+          .reg = 0x70,
+          .value = 0x020209f0,
+          .operation = Operation::read,
+          .address = 0x400,
+          .part1_value = 0x02020970},
+         {.offset = 973, .words = 3, .reg = 0x70, .value = 0x033e09f1, .part1_value = 0x033e0971},
+         {.offset = 976,
+          .words = 3,
+          .reg = 0x70,
+          .value = 0x033e09f1,
+          .operation = Operation::write,
+          .address = 0x400,
+          .part1_value = 0x033e0971}}};
+    for (const auto &step : sport) {
+      original_sport_step(memory, cpu, fetch, serial, devices, step);
+    }
+    constexpr unsigned int flags_clear = 979;
+    constexpr unsigned int flags_test = 982;
+    const auto flags = cpu.state().system[5];
+    original_picr_ordinary(memory, cpu, fetch, serial, devices, flags_clear, 3);
+    require(cpu.state().system[5] ==
+            (lead_a1::SharcKnown32{.value = flags.value & ~4U, .known = flags.known | 4U}));
+    original_picr_ordinary(memory, cpu, fetch, serial, devices, flags_test, 3);
+  }
+  original_startup_frontier(memory, cpu, fetch, serial, devices);
 }
 
 void original_sport_failure(lead_a1::SharcMemory &memory,
@@ -1834,8 +1969,10 @@ void original_sport_failure(lead_a1::SharcMemory &memory,
             (lead_a1::SharcKnown32{.value = mode_before.value | interrupt_modes,
                                    .known = mode_before.known | interrupt_modes}));
   }
-  original_dma_frontier(memory, cpu, fetch, serial, devices);
   check_original_idp_configuration(devices);
+  const auto receiver = devices.pdap->snapshot();
+  original_dma_frontier(memory, cpu, fetch, serial, devices);
+  require(devices.pdap->snapshot() == receiver);
   lead_a1::SharcPcgState pcg_expected;
   if (clocks) { pcg_expected.registers = original_pcg::configured; }
   require(devices.pcg != nullptr && devices.pcg->snapshot() == pcg_expected);
@@ -2424,11 +2561,11 @@ void original_pin_boundary(lead_a1::SharcMemory &memory,
   constexpr unsigned int earlier_clock = 128;
   constexpr unsigned int earlier_other = 104;
   const auto instructions = (clocks ? earlier_clock : earlier_other) +
-                            (6 * (pins.size() + data.size())) + (clocks ? 139U : 140U);
+                            (6 * (pins.size() + data.size())) + (clocks ? 144U : 140U);
   std::cout
       << "  Clocked application:" << instructions
       << " actual instructions; SPORT/PCG/PICR initialization; "
-      << "IDP DMA and DCPR configured; MODE1/IOP or LIRPTL unqualified; no source clock or audio\n";
+      << "SPORT2/IDP/DCPR configured; FLAG0 input or LIRPTL unresolved; no source clock or audio\n";
 }
 
 void original_post_spi_routing(lead_a1::SharcMemory &memory,

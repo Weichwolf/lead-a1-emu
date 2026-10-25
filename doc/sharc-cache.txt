@@ -8,10 +8,11 @@ contents unknown. Restored state validates canonical knowledge, widths and set
 membership without pretending that unknown contents have been observed.
 
 Pure native Type20a FLUSH CACHE requests invalidation independently of MODE2
-cache disable/freeze. For qualified internal execution, its effect follows one
-subsequent committed instruction. All valid bits then become known zero; tags,
+cache disable/freeze. The functional reference applies its effect after one follower. The bound
+clock can also apply the internal-cycle effect on a granted quiet clock,
+retaining the separate actual-follower guard (sharc-mode-holds.txt). All valid bits then become known zero; tags,
 instruction data and LRU knowledge remain. A failed instruction preserves the
-request and all CPU/peripheral state. Repeated flush and checkpoint continuation
+request/applied-effect distinction and all CPU/peripheral state. Repeated flush and checkpoint continuation
 preserve this distinction. A PM-data encoding immediately following FLUSH CACHE
 is explicitly rejected under PGR4-86/9-70, including conditional encodings.
 Combined stack operations, reserved fields and external latency remain guarded.

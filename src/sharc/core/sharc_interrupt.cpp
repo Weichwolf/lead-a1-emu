@@ -61,8 +61,9 @@ void settle_entry_effects(SharcState &state) {
   }
   state.pending.fill({});
   if (state.cache.pending_flush) {
-    state.cache.valid = {.known = all_bits};
+    if (!state.cache.flush_effect_applied) { state.cache.valid = {.known = all_bits}; }
     state.cache.pending_flush = false;
+    state.cache.flush_effect_applied = false;
   }
   nonnesting(state); // A pending MODE1 update must not sneak in unqualified nesting.
 }

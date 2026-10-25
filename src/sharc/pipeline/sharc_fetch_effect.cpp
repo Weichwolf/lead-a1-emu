@@ -6,7 +6,9 @@
 #include "sharc/peripherals/sharc_control.hpp"
 #include "sharc/pipeline/sharc_fetch.hpp"
 #include "sharc/pipeline/sharc_fetch_internal.hpp"
+#include "sharc/pipeline/sharc_fetch_mode.hpp"
 
+#include <cstdint>
 #include <optional>
 #include <stdexcept>
 
@@ -29,14 +31,23 @@ void sharc_fetch_quiet_effects(SharcState &cpu,
   if (transport.execute) { throw std::logic_error("SHARC quiet clock has an Execute instruction"); }
   const bool decoded = transport.decode.has_value() || transport.address.has_value();
   if (cpu.pending[sharc_mode1] && (transport.fetch1 || transport.fetch2 || decoded)) {
-    throw std::runtime_error("SHARC quiet MODE1 pipeline effect interlock not qualified");
+    if (sharc_fetch_interrupt_mode(cpu)) {
+      sharc_fetch_interrupt_mode_guard(cpu, transport);
+    } else {
+      sharc_fetch_unbanked_mode_guard(cpu, transport);
+    }
   }
   if (control != nullptr && control->state().delayed &&
       (!width_independent(transport.decode) || !width_independent(transport.address))) {
     throw std::runtime_error("SHARC quiet SYSCTL Decode/Address width interlock not qualified");
   }
-  if (cpu.cache.pending_flush) {
-    throw std::runtime_error("SHARC quiet FLUSH CACHE effect/follower ordering not qualified");
+  if (cpu.cache.pending_flush && !cpu.cache.flush_effect_applied) {
+    if (transport.lookup || transport.fill || transport.pending_fetch2) {
+      throw std::runtime_error("SHARC quiet FLUSH CACHE effect/follower ordering not qualified");
+    }
+    constexpr std::uint32_t full32 = 0xffffffff;
+    cpu.cache.valid = {.known = full32};
+    cpu.cache.flush_effect_applied = true;
   }
   // A-32/A-33: these effects mature at the end of the granted extra processor
   // clock, even without Execute. Do not run branch/loop/instruction finish code.

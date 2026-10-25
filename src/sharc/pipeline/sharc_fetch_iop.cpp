@@ -8,6 +8,7 @@
 #include "sharc/pipeline/sharc_fetch.hpp"
 #include "sharc/pipeline/sharc_fetch_internal.hpp"
 #include "sharc/pipeline/sharc_fetch_long.hpp"
+#include "sharc/pipeline/sharc_fetch_mode.hpp"
 
 #include <cstdint>
 #include <exception>
@@ -51,13 +52,15 @@ void context_guard(const SharcState &core, const SharcFetchState &fetch) {
   // A captured callee branch or deferred-loop entry may suppress Decode. A
   // full IOP hold retains that decision and mask until the next real advance.
   if (core.branch || !count_loop_context(core, fetch) || !arithmetic_setup_context(core, fetch) ||
-      core.interrupt || core.idle_pc || core.pending[detail::sharc_mode1] || fetch.lookup ||
-      fetch.fill || fetch.pending_fetch2 ||
+      core.interrupt || core.idle_pc ||
+      (core.pending[detail::sharc_mode1] && !detail::sharc_fetch_interrupt_mode(core)) ||
+      fetch.lookup || fetch.fill || fetch.pending_fetch2 ||
       (fetch.flow && (fetch.flow->loop || (fetch.flow->discard_decode != 0 && !core.count_loop &&
                                            !core.arithmetic_loop)))) {
     throw std::runtime_error(
         "SHARC IOP hold with mode/branch/cache/loop/IRQ context not qualified");
   }
+  if (core.pending[detail::sharc_mode1]) { detail::sharc_fetch_interrupt_mode_guard(core, fetch); }
   const auto mode1 = core.effective[detail::sharc_mode1];
   if ((mode1.known & detail::sharc_simd) == 0 || (mode1.value & detail::sharc_simd) != 0) {
     throw std::runtime_error("SHARC SIMD IOP hold not qualified");

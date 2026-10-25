@@ -222,6 +222,18 @@ ID  State    Evidence / remaining work
              RTI decisions and changed-frame failures have owned checks
              (sharc-delayed-idle.txt). Original arithmetic-loop IDLE, interrupted
              loop reentry, complete IRQ latency and global pipeline stay guarded.
+             Pure NESTM/IRPTEN MODE1 writes now hold native/VISA Decode while
+             preserving F1/F2/IAB and allowing the older Address word to reach
+             Execute. Real IOP holds or quiet clocks mature the effect without
+             retirement. Other supported non-SIMD mode effects can mature
+             with sequenced unbanked register-only consumers/NOPs; memory,
+             compute and banked consumers still reject. Unknown banks stay
+             unknown; general mode/active-loop/simultaneous stalls remain open. Deferred future
+             loops retain frames and unknown termination through this hold.
+             Timed FLUSH CACHE invalidation is now separate from its actual
+             PM-follower guard; a quiet clock can complete the effect, and later
+             real cache fills survive follower retirement. Overlapping initial
+             lookup/fill/response phases still reject (sharc-mode-holds.txt).
              A separate native instruction-bus transport captures data in F2
              and retains it through Decode/Address/Execute, under explicit
              CADIS=1 and owner clock/address grants (sharc-fetch.txt).
@@ -346,7 +358,7 @@ ID  State    Evidence / remaining work
              deferred frame; actual PCSTK changes preserve type0. Readback,
              unknown unsampled flags, rebind/owner repair and unsupported
              raw/short-forward/mixed paths have independent tests. All8
-             original fixtures continue25 grants from terminal header to
+             original fixtures continue26 grants from terminal header to
              CPU8c08e, with the DB Address target selected, original saved PX,
              masks/SYSCTL/cache and armed384-word vector DMA checked. The later
              vector/IRQ path is qualified separately below
@@ -646,10 +658,11 @@ ID  State    Evidence / remaining work
              The separate clocked IOP profile now preserves actual native
              posted SPI setup, all ordinary records/final-cell checks and384
              vector words through original P1I/RTI/native-VISA transition.
-             Its application reference reaches417/442 original instructions,
+             Its application reference reaches422/442 original instructions,
              including actual SPORT/PCG/PICR/secondary-mode and complete IDP
-             parameter/enable and DCPR/mask setup, then fails at pending MODE1/IOP
-             composition or LIRPTL access. No source
+             parameter/enable, DCPR/mask and transport0 SPORT2/FLAGS setup. Its
+             next FLAG0 wait has unknown input; transport1 LIRPTL remains
+             unsupported. No source
              SCLK/serial data,
              full cold boot or manual-function acceptance (sharc-sport.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
@@ -927,10 +940,16 @@ ID  State    Evidence / remaining work
              actual DCPR writes at+961/+1027 now execute through the bound
              peripheral arbiter. Original IMASK SET5000/1000 and transport0's
              MODE1 SET1800 retain literal value/knowledge expectations. Prefixes
-             reach417/442 instructions. The next SPCTL2 read+970 rejects its
-             pending MODE1/IOP composition; transport1 LIRPTL SET400 at+1033
-             rejects unimplemented register semantics. Exact CPU/fetch/control/
-             receiver/bridge/fabric/SPI snapshots survive both failures. Fabric
+             reach422/442 instructions. Transport0's actual SPCTL2 read/OR/
+             write at+970/+973/+976 establishes033e09f1/033e0971 conditionally
+             on the supplied family controls. FLAGS clear4+979 and test1+982
+             preserve unknown FLAG0/BTF. The original NOTTF branch+985 back
+             to+982 rejects its missing signal, retaining exact state; no forced
+             release is supplied. Transport1 LIRPTL SET400 at+1033 still rejects
+             missing register semantics. Exact CPU/fetch/control/receiver/
+             bridge/fabric/SPI snapshots survive both failures. Pending versus
+             delivered SPORT2 enable follows the actual posted5-clock write;
+             no SCLK, sampled control, DMA word or IRQ is invented. Fabric
              clocks equal bridge clocks since application entry, with no data
              requests or invented RAM/IRQ effects. Prior data/pin/
              enable/frame/clock,vector/payload and original SPI/SPORT/TCB
@@ -1009,6 +1028,10 @@ ID  State    Evidence / remaining work
              clocked reference; own pinned field scans additionally establish
              the following SYSCTL read/SET80/write with3/3/3 short-word widths
              in all four programs (sharc-idp-dma.txt).
+             Own hash-checked native kernel fields independently establish
+             MODE1 SET1000 at8c008/8c087 and FLUSH CACHE at8c088. Unchanged
+             MODE1 writes still require Decode stalls; the latter exposes a
+             real quiet cache-effect clock before vector setup.
              Private factual handoffs6401062330/6401407526 corroborate actual
              IDP completion vector/ISR latch-read versus separate mask RMW,
              SYSCTL/mask/MODE/SPORT fields and the MCU GPIO uploader's logical

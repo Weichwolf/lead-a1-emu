@@ -3,6 +3,7 @@
 #include "sharc/core/sharc_internal.hpp"
 #include "sharc/pipeline/sharc_fetch.hpp"
 #include "sharc/pipeline/sharc_fetch_internal.hpp"
+#include "sharc/pipeline/sharc_fetch_mode.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -207,6 +208,10 @@ void sharc_fetch_arithmetic_clock(SharcState &cpu,
                                   const SharcFetchEvent &event) {
   if (!cpu.arithmetic_loop) { return; }
   if (!transport.flow) { throw std::logic_error("Missing arithmetic fetch cursor"); }
+  if (event.control_stall && sharc_fetch_interrupt_mode(cpu)) {
+    sharc_fetch_interrupt_mode_guard(cpu, transport);
+    return; // No future-loop entry, termination test or frame change on this hold.
+  }
   if (event.stalled && !event.address_accepted && !event.control_stall && !event.loop_stall &&
       !event.dag_stall && !event.compute_stall && transport.lookup && !transport.lookup->wait &&
       !cpu.branch) {

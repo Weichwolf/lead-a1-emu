@@ -90,6 +90,8 @@ struct SharcCacheState {
   std::array<SharcKnown32, 32> addresses{};
   std::array<SharcKnown64, 32> instructions{};
   bool pending_flush{};
+  // The timed invalidation can finish before its actual follower retires.
+  bool flush_effect_applied{};
   bool operator==(const SharcCacheState &) const = default;
 };
 

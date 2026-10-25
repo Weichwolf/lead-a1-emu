@@ -414,6 +414,7 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     next.idle_delay_word.reset();
     next.pending.fill({});
     next.cache.pending_flush = false;
+    next.cache.flush_effect_applied = false;
     if (loop_clock == SharcLoopClock::clocked_pop) { detail::sharc_clocked_loop_pop(next); }
     detail::sharc_arithmetic_loop_prepare(next, *opcode, loop_clock);
     unsigned int minimum_cycles = 1;

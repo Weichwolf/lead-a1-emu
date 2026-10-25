@@ -387,6 +387,213 @@ void delayed_effects_and_failed_delivery() {
   }
 }
 
+struct InterruptMode {
+  std::uint32_t before;
+  std::uint64_t instruction;
+  std::uint32_t after;
+};
+
+void interrupt_mode_stall(Fixture &fixture, InterruptMode mode, Kind operation = Kind::read) {
+  constexpr unsigned int mode1 = 2;
+  constexpr unsigned int ustat1 = 0x70;
+  constexpr std::uint64_t sentinel = 0x0f7100009876;
+  fixture.code({.offset = 0, .opcode = mode.instruction});
+  fixture.code({.offset = 1, .opcode = move(operation, ustat1)});
+  fixture.code({.offset = 2, .opcode = sentinel});
+  fixture.next();
+  require(fixture.cpu.step(fixture.fetch).opcode == mode.instruction);
+  fixture.bus.tick();
+  require(fixture.cpu.state().effective[mode1].value == mode.before &&
+          present(fixture.cpu.state().pending[mode1]).value == mode.after);
+  const auto core = fixture.cpu.state();
+  const auto held = fixture.fetch.state();
+  const auto event = fixture.fetch.advance_sequenced(fixture.cpu);
+  require(event.stalled && event.control_stall && !event.address_accepted && !event.dag_stall &&
+          !event.compute_stall && !event.fetch_stall);
+  auto expected = held;
+  expected.execute = held.address;
+  expected.address.reset();
+  require(fixture.fetch.state() == expected && fixture.cpu.state().pc == core.pc &&
+          fixture.cpu.state().data == core.data && fixture.cpu.state().system == core.system &&
+          fixture.cpu.state().depth == core.depth);
+  fixture.bus.tick();
+  if (!fixture.short_words) {
+    require(held.address && held.address->address == fixture.entry() + 1 &&
+            fixture.fetch.state().execute &&
+            fixture.cpu.state().effective[mode1].value == mode.before &&
+            fixture.cpu.state().pending[mode1]);
+  }
+  if (!fixture.fetch.state().execute) { fixture.next(); }
+  const auto execute = fixture.fetch.state().execute;
+  require(execute && execute->address == fixture.entry() + fixture.units());
+}
+
+void interrupt_mode_read(InterruptMode mode, bool short_words, unsigned int read_clocks) {
+  constexpr unsigned int ustat1 = 0x70;
+  auto state = initial(short_words ? visa : native);
+  constexpr unsigned int mode1 = 2;
+  state.system[mode1].value = mode.before;
+  state.effective[mode1].value = mode.before;
+  Fixture fixture(short_words, {}, state, sequenced(state.pc));
+  interrupt_mode_stall(fixture, mode);
+  fixture.target.current.words[0] = third_value;
+  fixture.issue(read_clocks);
+  const auto held = fixture.fetch.state();
+  const auto core = fixture.cpu.state();
+  const auto start = fixture.bus.state().clocks;
+  for (unsigned int clock = 1; clock < read_clocks; ++clock) {
+    fixture.bus.tick();
+    fixture.fetch.wait_iop(fixture.cpu, fixture.bus);
+    require(fixture.fetch.state() == held && fixture.cpu.state().pc == core.pc &&
+            fixture.cpu.state().system[1].value == 0 && fixture.cpu.state().data == core.data &&
+            fixture.cpu.state().effective[mode1].value == mode.after &&
+            !fixture.cpu.state().pending[mode1] && fixture.target.current.reads == 0);
+  }
+  Fixture restored(short_words, fixture.bus.snapshot(), fixture.cpu.state(), fixture.fetch.state());
+  restored.target.current.words[0] = third_value;
+  fixture.target.fail_read = true;
+  rejected([&] { fixture.bus.tick(); }, "owned IOP target read failure");
+  require(fixture.bus.state().clocks == start + read_clocks && fixture.target.current.reads == 0);
+  const auto failed_core = fixture.cpu.state();
+  rejected([&] { fixture.fetch.wait_iop(fixture.cpu, fixture.bus); },
+           "exact unready bound request");
+  require(fixture.cpu.state() == failed_core && fixture.fetch.state() == held);
+  fixture.target.fail_read = false;
+  fixture.bus.retry_due();
+  restored.bus.tick();
+  require(restored.bus.ready() && fixture.bus.snapshot() == restored.bus.snapshot());
+  const auto step = fixture.cpu.step(fixture.fetch);
+  const auto resumed = restored.cpu.step(restored.fetch);
+  require(step.opcode == move(Kind::read, ustat1) && step.pc == fixture.entry() + fixture.units() &&
+          step.address_units == fixture.units() && resumed.opcode == step.opcode &&
+          fixture.cpu.state() == restored.cpu.state() &&
+          fixture.fetch.state() == restored.fetch.state() &&
+          fixture.cpu.state().system[0].value == third_value &&
+          fixture.cpu.state().system[1].value == 0 && fixture.target.current.reads == 1 &&
+          restored.target.current.reads == 1 && fixture.bus.state().clocks == start + read_clocks);
+}
+
+void interrupt_mode_matrix() {
+  // PGR A-5, A-32..34: literal NESTM/IRPTEN changes, including an unchanged write.
+  constexpr std::array<InterruptMode, 9> modes{
+      {{.before = 0, .instruction = 0x140200001800, .after = 0x1800},
+       {.before = 0x1800, .instruction = 0x142200001000, .after = 0x800},
+       {.before = 0x1800, .instruction = 0x142200000800, .after = 0x1000},
+       {.before = 0x800, .instruction = 0x140200001000, .after = 0x1800},
+       {.before = 0x1000, .instruction = 0x140200000800, .after = 0x1800},
+       {.before = 0x1800, .instruction = 0x142200001800, .after = 0},
+       {.before = 0, .instruction = 0x0f7200001800, .after = 0x1800},
+       {.before = 0x1800, .instruction = 0x0f7200000000, .after = 0},
+       {.before = 0x1800, .instruction = 0x0f7200001800, .after = 0x1800}}};
+  for (const auto &mode : modes) {
+    for (const bool short_words : {false, true}) {
+      for (const auto clocks : {7U, 8U}) { interrupt_mode_read(mode, short_words, clocks); }
+    }
+  }
+}
+
+void interrupt_mode_writes() {
+  constexpr unsigned int mode1 = 2;
+  constexpr InterruptMode enabling{.before = 0, .instruction = 0x140200001800, .after = 0x1800};
+  for (const bool short_words : {false, true}) {
+    for (const auto cycles : {4U, 5U}) {
+      auto state = initial(short_words ? visa : native);
+      state.system[0].value = third_value;
+      state.effective[0] = state.system[0];
+      Fixture fixture(short_words, {}, state, sequenced(state.pc));
+      interrupt_mode_stall(fixture, enabling, Kind::write);
+      const auto start = fixture.bus.state().clocks;
+      static_cast<void>(fixture.write(cycles));
+      require(fixture.cpu.state().effective[mode1].value == enabling.after &&
+              !fixture.cpu.state().pending[mode1] && fixture.target.current.writes == 0 &&
+              fixture.bus.state().clocks == start + 1);
+      for (unsigned int clock = 1; clock < cycles; ++clock) { fixture.bus.tick(); }
+      require(fixture.target.current.writes == 1 && fixture.target.current.reads == 0 &&
+              fixture.target.current.words[0] == third_value &&
+              fixture.bus.state().clocks == start + cycles);
+    }
+  }
+}
+
+void interrupt_mode_pending_request() {
+  constexpr unsigned int mode1 = 2;
+  constexpr unsigned int imask = 11;
+  constexpr unsigned int irptl = 10;
+  constexpr std::uint32_t enabled_spi = 0x1003;
+  constexpr std::uint32_t spi_latch = 0x1000;
+  auto state = initial(native);
+  state.system[imask].value = enabled_spi;
+  state.effective[imask].value = enabled_spi;
+  Fixture fixture(false, {}, state, sequenced(state.pc));
+  constexpr InterruptMode enabling{.before = 0, .instruction = 0x140200001800, .after = 0x1800};
+  interrupt_mode_stall(fixture, enabling);
+  fixture.cpu.latch_interrupt(spi_latch);
+  fixture.issue(8);
+  while (!fixture.bus.ready()) {
+    fixture.bus.tick();
+    if (!fixture.bus.ready()) { fixture.fetch.wait_iop(fixture.cpu, fixture.bus); }
+  }
+  const auto core = fixture.cpu.state();
+  const auto held = fixture.fetch.state();
+  const auto response = fixture.bus.snapshot();
+  constexpr std::uint32_t modes = 0x1800;
+  require(core.effective[mode1].value == modes && core.effective[irptl].value == spi_latch &&
+          !core.pending[mode1] && !core.interrupt && fixture.target.current.reads == 1);
+  rejected([&] { static_cast<void>(fixture.cpu.step(fixture.fetch)); },
+           "pending interrupt delivery not implemented");
+  require(fixture.cpu.state() == core && fixture.fetch.state() == held &&
+          fixture.bus.snapshot() == response && fixture.target.current.reads == 1);
+}
+
+void interrupt_mode_other_changes_reject() {
+  constexpr unsigned int mode1 = 2;
+  constexpr std::array<std::uint32_t, 5> other_modes{0x400, 0x2000, 0x10000, 0x200000, 0x1000000};
+  for (const auto mode : other_modes) {
+    Fixture fixture;
+    fixture.code({.offset = 0, .opcode = move(Kind::read, 0)});
+    fixture.next();
+    auto state = fixture.cpu.state();
+    state.system[mode1].value = mode;
+    state.pending[mode1] = state.system[mode1];
+    lead_a1::Sharc cpu(fixture.memory, state, &fixture.control);
+    const auto transport = fixture.fetch.state();
+    const auto bus = fixture.bus.snapshot();
+    rejected([&] { static_cast<void>(fixture.fetch.peripheral_access(cpu)); },
+             "mode/branch/cache/loop/IRQ context not qualified");
+    require(cpu.state() == state && fixture.fetch.state() == transport &&
+            fixture.bus.snapshot() == bus && fixture.target.current.reads == 0);
+  }
+}
+
+void interrupt_mode_partial_bank_knowledge() {
+  constexpr unsigned int mode1 = 2;
+  constexpr std::uint32_t data_bank = 0x400;
+  constexpr std::uint32_t simd = 0x200000;
+  constexpr InterruptMode enabling{.before = 0, .instruction = 0x140200001800, .after = 0x1800};
+  auto state = initial(native);
+  state.system[mode1].known &= ~data_bank;
+  state.effective[mode1].known &= ~data_bank;
+  Fixture fixture(false, {}, state, sequenced(state.pc));
+  interrupt_mode_stall(fixture, enabling);
+  static_cast<void>(fixture.read(7)); // USTAT is independent of the unknown data bank.
+  require((fixture.cpu.state().system[mode1].known & data_bank) == 0 &&
+          (fixture.cpu.state().effective[mode1].known & data_bank) == 0 &&
+          fixture.cpu.state().effective[mode1].value == enabling.after);
+  Fixture guarded;
+  guarded.code({.offset = 0, .opcode = move(Kind::read, 0)});
+  guarded.next();
+  auto unknown = guarded.cpu.state();
+  unknown.system[mode1].known &= ~simd;
+  unknown.effective[mode1].known &= ~simd;
+  unknown.pending[mode1] = unknown.system[mode1];
+  lead_a1::Sharc unidentified(guarded.memory, unknown, &guarded.control);
+  const auto transport = guarded.fetch.state();
+  rejected([&] { static_cast<void>(guarded.fetch.peripheral_access(unidentified)); },
+           "mode/branch/cache/loop/IRQ context not qualified");
+  require(unidentified.state() == unknown && guarded.fetch.state() == transport &&
+          !guarded.bus.state().request);
+}
+
 void captured_response_survives_cpu_fault() {
   Fixture fixture(true);
   constexpr unsigned int mode1 = 2;
@@ -981,6 +1188,40 @@ void deferred_program(Fixture &fixture) {
   fixture.code({.offset = deferred_entry + 13, .opcode = jump_db | (native + deferred_body)});
 }
 
+void deferred_interrupt_mode() {
+  constexpr std::uint64_t enable_interrupts = 0x140200001800;
+  constexpr unsigned int ustat1 = 0x70;
+  for (const auto cycles : {7U, 8U}) {
+    Fixture fixture(false, {}, deferred_initial(), sequenced(native + deferred_entry));
+    deferred_program(fixture);
+    fixture.code({.offset = deferred_entry + 2, .opcode = enable_interrupts});
+    fixture.code({.offset = deferred_entry + 3, .opcode = move(Kind::read, ustat1)});
+    for (unsigned int index = 0; index < 3; ++index) {
+      fixture.next();
+      require(fixture.cpu.step(fixture.fetch).pc == native + deferred_entry + index);
+      fixture.bus.tick();
+    }
+    Fixture resumed(false, fixture.bus.snapshot(), fixture.cpu.state(), fixture.fetch.state());
+    fixture.target.current.words[0] = second_value;
+    resumed.target.current.words[0] = second_value;
+    fixture.next();
+    resumed.next();
+    static_cast<void>(fixture.read(cycles));
+    static_cast<void>(resumed.read(cycles));
+    const auto &core = fixture.cpu.state();
+    const auto &loop = present(core.arithmetic_loop);
+    constexpr std::uint32_t modes = 0x1800;
+    require(loop.body == native + deferred_body && loop.end == native + deferred_end &&
+            loop.phase == lead_a1::SharcArithmeticPhase::deferred && loop.saved_depth == 1 &&
+            core.depth == 2 && core.pc_stack[0] == deferred_parent &&
+            core.pc_stack[1] == native + deferred_body && core.system[6].known == 0 &&
+            core.effective[6].known == 0 && core.effective[2].value == modes && !core.pending[2] &&
+            core.system[0].value == second_value && core.pc == native + deferred_entry + 4 &&
+            resumed.cpu.state() == core && resumed.fetch.state() == fixture.fetch.state() &&
+            fixture.target.current.reads == 1 && resumed.target.current.reads == 1);
+  }
+}
+
 lead_a1::SharcStep deferred_transfer(Fixture &fixture, Kind operation, unsigned int cycles) {
   const bool read = operation == Kind::read;
   const auto core = fixture.cpu.state();
@@ -1062,6 +1303,12 @@ void deferred_iop_matrix() {
 
 int main() {
   try {
+    interrupt_mode_matrix();
+    interrupt_mode_writes();
+    interrupt_mode_pending_request();
+    interrupt_mode_other_changes_reject();
+    interrupt_mode_partial_bank_knowledge();
+    deferred_interrupt_mode();
     deferred_iop_matrix();
     loop_callee_matrix();
     guarded_loop_body_io();

@@ -343,6 +343,8 @@ void ownership_and_effect_guards() {
            "block-conflict arbitration");
   require(cpu.state() == core && fetch.state() == lead_a1::SharcFetchState{});
   auto pending = initial();
+  constexpr std::uint32_t secondary_low = 0x400;
+  pending.system[2].value |= secondary_low;
   pending.pending[2] = pending.system[2];
   lead_a1::Sharc delayed(memory, pending);
   lead_a1::SharcFetchState in_flight;
@@ -352,6 +354,13 @@ void ownership_and_effect_guards() {
   rejected([&] { static_cast<void>(guarded.advance(delayed, base + 1)); },
            "quiet MODE1 pipeline effect interlock");
   require(delayed.state() == before && guarded.state() == in_flight);
+  auto unchanged = initial();
+  unchanged.pending[2] = unchanged.system[2];
+  lead_a1::Sharc unchanged_mode(memory, unchanged);
+  const auto unchanged_before = unchanged_mode.state();
+  rejected([&] { static_cast<void>(guarded.advance(unchanged_mode, base + 1)); },
+           "MODE1 interrupt-control stall context not qualified");
+  require(unchanged_mode.state() == unchanged_before && guarded.state() == in_flight);
   prime(fetch, cpu);
   static_cast<void>(tick(fetch, cpu, base + 3)); // Owner omitted the actual PM request.
   static_cast<void>(fetch.advance(cpu, base + 4));

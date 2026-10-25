@@ -340,20 +340,124 @@ void failed_clock_keeps_all_resources() {
   }
 }
 
-void flush_order_stays_guarded() {
+void unbanked_mode_quiet_clock() {
+  struct Mode {
+    std::uint64_t instruction;
+    std::uint32_t value;
+  };
+
+  constexpr std::array<Mode, 3> modes{{{.instruction = 0x140201000000, .value = 0x1000000},
+                                       {.instruction = 0x140200010000, .value = 0x10000},
+                                       {.instruction = 0x140200000400, .value = 0x400}}};
+  constexpr std::uint64_t copy_mode_to_ustat = 0x773f38000000;
+  constexpr std::array<std::uint64_t, 4> sensitive{
+      increment, 0x0f0000000001, 0x773f00000000, 0x107000080000};
+  for (const auto mode : modes) {
+    lead_a1::SharcMemory memory;
+    program(memory);
+    code(memory, base, mode.instruction);
+    lead_a1::Sharc cpu(memory, initial());
+    lead_a1::SharcFetch writer(memory);
+    single_instruction(writer, cpu);
+    const auto before = cpu.state();
+    require(before.effective[2].value == 0 && before.pending[2] &&
+            before.system[2].value == mode.value);
+    lead_a1::SharcFetchState input;
+    input.flow = lead_a1::SharcFetchFlow{.next = base + 2};
+    input.decode = lead_a1::SharcFetchWord{.address = base + 1, .opcode = copy_mode_to_ustat};
+    for (const auto opcode : sensitive) {
+      auto denied = input;
+      denied.decode = lead_a1::SharcFetchWord{.address = base + 1, .opcode = opcode};
+      lead_a1::SharcFetch blocked(memory, denied);
+      rejected([&] { static_cast<void>(blocked.advance_sequenced(cpu)); }, "quiet MODE1 pipeline");
+      require(cpu.state() == before && blocked.state() == denied);
+    }
+    lead_a1::SharcFetch fetch(memory, input);
+    const auto event = fetch.advance_sequenced(cpu);
+    auto expected = before;
+    expected.effective[2] = {.value = mode.value, .known = full32};
+    expected.pending[2].reset();
+    require(event.address_accepted && !fetch.state().execute && cpu.state() == expected);
+    require(fetch.advance_sequenced(cpu).address_accepted && fetch.state().execute);
+    require(cpu.step(fetch).opcode == copy_mode_to_ustat &&
+            cpu.state().system[0].value == mode.value && cpu.state().data == before.data &&
+            cpu.state().pc == base + 2);
+  }
+}
+
+void flush_clock_and_follower_guard() {
+  lead_a1::SharcMemory memory;
+  program(memory);
+  code(memory, base, flush);
+  auto state = initial();
+  state.cache.valid.value = full32;
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, state, &control);
+  lead_a1::SharcFetch fetch(memory);
+  single_instruction(fetch, cpu);
+  const auto before = cpu.state();
+  const auto transport = fetch.state();
+  require(before.cache.pending_flush && !before.cache.flush_effect_applied &&
+          before.cache.valid.value == full32);
+  control.begin_instruction();
+  rejected([&] { static_cast<void>(fetch.advance(cpu, {})); },
+           "clock advance during a transaction");
+  require(cpu.state() == before && fetch.state() == transport);
+  control.abort_instruction();
+  require(fetch.advance(cpu, {}).address_accepted && !fetch.state().execute);
+  auto expected = before;
+  expected.cache.valid = {.known = full32};
+  expected.cache.flush_effect_applied = true;
+  require(cpu.state() == expected && fetch.state() == transport && !memory.active());
+  lead_a1::Sharc restored(memory, before);
+  lead_a1::SharcFetch restored_fetch(memory, transport);
+  require(restored_fetch.advance(restored, {}).address_accepted && restored.state() == expected);
+  constexpr std::uint64_t prohibited_pm = 0x120000080000;
+  code(memory, base + 1, prohibited_pm);
+  require(fetch.advance(cpu, base + 1).address_accepted);
+  for (unsigned int clock = 0; clock < 4; ++clock) {
+    const auto bus = fetch.address_pm_request(cpu) ? lead_a1::SharcFetchBus::pm_data
+                                                   : lead_a1::SharcFetchBus::available;
+    static_cast<void>(fetch.advance(cpu, {}, bus));
+  }
+  const auto held = fetch.state();
+  rejected([&] { static_cast<void>(cpu.step(fetch)); },
+           "PM-data instruction immediately after FLUSH");
+  require(cpu.state() == expected && fetch.state() == held && !memory.active());
+}
+
+void flush_then_actual_cache_fill() {
   lead_a1::SharcMemory memory;
   program(memory);
   code(memory, base, flush);
   auto state = initial();
   state.cache.valid.value = full32;
   lead_a1::Sharc cpu(memory, state);
-  lead_a1::SharcFetch fetch(memory);
-  single_instruction(fetch, cpu);
+  lead_a1::SharcFetch flush_fetch(memory);
+  single_instruction(flush_fetch, cpu);
+  constexpr std::uint32_t cache_controls = 0x80010;
+  lead_a1::SharcFetchState request;
+  request.fetch1 = base + 1;
+  request.lookup = lead_a1::SharcFetchLookup{.mode = {.known = cache_controls}, .wait = true};
+  lead_a1::SharcFetch conflict(memory, request);
   const auto before = cpu.state();
-  const auto transport = fetch.state();
-  require(before.cache.pending_flush && before.cache.valid.value == full32);
-  rejected([&] { static_cast<void>(fetch.advance(cpu, base + 1)); }, "FLUSH CACHE effect/follower");
-  require(cpu.state() == before && fetch.state() == transport && !memory.active());
+  rejected([&] { static_cast<void>(conflict.advance(cpu, {})); }, "FLUSH CACHE effect/follower");
+  require(cpu.state() == before && conflict.state() == request);
+  static_cast<void>(flush_fetch.advance(cpu, {}));
+  require(cpu.state().cache.flush_effect_applied && cpu.state().cache.valid.value == 0);
+  require(conflict.advance(cpu, {}).stalled);
+  constexpr std::uint32_t entry_two = 4; // Set1,way0 for the actual next-PC request.
+  constexpr unsigned int cache_entry = 2;
+  constexpr std::uint64_t instruction_bits = 0xffffffffffff;
+  require(cpu.state().cache.valid.value == entry_two &&
+          cpu.state().cache.addresses[cache_entry].value == base + 1);
+  for (unsigned int clock = 0; clock < 4; ++clock) { static_cast<void>(conflict.advance(cpu, {})); }
+  require(cpu.state().cache.valid.value == entry_two &&
+          cpu.state().cache.instructions[cache_entry] ==
+              (lead_a1::SharcKnown64{.known = instruction_bits}));
+  require(cpu.step(conflict).opcode == 0 && cpu.state().pc == base + 2 &&
+          cpu.state().cache.valid.value == entry_two && !cpu.state().cache.pending_flush &&
+          !cpu.state().cache.flush_effect_applied);
 }
 
 }
@@ -367,7 +471,9 @@ int main() {
     routed_latch_survives_delayed_clear();
     quiet_clock_preserves_flow_and_unknown_bits();
     failed_clock_keeps_all_resources();
-    flush_order_stays_guarded();
+    unbanked_mode_quiet_clock();
+    flush_clock_and_follower_guard();
+    flush_then_actual_cache_fill();
     std::cout << "SHARC quiet processor clocks and actual delayed effects passed\n";
     return 0;
   } catch (const std::exception &error) {

@@ -72,6 +72,11 @@ using the existing frame/end-window guard. It does not sample the unresolved
 termination condition or enter the body during a hold. Captured callee
 branches and deferred entry branches may retain their Decode masks; the
 complete transport and core stay fixed until real advance/retirement.
+Pure NESTM/IRPTEN changes now have a separate native/VISA Decode stall and
+can mature during an actual IOP hold without changing captured operands or
+sampled signals. Independent mode/read/write, late-fault, IRQ and deferred
+frame checks are documented in sharc-mode-holds.txt. Other MODE1 changes
+retain their guards.
 Loop-body IOP, active arithmetic loops/delay slots and other mode/cache/IRQ
 compositions remain guarded. Startup stack arbitration, general loop/branch
 IOP timing and physical timing are still unqualified.
