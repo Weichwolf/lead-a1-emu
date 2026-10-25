@@ -62,7 +62,13 @@ ID  State    Evidence / remaining work
              explicit PLL/divider/reentry wait bounds have owned tests. Native
              single-NOP counter loops preserve frames/pre-pop and report cycle
              lower bounds. Source frequency/physical timing remain unqualified
-             (sharc-clock.txt). Native count loops of at least five instructions
+             (sharc-clock.txt). A separate PMCTL1 delivered-access reference
+             captures raw control and matures15 clock outputs/accelerator
+             selection after two actual PCLK periods. Reserved2148x bit12 is
+             retained without inventing LP0. Unknown reset/read timing, overlap,
+             snapshots and late-delivery rollback have owned checks; the
+             core/IOP bridge and complete peripheral coupling remain open
+             (sharc-power.txt). Native count loops of at least five instructions
              execute ordinary CALL/RTS, nested callees and conditional polling;
              final e-3 pre-pop, PCSTK/PCSTKP reads and failed pre-pop/pending-effect
              rollback have independent tests (sharc-long-loops.txt). Other loop
@@ -626,6 +632,12 @@ ID  State    Evidence / remaining work
              edge cases,13 short-compute results, actual compact dual/DM stores,
              mixed-width control, ownership and independent failure/retry
              checks cover the new CPU API (sharc-visa-execution.txt).
+             The same eight original reference forks additionally execute18
+             second-call instructions, including the actual PMCTL1 write and
+             compact0/1/2/-1 modifier setup. Their real frames, delayed clock
+             outputs, eight M values and unchanged ordinary payload are checked.
+             Each preserves the next failing original SRU_PBEN2 read at247a,
+             including CPU/IAB/power/clock/SYSCTL/SPI rollback (sharc-power.txt).
              No clocked VISA boot or complete application is qualified.
              original_sharc_images freshly verifies bundle/sections/kernels and
              drives all four original DSP streams at two fixed serial cadences.

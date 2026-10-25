@@ -19,7 +19,7 @@
       "local_copy_bytes": 18156850,
       "local_copy_sha256": "a9534d75e8946af83d5c9e250bb7e212224786b56977d6fec90d88e178f034dc",
       "provenance": "Analysis-only manufacturer manual mirror, exact official-byte identity unverified; no source reused.",
-      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals"
+      "sections": "16-15/17 SPI clock/select protocol; 24-8 hardcoded DMA, idle core, no controlling boot ROM; 24-15/19 SPI slave boot and packing; Tables24-9/10, Figure24-4; 23-3/17 PLL reset/control/programming/settling; A-7/10 PMCTL fields and 2147x/2148x CLK_CFG encodings; 24-28 core FLAG0..3 reset as inputs, pin mux distinct from core signals; A-4 reserved readback, A-8 PMCTL1 two-PCLK effect, A-11/13 shutdown/accelerator fields, 23-11 clocks enabled by default"
     },
     {
       "author": "Analog Devices",
@@ -591,5 +591,56 @@
     },
     "external_static_corroboration": "Private issue1 comment6390876207 at0850ab477efb4b4de3acb395baa439b70e4e570f independently identifies33 full48 instructions and compact RTS, six loop counts/addresses and all caller/return boundaries. Static source/byte evidence only; no private implementation/worktree imported and no physical timing inferred",
     "limits": "Instruction-order reference, not native/VISA five-stage connection or full runtime. Mixed-width long/arithmetic/IRQ/IDLE control, taken VISA CALL(DB), other compact operations and cache/port/IAB scheduling remain guarded/open. Minimum-clock PMCTL input and equal CLKIN bounds while bypassed are explicit reference inputs. Candidate F2 response phase, complete application/boot/instrument/MIDI/audio/USB/UI/storage/update/recovery/performance/hardware acceptance remain unqualified"
+  },
+  "power_reference": {
+    "primary": "HWRrev1.1 A-4,A-8,A-11/13,23-11; PGRrev2.4 7-7 separate core/IOP bridge latency",
+    "address": "0x2001, delivered 32-bit IOP register access at mapped offset0",
+    "state": "Explicit2147x/2148x reset clock outputs enabled; full reset/reserved readback and accelerator selection unknown. Actual full write captures raw value separately from effective shutdown/selection; two supplied PCLK intervals mature outputs. Settled readback retains raw reserved bits per HWR A-4",
+    "clock_fields": "UART0,TWI1,PWM2,MTM3,DAI4,external5,SPORT01/23/45/67 at6/7/8/9,SPI10,timers11,RTC13,accelerator16,MLB19. Bit12 reserved on2147x/2148x, stored but no LP0 output. ACCSEL18:17 selects FIR0,IIR1,FFT2;3 remains guarded",
+    "transactions": "Complete delivered writes and latency stage through MemoryDevice transaction; failed later CPU/RAM operation aborts power changes. Committed outputs remain separate. External PCLK/snapshot reject active transactions; validated idle snapshots preserve remaining clocks",
+    "evidence": "Literal15 gate masks, first/second-clock results/re-enable, reserved bits31/12, three selections, independent intermediate restores, malformed state/accesses, ownership, actual native direct IOP store with injected late-delivery failure rollback and unchanged-instruction retry",
+    "limits": "Bounded register/output reference: overlapping writes and unsettled guest readback remain explicit timing guards. Owner must connect clock outputs; peripheral execution, accelerator engines, core/IOP bridge4..5 CCLK latency, complete coupled schedule and physical Nord hardware/boot/instrument acceptance remain open",
+    "package_header_confirmation": {
+      "reference": "reference/visualdsp.json",
+      "artifact": "214xx/include/def21489.h",
+      "bytes": 206164,
+      "sha256": "4c574aee815ec6186067df253d3a499fc6f0cdd474bd63e071157ad1e5402ca5",
+      "scope": "Static address/field corroboration only; header stays local and is not included in builds. HWR defines family/reserved treatment and latency; no implementation reused."
+    },
+    "original_prefix": {
+      "profile": "original_sharc_visa_instructions, all four placements at both existing serial cadences; existing native guard/common8286-instruction clock reference retained",
+      "additional_instructions": 18,
+      "full48": 6,
+      "compact32": 12,
+      "control": "0x8180f",
+      "effective_shutdown": "0x8080f",
+      "accelerator": "FIR",
+      "modifiers": "M0/M8=0,M1/M9=1,M2/M10=2,M7/M15=0xffffffff; all known32",
+      "clock_inputs": "Conservative complete-PCLK lower bounds from subsequent instruction minimum core cycles, core/PCLK ratio2. Pre-write fractional phase is discarded; no delivered-write instruction time, bridge latency or physical phase is invented",
+      "call_frame": "actual ordinary CALL frame bit24|entry+6; initializer has not returned",
+      "next_operation": "unsupported actual read SRU_PBEN2 at IOP word0x247a, initializer entry+39; captured instruction and CPU/IAB/power/SYSCTL/clock/SPI retain failure",
+      "frontiers": [
+        {
+          "part": 0,
+          "transport": 0,
+          "pc": "0x1c5bb4"
+        },
+        {
+          "part": 0,
+          "transport": 1,
+          "pc": "0x1c5b3c"
+        },
+        {
+          "part": 1,
+          "transport": 0,
+          "pc": "0x1c077b"
+        },
+        {
+          "part": 1,
+          "transport": 1,
+          "pc": "0x1c0647"
+        }
+      ]
+    }
   }
 }

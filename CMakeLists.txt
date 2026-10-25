@@ -47,6 +47,7 @@ target_sources(lead_a1_sharc PRIVATE src/sharc_immediate_indexed.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_fetch_memory.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_visa.cpp src/sharc_visa_length.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_visa_decode.cpp src/sharc_visa_execute.cpp)
+target_sources(lead_a1_sharc PRIVATE src/sharc_power.cpp)
 target_sources(lead_a1_sharc PRIVATE src/sharc_float.cpp src/sharc_float_compute.cpp src/sharc_fetch_multiplier.cpp)
 target_include_directories(lead_a1_sharc PUBLIC include)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
@@ -54,6 +55,9 @@ add_executable(lead-a1-emu src/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-power-test test/sharc_power_test.cpp)
+  target_link_libraries(lead-a1-sharc-power-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_peripheral_clock_gates COMMAND lead-a1-sharc-power-test)
   add_executable(lead-a1-sharc-visa-cpu-test test/sharc_visa_cpu_test.cpp)
   target_link_libraries(lead-a1-sharc-visa-cpu-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_visa_instruction_execution COMMAND lead-a1-sharc-visa-cpu-test)
@@ -473,6 +477,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-fetch-memory-test
       lead-a1-sharc-visa-test
       lead-a1-sharc-visa-cpu-test
+      lead-a1-sharc-power-test
       lead-a1-sharc-loop-idle-test
       lead-a1-sharc-operand-test lead-a1-sharc-memory-bus-test lead-a1-sharc-spi-bus-test lead-a1-sharc-float-test lead-a1-sharc-float-multiply-test lead-a1-sharc-compare-test lead-a1-sharc-multiplier-branch-test lead-a1-sharc-float-fixed-stall-test lead-a1-sharc-idle-branch-test
       lead-a1-arm-test lead-a1-arm-status-test lead-a1-arm-system-test

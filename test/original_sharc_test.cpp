@@ -6,6 +6,7 @@
 #include "lead_a1/sharc_control.hpp"
 #include "lead_a1/sharc_fetch.hpp"
 #include "lead_a1/sharc_memory.hpp"
+#include "lead_a1/sharc_power.hpp"
 #include "lead_a1/sharc_spi.hpp"
 #include "lead_a1/sharc_visa.hpp"
 
@@ -365,6 +366,15 @@ struct SerialInput {
 
 enum class OriginalProfile : std::uint8_t { immediate, deferred_f2, visa_reference };
 
+void map_original_power(lead_a1::SharcMemory &memory,
+                        lead_a1::SharcPower &power,
+                        OriginalProfile profile) {
+  constexpr std::uint32_t pmctl1 = 0x2001;
+  if (profile == OriginalProfile::visa_reference) {
+    memory.map_io({.first_word = pmctl1, .words = 1}, power);
+  }
+}
+
 struct HeaderDevices {
   ObservedClock &clock;
   lead_a1::SharcSpi &spi;
@@ -372,6 +382,7 @@ struct HeaderDevices {
   unsigned int interval;
   OriginalProfile profile{OriginalProfile::immediate};
   Placement placement{};
+  lead_a1::SharcPower *power{};
 };
 
 void check_frontier(const lead_a1::Sharc &cpu,
@@ -580,6 +591,13 @@ void check_original_visa_boundary(lead_a1::SharcMemory &memory,
   throw std::runtime_error("Missing original native-to-VISA transport guard");
 }
 
+void fill_visa_reference(lead_a1::SharcVisaBuffer &buffer) {
+  for (unsigned int fill = 0; fill < 2 && !buffer.instruction(); ++fill) {
+    if (buffer.can_capture()) { buffer.capture(); }
+    static_cast<void>(buffer.advance(false));
+  }
+}
+
 lead_a1::SharcStep visa_reference_step(lead_a1::SharcMemory &memory,
                                        lead_a1::Sharc &cpu,
                                        std::optional<lead_a1::SharcVisaBuffer> &buffer) {
@@ -590,10 +608,7 @@ lead_a1::SharcStep visa_reference_step(lead_a1::SharcMemory &memory,
     buffer.emplace(memory,
                    lead_a1::SharcVisaState{.decode = cpu.state().pc, .fetch = cpu.state().pc});
   }
-  for (unsigned int fill = 0; fill < 2 && !buffer->instruction(); ++fill) {
-    if (buffer->can_capture()) { buffer->capture(); }
-    static_cast<void>(buffer->advance(false));
-  }
+  fill_visa_reference(*buffer);
   return cpu.step(*buffer);
 }
 
@@ -633,6 +648,97 @@ void record_visa_reference(lead_a1::SharcStep step,
                         .clkin_cycles = (clock.device.state().control & pll_bypass) != 0
                                             ? step.minimum_core_cycles
                                             : 0U});
+}
+
+void original_visa_routing_boundary(lead_a1::SharcMemory &memory,
+                                    lead_a1::Sharc &cpu,
+                                    lead_a1::SharcVisaBuffer &buffer,
+                                    HeaderDevices devices) {
+  require(devices.power != nullptr);
+  fill_visa_reference(buffer);
+  const auto before = cpu.state();
+  const auto input = buffer.state();
+  const auto power = devices.power->snapshot();
+  const auto control = devices.control.snapshot();
+  const auto clock = devices.clock.device.state();
+  const auto spi = devices.spi.state();
+  try {
+    static_cast<void>(cpu.step(buffer));
+  } catch (const std::exception &error) {
+    const std::string message(error.what());
+    require(message.find("SHARC direct read word-address=0x247a") != std::string::npos &&
+            message.find("Unmapped SHARC IOP register") != std::string::npos);
+    require(cpu.state() == before && buffer.state() == input &&
+            devices.power->snapshot() == power && devices.control.snapshot() == control &&
+            devices.clock.device.state() == clock && devices.spi.state() == spi &&
+            !memory.active());
+    return;
+  }
+  throw std::runtime_error("Missing original SRU_PBEN2 read boundary");
+}
+
+void check_original_power_outputs(const lead_a1::Sharc &cpu, HeaderDevices devices) {
+  require(devices.power != nullptr);
+  const auto state = devices.power->snapshot();
+  constexpr std::uint32_t expected_control = 0x8180f;
+  constexpr std::uint32_t expected_shutdown = 0x8080f;
+  require(state == (lead_a1::SharcPowerState{.control = expected_control,
+                                             .shutdown = expected_shutdown,
+                                             .accelerator = lead_a1::SharcAccelerator::fir}));
+  require(devices.power->enabled(lead_a1::SharcClockGate::spi) &&
+          devices.power->enabled(lead_a1::SharcClockGate::dai) &&
+          !devices.power->enabled(lead_a1::SharcClockGate::uart));
+  constexpr std::array<unsigned int, 8> registers{0, 1, 2, 7, 8, 9, 10, 15};
+  constexpr std::array<std::uint32_t, 8> values{0, 1, 2, full32, 0, 1, 2, full32};
+  for (unsigned int index = 0; index < registers.size(); ++index) {
+    require(cpu.state().dag[0][1][registers[index]] ==
+            (lead_a1::SharcKnown32{.value = values[index], .known = full32}));
+  }
+  constexpr std::uint32_t call_frame = 0x1000000;
+  require(cpu.state().depth == 1 &&
+          cpu.state().pc_stack[0] == (call_frame | (devices.placement.visa_entry + 6)) &&
+          cpu.state().loops_empty == true && !cpu.state().count_loop &&
+          !cpu.state().arithmetic_loop && !cpu.state().branch && !cpu.state().interrupt);
+}
+
+std::uint32_t original_power_pc(Placement placement, unsigned int index) {
+  constexpr unsigned int full_prefix = 6;
+  if (index == 0) { return placement.visa_entry + 3; }
+  if (index < full_prefix) { return placement.second_call + ((index - 1) * 3); }
+  return placement.second_call + 15 + ((index - full_prefix) * 2);
+}
+
+void original_visa_power_reference(lead_a1::SharcMemory &memory,
+                                   lead_a1::Sharc &cpu,
+                                   lead_a1::SharcVisaBuffer &buffer,
+                                   HeaderDevices devices) {
+  require(devices.power != nullptr);
+  constexpr unsigned int instructions = 18;
+  constexpr unsigned int full_prefix = 6;
+  constexpr unsigned int power_write = 5;
+  unsigned int elapsed_core{};
+  for (unsigned int index = 0; index < instructions; ++index) {
+    fill_visa_reference(buffer);
+    const auto step = cpu.step(buffer);
+    const auto expected_pc = original_power_pc(devices.placement, index);
+    require(step.pc == expected_pc && step.address_units == (index < full_prefix ? 3U : 2U) &&
+            step.minimum_core_cycles == 1);
+    devices.clock.device.advance({.core_cycles = step.minimum_core_cycles});
+    if (index == power_write) { require(devices.power->state().remaining_pclk == 2); }
+    if (index > power_write) {
+      // Count complete elapsed PCLK periods only after the delivered store.
+      // No unknown pre-write CCLK/PCLK phase or core/IOP bridge is invented.
+      elapsed_core += step.minimum_core_cycles;
+      devices.power->advance_pclk(elapsed_core / 2);
+      elapsed_core %= 2;
+    }
+  }
+  constexpr std::uint32_t initializer_prefix = 39;
+  require(cpu.state().pc == devices.placement.second_call + initializer_prefix);
+  check_original_power_outputs(cpu, devices);
+  original_visa_routing_boundary(memory, cpu, buffer, devices);
+  std::cout << "  Separate VISA power prefix:18 actual instructions, six full/twelve compact, "
+               "delayed PMCTL1 outputs and eight modifiers; SRU_PBEN2 read remains unsupported\n";
 }
 
 void original_visa_instruction_reference(lead_a1::SharcMemory &memory,
@@ -680,6 +786,10 @@ void original_visa_instruction_reference(lead_a1::SharcMemory &memory,
   std::cout
       << "  Separate VISA instruction-order fork:8286 actual instructions, six original "
          "wait loops/11 PMCTL accesses, first CALL returned; clocked redirect still guarded\n";
+  if (!buffer) { throw std::runtime_error("Missing original VISA clock-prefix input"); }
+  original_visa_power_reference(memory, cpu, *buffer, devices);
+  require(checkpoint.state() == native && fetch.state() == transport &&
+          devices.control.snapshot() == controller);
 }
 
 void sequenced_deferred_foreground(lead_a1::SharcMemory &memory,
@@ -1013,12 +1123,14 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                            Placement placement,
                            OriginalProfile profile) {
   // This fixture owns fresh RAM and PMCTL: its writes cannot seed the full stream.
+  lead_a1::SharcPower power;
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
   auto boot = lead_a1::SharcSpiBoot::slave_reference_214xx();
   bootstrap(memory, boot, stream);
   ObservedClock clock;
   memory.map_io({.first_word = 0x2000, .words = 1}, clock);
+  map_original_power(memory, power, profile);
   lead_a1::SharcControl control(true);
   lead_a1::SharcSpi spi(boot.state());
   memory.map_io({.first_word = sysctl, .words = 1}, control);
@@ -1088,7 +1200,8 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                           .control = control,
                           .interval = interval,
                           .profile = profile,
-                          .placement = placement});
+                          .placement = placement,
+                          .power = &power});
   check_cells(memory, expected);
   std::cout << "  Sequenced final payload cells: " << expected.size() << " matched\n";
 }

@@ -1,0 +1,70 @@
+PMCTL1 peripheral clock reference
+
+SharcPower models a delivered32-bit IOP access at word2001 (mapped offset0).
+HWRrev1.1 A-8 gives two PCLK cycles of peripheral effect latency. Explicit
+advance_pclk intervals mature the captured shutdown fields and accelerator
+selection; reads, snapshots and writes do not supply elapsed time. Outputs
+change only after both clocks. The owner must route these outputs to the
+corresponding peripherals, independently of serial edges and RAM grants.
+
+The explicit2147x/2148x reset reference has all peripheral clocks enabled
+(HWR23-11). Complete reset/reserved readback and accelerator selection remain
+unknown until an actual write establishes them. Unknown reset reads reject.
+HWR A-4 permits reserved-bit readback of last-written/reset values: a settled
+full write therefore reads back exactly, including reserved bits. Bit12 stays
+stored but is not a2148x LP0 clock output. HWR A-11/13 defines15 clock outputs,
+including RTC at13 and accelerator/MLB at16/19, and FIR/IIR/FFT selection.
+No physical Nord chip, oscillator, board connection or accelerator execution
+is inferred from this family reference.
+
+Programmed data and delayed outputs are separate state. MemoryDevice begin/
+commit/abort stages the complete write and pending latency. External clock
+advance and serialization reject an active transaction. enabled() exposes
+only committed clock outputs. Snapshot restore validates masks, pending
+counts, reset knowledge, selection and settled output consistency; a restored
+one-clock remainder needs that remaining real clock. No read clears it.
+
+The current bounded reference rejects reserved accelerator selection, another
+write before the pending effect matures, and unsettled guest readback. These
+last two guards preserve unqualified IOP overlap/read timing; they are not
+claims that silicon rejects the operations. Wrong offsets/widths and oversized
+writes fail. Bus faults receive address/operation/PC from SharcMemory/core.
+
+PGRrev2.4 7-7 separately gives4..5 CCLK peripheral-register write latency
+through the CCLK/PCLK bridge. This device starts at delivered IOP input and
+does not supply that bridge, automatic scheduler phase, port arbitration or
+peripheral behavior. Coupled CPU/peripheral timing remains required work.
+The full original-instrument acceptance in objective.txt is unchanged.
+
+Owned tests use15 independently listed gate masks, exact first/second-clock
+outputs and re-enable, reserved31/12 readback, all three accelerator selections,
+unknown/reset and malformed inputs, zero/large clock intervals, intermediate
+restore, transaction ownership and abort. A real native direct IOP store
+stages the joined power device, then an injected late delivery fault rolls back
+both CPU and device. Repairing that external fault retries the unchanged
+instruction successfully; its output still waits for both PCLK events. These qualify the
+register/output contract, not a working clocked peripheral or instrument.
+
+The existing original_sharc_visa_instructions profile retains the complete
+candidate-input native prefix and all8286-instruction common-clock checks.
+Its CPU fork then executes18 further original instructions: second CALL plus
+five full48-bit operations and twelve compact32-bit operations. The real write
+establishes8180f; after conservative complete-PCLK lower bounds from subsequent
+instruction minima, shutdown is8080f and selection is FIR. Bit12 is retained
+only in raw control. Eight actual M registers hold0/1/2/-1 in both DAGs.
+The real unreturned frame is entry+6; checkpoint CPU/fetch/SYSCTL and ordinary
+payload-cell checks remain. No host PC, opcode or padding is substituted.
+
+Each of four placements at both serial cadences then fails atomically on the
+actual SRU_PBEN2 read at word247a. Its PCs are1c5bb4/1c5b3c/1c077b/1c0647.
+The captured read and CPU/IAB/power/SYSCTL/clock/SPI state remain unchanged.
+This preserves the next missing routing input; it does not complete the I/O
+initializer, supply a pin-enable reset value or qualify the five-stage switch.
+Post-delivery PCLK lower bounds discard unknown pre-write fractional phase;
+they do not establish a global phase or the separate core/IOP bridge latency.
+
+Primary document identities and sections are in reference/sharc.json.
+No manufacturer source, program bytes or private reconstruction are reused.
+
+  cmake --build --preset strict --target lead-a1-sharc-power-test format-check
+  ctest --preset strict -R '^sharc_peripheral_clock_gates$' --output-on-failure

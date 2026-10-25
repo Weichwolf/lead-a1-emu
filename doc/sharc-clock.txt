@@ -5,6 +5,8 @@ hardware reference rev1.1, 23-3..17 and A-7..10. This is an explicit candidate
 reference, not physical Nord clock/package/pin qualification. CLKIN frequency,
 voltage/analog behavior, jitter, actual mux phase, PLL operating limits, peripheral
 gating/PMCTL1 and full board timing are not established by these tests.
+The separate delivered-access PMCTL1 clock-output reference and its remaining
+bridge/peripheral composition gaps are documented in sharc-power.txt.
 
 Clock contract
 The caller supplies CLK_CFG1:0, stable ideal CLKIN/reference conditions and
