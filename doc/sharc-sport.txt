@@ -67,9 +67,10 @@ is normalized.
 Family reset control inputs are explicit.
 Without a modeled source clock, all SPORT sampled controls, DMA modes, wire
 history/buffers and IRQs remain inactive/unknown despite raw enable writes.
-The application reaches358/431 actual instructions. Transport0 fails at the
-real posted PCG_PW1/24c4 write; transport1 at IDP_CTL1/24b2 DMA enable
-after PICR/secondary-register initialization (sharc-picr.txt). All prior payload,
+The application reaches405/431 actual instructions. Transport0 additionally
+programs the actual PCG registers with both generators still disabled
+(sharc-pcg.txt). Both fail at IDP_CTL1/24b2 DMA enable after PICR/secondary-
+register initialization (sharc-picr.txt). All prior payload,
 vector, SPI and DAI checkpoint assertions remain. These are initialization
 prefixes, not full boot, serial firmware traffic or audio evidence.
 

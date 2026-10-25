@@ -29,6 +29,13 @@ timing, silicon revision and the binding of either stream to a photographed
 package need execution and hardware evidence. Callback/record counts alone
 must not become a host voice-allocation policy.
 
+The initializer's final logical SRU selectors are independently corroborated
+by factual handoff6400242285: transport0 SPORT0/1/3 clock/frame use PCG B,
+SPORT2 uses PCG A; transport1 SPORT0..3 clock uses DAI pin-buffer3 and frame
+uses pin-buffer4. Transport0 programs PCG A/B before its FLAGS synchronization
+loop but enables them only after that loop. These are software routing facts,
+not a physical inter-DSP/codec connection or evidence of present clock signals.
+
 Preserve both original programs and their causal exchanges in the emulator.
 Choose host SIMD packing or concurrency from observed workloads after exact
 reference arithmetic and inter-processor scheduling exist. AVX512 availability

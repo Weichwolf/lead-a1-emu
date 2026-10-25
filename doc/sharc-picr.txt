@@ -41,22 +41,27 @@ Other core priorities explicitly reject at this reference boundary. All other
 unobserved peripheral source levels remain unknown. This event-boundary fixture
 is not a complete level-sampling board interrupt controller.
 
-Both original transport1 programs execute PICR0 read/CLR4c00/SET3000/write:
-0a418820 ->0a418020 ->0a41b020, selecting DAILI for P2 while retaining SPIHI
-for P1. Subsequent original instructions clear MODE1.RND32, set CBUFEN,
-save MODE1, initialize secondary B0/I0/L0/R0/R2/R3/M8/M1 with image-specific
-stack addresses, then restore MODE1. Actual IDP_CTL0/CTL1 programming follows.
-All PCs/widths/results/post-values are checked against original fields and
-PGR encodings, not recorded emulator output. Transport1 reaches431 application
-instructions and fails at actual posted IDP_CTL1/24b2=10101 delivery. Later
-IDP_DMA_I0A/2408 and I0B/2418 writes remain queued. I0B at+999 really retires
-before prior CTL1 delivery fails; CPU/fetch after that retirement and all three
-posted writes remain, with no outstanding core request.
-Transport0 retains its358-instruction PCG_PW1 frontier. Four original programs
-at two serial cadences retain all earlier payload/vector/SPI/SPORT/DAI checks.
+Both transports in both images execute PICR0 read/CLR4c00/SET3000/write:
+0a418820 ->0a418020 ->0a41b020 under the explicit family reset reference,
+selecting DAILI for P2 while retaining SPIHI for P1. Transport0 first programs
+PCG A/B but leaves them disabled (sharc-pcg.txt). Only transport1 clears
+MODE1.RND32. Both set CBUFEN, save MODE1, initialize secondary B0/I0/L0/
+R0/R2/R3/M8/M1 with image-specific command ring bases, then restore MODE1.
+The B0 write establishes I0; there is no separate original I0 assignment in
+this band. Main ringA=93ee1, part1 transport0=9235a, transport1=923f9;
+ringB=A+80. Actual IDP_CTL0/CTL1 programming follows. All PCs/widths/results/
+post-values are checked against original fields/PGR encodings, not recorded
+emulator output, and independently corroborated by factual handoff6400242285.
+
+Transport0/1 reach405/431 application instructions and fail at actual posted
+IDP_CTL1/24b2=10101 delivery, offsets+921/+987. Later IDP_DMA_I0A/2408 and
+I0B/2418 writes remain queued. I0B at+933/+999 really retires before prior
+CTL1 delivery fails; CPU/fetch after retirement and all three posted writes
+remain, with no outstanding core request. Four original programs at two
+serial cadences retain all earlier payload/vector/SPI/SPORT/DAI checks.
 No SPORT SCLK, IDP samples, audio, full boot or hardware result is invented.
 
-Next implement PCG source clocks/frame generation, IDP DMA/ping-pong and full
+Next implement IDP DMA/ping-pong, PCG source/board clock coupling and full
 interrupt coupling. The complete objective.txt acceptance remains required.
 
   cmake --build --preset strict

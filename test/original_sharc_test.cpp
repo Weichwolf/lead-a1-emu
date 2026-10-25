@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "common/memory.hpp"
+#include "original_pcg_expectations.hpp"
 #include "original_picr_expectations.hpp"
 #include "original_sport_expectations.hpp"
 #include "sharc/core/sharc.hpp"
@@ -13,6 +14,7 @@
 #include "sharc/peripherals/sharc_dai_pin.hpp"
 #include "sharc/peripherals/sharc_dai_timing.hpp"
 #include "sharc/peripherals/sharc_dpi_routing.hpp"
+#include "sharc/peripherals/sharc_pcg.hpp"
 #include "sharc/peripherals/sharc_pdap.hpp"
 #include "sharc/peripherals/sharc_picr.hpp"
 #include "sharc/peripherals/sharc_power.hpp"
@@ -405,6 +407,7 @@ struct HeaderDevices {
   lead_a1::SharcDaiTiming *frame_routes{};
   lead_a1::SharcPdap *pdap{};
   lead_a1::SharcPicr *priority{};
+  lead_a1::SharcPcg *pcg{};
   lead_a1::SharcIopBridge *bridge{};
   lead_a1::SharcDpiRouting *dpi_pin{};
   lead_a1::SharcDpiRouting *dpi_enable{};
@@ -1456,21 +1459,30 @@ lead_a1::SharcKnown32 original_picr_mode(lead_a1::SharcMemory &memory,
                                          SerialInput &serial,
                                          HeaderDevices devices) {
   auto saved = cpu.state().system[2];
+  const bool clocks = uses_clock_initializer(devices.placement);
   constexpr std::uint32_t rounding32 = 0x10000;
   constexpr std::uint32_t circular = 0x01000000;
-  saved.value = (saved.value & ~rounding32) | circular;
-  saved.known |= rounding32 | circular;
-  constexpr std::array offsets{931U, 934U, 937U, 939U, 942U, 943U};
-  constexpr std::array widths{3U, 3U, 2U, 3U, 1U, 1U};
+  constexpr unsigned int setup_offset = 66;
+  if (!clocks) {
+    constexpr unsigned int rounding_clear = 931;
+    original_picr_ordinary(memory, cpu, fetch, serial, devices, rounding_clear, 3);
+    saved.value &= ~rounding32;
+    saved.known |= rounding32;
+    require(cpu.state().system[2] == saved);
+  }
+  saved.value |= circular;
+  saved.known |= circular;
+  constexpr std::array offsets{934U, 937U, 939U, 942U, 943U};
+  constexpr std::array widths{3U, 2U, 3U, 1U, 1U};
   constexpr std::uint32_t temporary = 0x010014fc;
   constexpr std::uint32_t writable = 0x01e1fcff;
   for (unsigned int index = 0; index < offsets.size(); ++index) {
-    original_picr_ordinary(memory, cpu, fetch, serial, devices, offsets[index], widths[index]);
+    const auto offset = offsets[index] - (clocks ? setup_offset : 0U);
+    original_picr_ordinary(memory, cpu, fetch, serial, devices, offset, widths[index]);
     const auto mode = cpu.state().system[2];
-    if (index == 0) { require((mode.value & rounding32) == 0 && (mode.known & rounding32) != 0); }
-    if (index == 1 || index == 2) { require(mode == saved); }
-    if (index >= 2) { require(cpu.state().system[0] == saved); }
-    if (index >= 3) {
+    if (index <= 1) { require(mode == saved); }
+    if (index >= 1) { require(cpu.state().system[0] == saved); }
+    if (index >= 2) {
       require((mode.value & writable) == temporary && (mode.known & writable) == writable &&
               (mode.value & ~writable) == (saved.value & ~writable));
     }
@@ -1516,6 +1528,14 @@ void check_original_picr_setup(const lead_a1::SharcState &state,
   }
 }
 
+std::uint32_t original_command_ring(HeaderDevices devices) {
+  constexpr std::uint32_t main = 0x93ee1;
+  constexpr std::uint32_t part1_first = 0x9235a;
+  constexpr std::uint32_t part1_second = 0x923f9;
+  if (!original_sport_part1(devices.placement)) { return main; }
+  return uses_clock_initializer(devices.placement) ? part1_first : part1_second;
+}
+
 void original_picr_initialization(lead_a1::SharcMemory &memory,
                                   lead_a1::Sharc &cpu,
                                   lead_a1::SharcFetch &fetch,
@@ -1524,6 +1544,9 @@ void original_picr_initialization(lead_a1::SharcMemory &memory,
   constexpr unsigned int ustat1 = 0x70;
   constexpr std::uint32_t picr0 = 0x2200;
   constexpr std::array offsets{919U, 922U, 925U, 928U};
+  constexpr unsigned int picr_offset = 63;
+  constexpr unsigned int setup_offset = 66;
+  const bool clocks = uses_clock_initializer(devices.placement);
   constexpr std::array values{0x0a418820U, 0x0a418020U, 0x0a41b020U, 0x0a41b020U};
   using Operation = original_sport::Operation;
   constexpr std::array operations{
@@ -1534,7 +1557,7 @@ void original_picr_initialization(lead_a1::SharcMemory &memory,
                         fetch,
                         serial,
                         devices,
-                        {.offset = offsets[index],
+                        {.offset = offsets[index] - (clocks ? picr_offset : 0U),
                          .words = 3,
                          .reg = ustat1,
                          .value = values[index],
@@ -1542,8 +1565,9 @@ void original_picr_initialization(lead_a1::SharcMemory &memory,
                          .address = picr0});
   }
   const auto saved = original_picr_mode(memory, cpu, fetch, serial, devices);
-  const auto stack = original_sport_part1(devices.placement) ? 0x923f9U : 0x93ee1U;
-  for (const auto &step : original_picr::setup) {
+  const auto stack = original_command_ring(devices);
+  for (auto step : original_picr::setup) {
+    step.offset -= clocks ? setup_offset : 0U;
     original_picr_ordinary(memory, cpu, fetch, serial, devices, step.offset, step.words);
     check_original_picr_setup(cpu.state(), step, stack, saved);
   }
@@ -1552,6 +1576,15 @@ void original_picr_initialization(lead_a1::SharcMemory &memory,
   require(devices.priority->snapshot().control[0] == picr_result &&
           devices.priority->destinations(12) == ((1U << 2) | (1U << 12)) &&
           !devices.priority->outputs()[2] && devices.priority->outputs()[1] == false);
+}
+
+void original_idp_initialization(lead_a1::SharcMemory &memory,
+                                 lead_a1::Sharc &cpu,
+                                 lead_a1::SharcFetch &fetch,
+                                 SerialInput &serial,
+                                 HeaderDevices devices) {
+  constexpr unsigned int ustat1 = 0x70;
+  using Operation = original_sport::Operation;
   constexpr std::array<original_sport::Step, 11> idp{
       {{.offset = 966,
         .words = 3,
@@ -1590,7 +1623,17 @@ void original_picr_initialization(lead_a1::SharcMemory &memory,
         .address = 0x2408,
         .part1_value = 0x923f9},
        {.offset = 996, .words = 3, .reg = 0, .value = 0x93f61, .part1_value = 0x92479}}};
-  for (const auto &step : idp) { original_sport_step(memory, cpu, fetch, serial, devices, step); }
+  constexpr unsigned int setup_offset = 66;
+  constexpr unsigned int half_ring = 0x80;
+  constexpr unsigned int main_ring_b = 0x93f61;
+  for (auto step : idp) {
+    step.offset -= uses_clock_initializer(devices.placement) ? setup_offset : 0U;
+    if (step.reg == 0) {
+      step.value = original_command_ring(devices) + (step.value == main_ring_b ? half_ring : 0U);
+      step.part1_value.reset();
+    }
+    original_sport_step(memory, cpu, fetch, serial, devices, step);
+  }
 }
 
 void original_idp_index_b_store(lead_a1::SharcMemory &memory,
@@ -1600,14 +1643,15 @@ void original_idp_index_b_store(lead_a1::SharcMemory &memory,
                                 HeaderDevices devices) {
   require(!wait_original_iop(memory, cpu, fetch, serial, devices, OriginalClock::visa));
   const auto step = cpu.step(fetch);
-  constexpr unsigned int last_store = 999;
+  const auto last_store = uses_clock_initializer(devices.placement) ? 933U : 999U;
   require(step.pc == devices.placement.second_call + last_store && step.address_units == 3);
   const auto &queue = devices.bridge->snapshot();
   require(queue.write_count == 3 && !queue.request && queue.writes[2]);
   const auto &last = queue.writes[2];
   if (!last) { throw std::runtime_error("Missing posted IDP index B write"); }
   constexpr std::uint32_t index_b = 0x2418;
-  const auto value = original_sport_part1(devices.placement) ? 0x92479U : 0x93f61U;
+  constexpr unsigned int half_ring = 0x80;
+  const auto value = original_command_ring(devices) + half_ring;
   require(last->intent.pc == step.pc && last->intent.address == index_b && last->value == value &&
           last->posted_at == queue.clocks);
 }
@@ -1619,44 +1663,28 @@ void original_sport_failure(lead_a1::SharcMemory &memory,
                             HeaderDevices devices) {
   const bool clocks = uses_clock_initializer(devices.placement);
   if (clocks) {
-    constexpr unsigned int pulse_write = 818;
-    constexpr unsigned int pulse_width = 0x10080;
-    constexpr std::uint32_t pcg_pw = 0x24c4;
-    original_sport_step(memory,
-                        cpu,
-                        fetch,
-                        serial,
-                        devices,
-                        {.offset = pulse_write,
-                         .words = 3,
-                         .reg = 0,
-                         .value = pulse_width,
-                         .operation = original_sport::Operation::write,
-                         .address = pcg_pw});
-  } else {
-    original_picr_initialization(memory, cpu, fetch, serial, devices);
+    for (const auto &step : original_pcg::setup) {
+      original_sport_step(memory, cpu, fetch, serial, devices, step);
+    }
   }
+  original_picr_initialization(memory, cpu, fetch, serial, devices);
+  original_idp_initialization(memory, cpu, fetch, serial, devices);
   original_application_prepare(memory, cpu, fetch, serial, devices);
-  if (!clocks) { original_idp_index_b_store(memory, cpu, fetch, serial, devices); }
+  original_idp_index_b_store(memory, cpu, fetch, serial, devices);
   const auto core = cpu.state();
   const auto pipeline = fetch.state();
-  const auto failing_pc = devices.placement.second_call + (clocks ? 818U : 987U);
-  const auto address = clocks ? 0x24c4U : 0x24b2U;
+  const auto failing_pc = devices.placement.second_call + (clocks ? 921U : 987U);
+  constexpr unsigned int address = 0x24b2;
   std::ostringstream prefix;
   prefix << "SHARC IOP bridge pc=0x" << std::hex << failing_pc << " word-address=0x" << address
          << " operation=write cclk=";
   bool stopped{};
   try {
-    if (clocks) {
-      static_cast<void>(original_application_retire(memory, cpu, fetch, serial, devices));
-    } else {
-      original_application_clock(memory, cpu, serial, devices);
-    }
+    original_application_clock(memory, cpu, serial, devices);
   } catch (const std::runtime_error &error) {
     const std::string message(error.what());
     if (!message.starts_with(prefix.str()) ||
-        message.find(clocks ? "Unmapped SHARC IOP register"
-                            : "PDAP DMA/ping-pong engine not implemented") == std::string::npos) {
+        message.find("PDAP DMA/ping-pong engine not implemented") == std::string::npos) {
       throw;
     }
     stopped = true;
@@ -1666,21 +1694,15 @@ void original_sport_failure(lead_a1::SharcMemory &memory,
           !devices.bridge->ready() && !devices.bridge->waiting());
   const auto &queued = bus.writes[0];
   if (!queued) { throw std::runtime_error("Missing original failed posted write"); }
-  require(bus.write_count == (clocks ? 1U : 3U) && queued->intent.pc == failing_pc &&
+  require(bus.write_count == 3 && queued->intent.pc == failing_pc &&
           queued->intent.address == address && bus.clocks == queued->posted_at + 5);
-  if (clocks) {
-    const auto &request = bus.request;
-    constexpr unsigned int read_offset = 821;
-    constexpr unsigned int read_address = 0x24c5;
-    require(request && request->pc == devices.placement.second_call + read_offset &&
-            request->address == read_address && request->operation == lead_a1::AccessKind::read &&
-            request->delivery_cycles == 8 && bus.read && !bus.read->response);
-  } else {
-    constexpr std::uint32_t ping_pong = 0x10101;
-    constexpr unsigned int next_offset = 1002;
-    require(!bus.request && !bus.read && queued->value == ping_pong &&
-            cpu.state().pc == devices.placement.second_call + next_offset);
-  }
+  constexpr std::uint32_t ping_pong = 0x10101;
+  const auto next_offset = clocks ? 936U : 1002U;
+  require(!bus.request && !bus.read && queued->value == ping_pong &&
+          cpu.state().pc == devices.placement.second_call + next_offset);
+  lead_a1::SharcPcgState pcg_expected;
+  if (clocks) { pcg_expected.registers = original_pcg::configured; }
+  require(devices.pcg != nullptr && devices.pcg->snapshot() == pcg_expected);
   constexpr std::uint32_t configured = 0x4d14;
   constexpr std::uint32_t vector_end = 0x92180;
   require(devices.spi.state().port_control == configured && devices.spi.state().control == 0 &&
@@ -2266,11 +2288,10 @@ void original_pin_boundary(lead_a1::SharcMemory &memory,
   constexpr unsigned int earlier_clock = 128;
   constexpr unsigned int earlier_other = 104;
   const auto instructions = (clocks ? earlier_clock : earlier_other) +
-                            (6 * (pins.size() + data.size())) + (clocks ? 80U : 129U);
+                            (6 * (pins.size() + data.size())) + (clocks ? 127U : 129U);
   std::cout << "  Clocked application:" << instructions
-            << " actual instructions; SPORT initialization; "
-            << (clocks ? "PCG_PW1 write" : "IDP_CTL1 DMA write")
-            << " remains unimplemented; no serial source clock or audio\n";
+            << " actual instructions; SPORT/PCG/PICR initialization; "
+            << "IDP_CTL1 DMA write remains unimplemented; no serial source clock or audio\n";
 }
 
 void original_post_spi_routing(lead_a1::SharcMemory &memory,
@@ -2925,6 +2946,7 @@ struct OriginalRouting {
   lead_a1::SharcDaiTiming frames{power, lead_a1::SharcDaiTimingGroup::frame};
   lead_a1::SharcPdap pdap{power};
   lead_a1::SharcPicr priority;
+  lead_a1::SharcPcg pcg{power};
   lead_a1::SharcDpiRouting dpi_pin{lead_a1::SharcDpiGroup::pin};
   lead_a1::SharcDpiRouting dpi_enable{lead_a1::SharcDpiGroup::enable};
   lead_a1::SharcMemory peripheral;
@@ -3005,6 +3027,8 @@ struct OriginalRouting {
       constexpr std::uint32_t dai_data0 = 0x2440;
       peripheral.map_io({.first_word = dai_data0, .words = 7}, data);
       map_sports(memory, bound);
+      constexpr lead_a1::SharcIoMapping pcg_window{.first_word = 0x24c0, .words = 12};
+      peripheral.map_io(pcg_window, pcg);
       constexpr lead_a1::SharcIoMapping priority_window{.first_word = 0x2200, .words = 4};
       peripheral.map_io(priority_window, priority);
       memory.map_io(priority_window, priority_port.emplace(bound, priority_window));
@@ -3111,6 +3135,7 @@ void sequenced_clock_setup(std::span<const std::byte> stream,
                           .frame_routes = &routing.frames,
                           .pdap = &routing.pdap,
                           .priority = &routing.priority,
+                          .pcg = &routing.pcg,
                           .bridge = bus,
                           .dpi_pin = &routing.dpi_pin,
                           .dpi_enable = &routing.dpi_enable,

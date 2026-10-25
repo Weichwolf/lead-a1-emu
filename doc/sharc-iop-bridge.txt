@@ -196,9 +196,10 @@ The278/302-instruction checkpoints next read SPCTLN0/c1a at+601/+651 and
 now enter the real SPORT pair backends. Native pair maps and bit fields follow HWR.
 Twelve original secondary-control groups,24 DMA groups and subsequent CS/
 SPMCTL/SPCTL setup retain independent PC/width/result/post-value expectations.
-All eight cases reach358/431 instructions, then fail on a real PCG_PW1/24c4
-posted write or IDP_CTL1/24b2 DMA enable after PICR setup (sharc-picr.txt).
-PCG holes are not mapped to the IDP control backend; PICR uses the same posted bridge and actual source mux.
+All eight cases reach405/431 instructions, then fail on real IDP_CTL1/24b2
+DMA enable after actual PCG/PICR setup (sharc-pcg.txt,sharc-picr.txt).
+PCG has its own native24c0..cb owner, separate from IDP control holes. PICR
+uses the same posted bridge and actual source mux.
 All earlier checkpoints and final-cell/vector oracles remain. No source SCLK
 is supplied, so raw SPORT setup does not activate wire/DMA modes or audio.
 See sharc-sport.txt for the exact reference and remaining gaps.
