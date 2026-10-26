@@ -1344,9 +1344,61 @@ lead_a1::ArmState uploader_wait(Fixture &fixture, lead_a1::Arm &cpu, std::uint32
   throw std::runtime_error("Original uploader accepted unknown readiness input");
 }
 
+void uploader_flag_handshake(
+    Fixture &fixture, lead_a1::Arm &arm, lead_a1::Sharc &dsp, std::uint32_t poll, bool paired) {
+  // Explicit software-entry peer: its reset-input FLAG directions are observed,
+  // but it executes no instruction and receives no fabricated boot frame.
+  lead_a1::SharcMemory idle_memory;
+  lead_a1::Sharc idle(idle_memory, lead_a1::Sharc::reset_reference_214xx(dsp_reset));
+  auto idle_expected = idle.state();
+  const std::array dsps{&dsp, &idle};
+  const auto participants = std::span(dsps).first(paired ? 2U : 1U);
+  std::vector<lead_a1::ProcessorWire> wires{{.bank = 3, .pin = 2, .dsp = 0, .flag = 0},
+                                            {.bank = 3, .pin = 3, .dsp = 0, .flag = 1}};
+  if (paired) {
+    wires.push_back({.bank = 3, .pin = 0, .dsp = 1, .flag = 0});
+    wires.push_back({.bank = 3, .pin = 1, .dsp = 1, .flag = 1});
+  }
+  constexpr std::uint16_t paired_unconnected = 0xfff0;
+  fixture.gpio.device.sample(3, {.known = paired ? paired_unconnected : uploader_unconnected});
+  if (paired) {
+    lead_a1::ProcessorLinks unknown(fixture.gpio.device, participants, wires);
+    unknown.sample();
+    constexpr std::uint16_t missing_peer = 0xfffd;
+    require(fixture.gpio.device.state().banks[3].input ==
+                (lead_a1::GpioSample{.value = 8, .known = missing_peer}) &&
+            idle.state().flag_inputs == (lead_a1::SharcKnown32{.known = 1}));
+    static_cast<void>(uploader_wait(fixture, arm, poll)); // Same real LDRH still rejects bit1.
+    // Explicit owned weak reference inputs, not measured Nord resistors.
+    wires[1].pull = false;
+    wires[3].pull = false;
+  }
+  lead_a1::ProcessorLinks links(fixture.gpio.device, participants, wires);
+  links.sample();
+  require(dsp.state().flag_inputs == (lead_a1::SharcKnown32{.value = 2, .known = 3}) &&
+          fixture.gpio.device.state().banks[3].input ==
+              (lead_a1::GpioSample{.value = 8, .known = all_gpio_bits}));
+  if (paired) {
+    idle_expected.flag_inputs = {.known = 3};
+    require(idle.state() == idle_expected &&
+            links.snapshot().levels[1] == (lead_a1::ProcessorWireLevel{.high = 2, .level = true}) &&
+            links.snapshot().levels[3] == (lead_a1::ProcessorWireLevel{.level = false}));
+  }
+  for (unsigned int instruction = 0; instruction < 3; ++instruction) {
+    require(!arm.step().exception);
+    fixture.progress();
+    links.sample();
+  }
+  constexpr std::uint32_t zero_flag = 0x40000000;
+  require(arm.state().registers[15] == poll + 12 && arm.state().registers[1] == 8 &&
+          (arm.state().cpsr & zero_flag) == 0 && dsp.state().pc == dsp_ready_return);
+  if (paired) { require(idle.state() == idle_expected); }
+}
+
 void original_uploader_handshake(std::span<const std::byte> image,
                                  const std::filesystem::path &spec,
-                                 unsigned int part) {
+                                 unsigned int part,
+                                 bool paired = false) {
   constexpr std::array<std::uint32_t, 2> entries{0xc01348b8, 0xc00051cc};
   constexpr std::array<std::uint32_t, 2> polls{0xc0134948, 0xc000525c};
   Fixture fixture(image, placements[part]);
@@ -1394,29 +1446,11 @@ void original_uploader_handshake(std::span<const std::byte> image,
   kernel_clock_setup(fixture, dsp);
   flag_setup(fixture, dsp);
   clear_ram(fixture, dsp);
-  // Explicit software-handshake candidate, not a measured Nord pinout or clock.
-  const std::array dsps{&dsp};
-  lead_a1::ProcessorLinks links(
-      fixture.gpio.device,
-      dsps,
-      std::vector<lead_a1::ProcessorWire>{{.bank = 3, .pin = 2, .dsp = 0, .flag = 0},
-                                          {.bank = 3, .pin = 3, .dsp = 0, .flag = 1}});
-  // Unconnected pads have explicit owned test inputs; the two wires supply their own levels.
-  fixture.gpio.device.sample(3, {.known = uploader_unconnected});
-  links.sample();
-  require(dsp.state().flag_inputs == (lead_a1::SharcKnown32{.value = 2, .known = 3}) &&
-          fixture.gpio.device.state().banks[3].input ==
-              (lead_a1::GpioSample{.value = 8, .known = all_gpio_bits}));
-  for (unsigned int instruction = 0; instruction < 3; ++instruction) {
-    require(!arm.step().exception);
-    fixture.progress();
-    links.sample();
-  }
-  require(arm.state().registers[15] == polls[part] + 12 && arm.state().registers[1] == 8 &&
-          (arm.state().cpsr & 0x40000000) == 0 && dsp.state().pc == dsp_ready_return);
+  uploader_flag_handshake(fixture, arm, dsp, polls[part], paired);
   uploader_kernel_words(fixture, part);
   std::cout
-      << "Part " << part << ": original uploader initialized bank3, sent all768 kernel halfwords, "
+      << "Part " << part << (paired ? " paired reference pulls" : " legacy single peer")
+      << ": original uploader initialized bank3, sent all768 kernel halfwords, "
       << "then original DSP171758-instruction readiness reached actual MCU LDRH/TST/backedge; "
          "candidate logical wires, no full uploader or physical timing claim\n";
 }
@@ -1507,7 +1541,14 @@ void reset_kernel_transfer(std::span<const std::byte> image,
                "shared peer unchanged, no DSP activation/return-frame claim\n";
 }
 
-enum class SpiCheckMode : std::uint8_t { all, controllers, kernel, uploader, reset_kernel };
+enum class SpiCheckMode : std::uint8_t {
+  all,
+  controllers,
+  kernel,
+  uploader,
+  uploader_pulls,
+  reset_kernel
+};
 
 struct SpiCheck {
   SpiCheckMode mode{SpiCheckMode::all};
@@ -1528,8 +1569,11 @@ SpiCheck check_mode(int argc, char **argv) {
   if (argc == 5 && std::string_view(argv[3]) == "--controllers") {
     return {.mode = SpiCheckMode::controllers, .selected = {.part = check_index(argv[4])}};
   }
-  if (argc == 5 && std::string_view(argv[3]) == "--uploader") {
-    return {.mode = SpiCheckMode::uploader, .selected = {.part = check_index(argv[4])}};
+  if (argc == 5 && (std::string_view(argv[3]) == "--uploader" ||
+                    std::string_view(argv[3]) == "--uploader-pulls")) {
+    return {.mode = std::string_view(argv[3]) == "--uploader" ? SpiCheckMode::uploader
+                                                              : SpiCheckMode::uploader_pulls,
+            .selected = {.part = check_index(argv[4])}};
   }
   if (argc == 6 &&
       (std::string_view(argv[3]) == "--kernel" || std::string_view(argv[3]) == "--reset-kernel")) {
@@ -1539,7 +1583,7 @@ SpiCheck check_mode(int argc, char **argv) {
   }
   throw std::runtime_error("Usage: original-spi-test spec images "
                            "[--controllers part | --kernel part channel | --uploader part | "
-                           "--reset-kernel part channel]");
+                           "--uploader-pulls part | --reset-kernel part channel]");
 }
 
 void check_part(const SpiCheck &check,
@@ -1551,9 +1595,11 @@ void check_part(const SpiCheck &check,
     reset_kernel_transfer(image, spec, check.selected);
     return;
   }
-  if (check.mode == SpiCheckMode::uploader || check.mode == SpiCheckMode::all) {
-    original_uploader_handshake(image, spec, part);
-    if (check.mode == SpiCheckMode::uploader) { return; }
+  if (check.mode == SpiCheckMode::uploader || check.mode == SpiCheckMode::uploader_pulls ||
+      check.mode == SpiCheckMode::all) {
+    original_uploader_handshake(image, spec, part, check.mode == SpiCheckMode::uploader_pulls);
+    if (check.mode != SpiCheckMode::all) { return; }
+    original_uploader_handshake(image, spec, part, true);
   }
   if (check.mode != SpiCheckMode::kernel) {
     Fixture fixture(image, placement);

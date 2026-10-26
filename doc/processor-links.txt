@@ -8,12 +8,17 @@ thread. Physical routing and timing remain unqualified.
 
 Each point-to-point wire resolves committed GPIO output-enable/latch state,
 effective SHARC FLAG direction/latch state and an explicit external driver.
-HIGH/LOW require an actual unopposed known drive. Floating, unresolved and
-conflicting drives produce unknown samples, never guessed LOW or stale HIGH.
-External drivers have equal logical strength; they do not model weak pull resistors.
+An unopposed known real drive determines the level. Unresolved or conflicting
+real drives stay unknown. Only when all real drivers are HiZ can the explicit
+ProcessorWire.pull supply a weak HIGH/LOW; its default is absent. No missing
+physical input is guessed. external() drivers have equal strong logical
+strength and remain distinct from this weak topology input.
 Per-driver HIGH/LOW/unresolved masks remain available in the last sampled
-resolution. Every endpoint must be unique; unsupported fanout/multiple-net
-configurations reject instead of silently dropping a connection.
+resolution; a weak level sets none of those strong-driver masks. Topology
+snapshots retain the optional pull and validate sampled resolutions against it.
+Unsampled snapshots retain absent levels until sample(). Every endpoint must be
+unique; unsupported fanout/multiple-net configurations reject instead of silently
+dropping a connection.
 
 sample() checks every device's instruction ownership and validates every
 proposed sample before changing any input, edge status or published resolution.
@@ -31,9 +36,11 @@ Gpio::check_sample and Sharc::check_flag_inputs expose the same side-effect-free
 validation used by their ordinary sample methods; no alternative write path
 bypasses the guards.
 
-Owned tests enumerate the 48 GPIO/DSP/external drive combinations against an
-independent resolution table. They retain known-low versus unknown, conflicting
-drivers, unconnected samples, multiple participants, malformed snapshots and
+Owned tests enumerate all 48 GPIO/DSP/external drive combinations with absent,
+LOW and HIGH pulls: 144 cases against an independent resolution table. Actual
+FLAG direction/SET/CLR instructions additionally check HiZ -> unresolved output
+-> HIGH -> LOW -> HiZ, including effect latency and restored weak/strong states.
+They retain known-low versus unknown, conflicting drivers, unconnected samples, multiple participants, malformed snapshots and
 foreign-instruction rollback. Independent restores retain pending IRQ bits;
 after actual W1C acknowledgement, unchanged HIGH samples do not relatch them.
 An assembled owned ARM program preloads a GPIO
@@ -65,6 +72,22 @@ cadence, DMA grants and the MISO pull remain explicit fixture inputs. The
 shared SPI bus needed for multiple receivers is qualified separately in
 spi-sharc-bus.txt; it does not itself advance this first-handshake reference.
 
+Paired-input reference (original_arm_spi_uploader_pulls_0/1)
+The same actual first kernel and readiness prefix also run with a second,
+unexecuted core-input reference attached to bank3 pins0/1. Its FLAG directions
+are inputs; no initial boot transition/frame or second kernel execution is
+supplied. Its software-entry PC is bookkeeping, not a qualified reset PC. Only
+unconnected pads4..15 have explicit owned samples (maskfff0). Both actual
+release and readiness wires are resolved from their drivers.
+
+Without a pull, the other readiness pad remains unknown (maskfffd) and the
+original MCU LDRH still rejects, preserving all state. Explicit owned LOW pulls
+on readiness wires then supply only the idle HiZ level. The running kernel's
+actual HIGH overrides its LOW pull; strong-driver masks identify that source.
+The same original LDRH/TST/BEQ reaches the first remainder-send setup. The idle
+core changes only its observed inputs. These optional reference pulls are not
+measured Nord resistors and do not qualify hardware startup or the full uploader.
+
 Static continuation contract (not executed by these uploader cases)
 Independent PC-relative literal decoding of both hash-checked CODE sections
 agrees with reference/sharc-source-equivalence.json. Counts are 32-bit words;
@@ -83,8 +106,9 @@ c01349d8/c00052ec. Only then do actual SET halfword stores release mask 4
 followed by mask 1 at c01349f0/4 and c0005304/8. These instruction/operand facts
 constrain future coupled execution; no current test claims those later phases.
 
-Only this fixture supplies explicit known-low inputs on unconnected bank 3 pads
-(mask fff3). The production link supplies none. ARM currently requires every
+The legacy single-peer fixture supplies explicit known-low inputs on unconnected
+bank3 pads (mask fff3); the paired reference removes its four wire endpoints
+from that mask (fff0). The production link supplies none. ARM currently requires every
 requested GPIO-read bit to be known, even if later code masks it; the fixture
 does not establish Nord pull levels or partial-bit ARM propagation. ARM is held
 at its diagnosed missing-input boundary while the kernel runs. Sampling begins
@@ -93,4 +117,4 @@ uploader execution, completed streams, FLAG-clear/release, physical timing,
 cold boot, synth/audio or acceptance under objective.txt.
 
   cmake --build --preset strict
-  ctest --preset strict -R '^(processor_gpio_sharc_links|gpio_mmio_cpu|sharc_flags|original_arm_spi_uploader_[01])$' --output-on-failure
+  ctest --preset strict -R '^(processor_gpio_sharc_links|gpio_mmio_cpu|sharc_flags|original_arm_spi_uploader(_pulls)?_[01])$' --output-on-failure

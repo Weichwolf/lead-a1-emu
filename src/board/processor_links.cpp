@@ -34,18 +34,22 @@ void validate_drive(WireDrive drive) {
   }
 }
 
-std::optional<bool> resolved(const ProcessorWireLevel &wire) {
+std::optional<bool> resolved(const ProcessorWireLevel &wire, std::optional<bool> pull) {
   if (wire.unresolved != 0 || (wire.high != 0 && wire.low != 0)) { return {}; }
   if (wire.high != 0) { return true; }
   if (wire.low != 0) { return false; }
-  return {};
+  return pull;
 }
 
-void validate_level(const ProcessorWireLevel &wire) {
+void validate_level(const ProcessorWireLevel &wire, ProcessorWire topology, bool sampled) {
   const auto used = wire.high | wire.low | wire.unresolved;
+  const auto pull = sampled ? topology.pull : std::nullopt;
   if ((used & ~all_drivers) != 0 || (wire.high & wire.low) != 0 ||
-      ((wire.high | wire.low) & wire.unresolved) != 0 || wire.level != resolved(wire)) {
+      ((wire.high | wire.low) & wire.unresolved) != 0 || wire.level != resolved(wire, pull)) {
     throw std::invalid_argument("Invalid processor wire resolution snapshot");
+  }
+  if (!sampled && wire != ProcessorWireLevel{}) {
+    throw std::invalid_argument("Unsampled processor link has published levels");
   }
 }
 
@@ -74,7 +78,7 @@ resolve(GpioDrive gpio, SharcFlagDrive dsp, ProcessorWire wire, WireDrive drive)
   if (drive == WireDrive::high) { result.high |= external_driver; }
   if (drive == WireDrive::low) { result.low |= external_driver; }
   if (drive == WireDrive::unresolved) { result.unresolved |= external_driver; }
-  result.level = resolved(result);
+  result.level = resolved(result, wire.pull);
   return result;
 }
 
@@ -139,10 +143,7 @@ void ProcessorLinks::validate() const {
       throw std::invalid_argument("Invalid processor link endpoint");
     }
     validate_drive(state_.external[index]);
-    validate_level(state_.levels[index]);
-    if (!state_.sampled && state_.levels[index] != ProcessorWireLevel{}) {
-      throw std::invalid_argument("Unsampled processor link has published levels");
-    }
+    validate_level(state_.levels[index], wire, state_.sampled);
     for (std::size_t previous = 0; previous < index; ++previous) {
       const auto other = state_.wires[previous];
       if ((wire.bank == other.bank && wire.pin == other.pin) ||

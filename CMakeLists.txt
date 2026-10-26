@@ -647,6 +647,7 @@ if(BUILD_TESTING)
   foreach(part RANGE 0 1)
     lead_a1_add_original_check("original_arm_spi_controls_${part}" "spi-controls-${part}")
     lead_a1_add_original_check("original_arm_spi_uploader_${part}" "spi-uploader-${part}")
+    lead_a1_add_original_check("original_arm_spi_uploader_pulls_${part}" "spi-uploader-pulls-${part}")
     foreach(channel RANGE 0 1)
       lead_a1_add_original_check("original_arm_spi_reset_kernel_${part}_${channel}"
         "spi-reset-kernel-${part}-${channel}")

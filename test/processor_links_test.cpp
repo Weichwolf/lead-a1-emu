@@ -91,7 +91,10 @@ std::optional<bool> level(Drive drive) {
   return {};
 }
 
-void check_resolution(unsigned int gpio_mode, unsigned int dsp_mode, unsigned int external) {
+void check_resolution(unsigned int gpio_mode,
+                      unsigned int dsp_mode,
+                      unsigned int external,
+                      std::optional<bool> pull) {
   constexpr std::array<Drive, 4> types{Drive::floating, Drive::low, Drive::high, Drive::unresolved};
   constexpr std::array<std::array<Drive, 4>, 4> pair{
       {{Drive::floating, Drive::low, Drive::high, Drive::unresolved},
@@ -112,13 +115,19 @@ void check_resolution(unsigned int gpio_mode, unsigned int dsp_mode, unsigned in
   lead_a1::ProcessorLinks links(
       gpio,
       dsps,
-      std::vector<lead_a1::ProcessorWire>{{.bank = bank, .pin = pin, .dsp = 0, .flag = flag}});
+      std::vector<lead_a1::ProcessorWire>{
+          {.bank = bank, .pin = pin, .dsp = 0, .flag = flag, .pull = pull}});
   links.external(0, types[external]);
   const auto before = gpio.state();
   links.sample();
-  const auto expected = level(pair[static_cast<unsigned int>(pair[gpio_mode][dsp_mode])][external]);
+  const auto strong = pair[static_cast<unsigned int>(pair[gpio_mode][dsp_mode])][external];
+  const auto expected = strong == Drive::floating ? pull : level(strong);
   const auto saved = links.snapshot();
-  require(saved.sampled && saved.levels[0].level == expected);
+  require(saved.sampled && saved.wires[0].pull == pull && saved.levels[0].level == expected);
+  if (strong == Drive::floating) {
+    require(saved.levels[0].high == 0 && saved.levels[0].low == 0 &&
+            saved.levels[0].unresolved == 0);
+  }
   const auto sample = gpio.state().banks[bank].input;
   require((sample.known & pin_bit) == (expected ? pin_bit : 0) &&
           (sample.value & pin_bit) == (expected.value_or(false) ? pin_bit : 0));
@@ -131,12 +140,91 @@ void check_resolution(unsigned int gpio_mode, unsigned int dsp_mode, unsigned in
 }
 
 void resolution_truth_table() {
+  constexpr std::array<std::optional<bool>, 3> pulls{std::nullopt, false, true};
   for (unsigned int gpio_mode = 0; gpio_mode < 3; ++gpio_mode) {
     for (unsigned int dsp_mode = 0; dsp_mode < 4; ++dsp_mode) {
       for (unsigned int external = 0; external < 4; ++external) {
-        check_resolution(gpio_mode, dsp_mode, external);
+        for (const auto pull : pulls) { check_resolution(gpio_mode, dsp_mode, external, pull); }
       }
     }
+  }
+}
+
+void actual_flag_drive_and_weak_pull() {
+  constexpr std::uint64_t input_flag1 = 0x142500000008;
+  for (const bool pull : {false, true}) {
+    lead_a1::Gpio gpio(lead_a1::Gpio::reset_reference(pins));
+    lead_a1::SharcMemory memory;
+    program(memory);
+    memory.write({.address = native + 7, .width = lead_a1::SharcWidth::wide48}, input_flag1);
+    memory.write({.address = native + 8, .width = lead_a1::SharcWidth::wide48}, 0);
+    auto state = signal(Drive::floating, 1);
+    state.pc = native + 1;
+    lead_a1::Sharc dsp(memory, state);
+    const std::array dsps{&dsp};
+    lead_a1::ProcessorLinks links(gpio,
+                                  dsps,
+                                  std::vector<lead_a1::ProcessorWire>{
+                                      {.bank = 0, .pin = 1, .dsp = 0, .flag = 1, .pull = pull}});
+    links.sample();
+    require(links.snapshot().levels[0] == (lead_a1::ProcessorWireLevel{.level = pull}));
+    const std::array<lead_a1::ProcessorWireLevel, 4> expected{
+        {{.unresolved = 2, .level = std::nullopt},
+         {.high = 2, .level = true},
+         {.low = 2, .level = false},
+         {.level = pull}}};
+    for (const auto &level : expected) {
+      for (unsigned int instruction = 0; instruction < 2; ++instruction) {
+        static_cast<void>(dsp.step());
+      }
+      links.sample();
+      require(links.snapshot().levels[0] == level && links.snapshot().wires[0].pull == pull);
+      const auto sample = gpio.state().banks[0].input;
+      require(sample.known == (level.level ? 2U : 0U) &&
+              sample.value == (level.level.value_or(false) ? 2U : 0U) &&
+              dsp.state().flag_inputs.known == sample.known &&
+              dsp.state().flag_inputs.value == sample.value);
+    }
+    require(dsp.state().pc == native + 9);
+  }
+}
+
+void weak_pull_snapshot_and_strong_external() {
+  lead_a1::Gpio gpio(lead_a1::Gpio::reset_reference(pins));
+  lead_a1::SharcMemory memory;
+  lead_a1::Sharc dsp(memory, signal(Drive::floating, 1));
+  const std::array dsps{&dsp};
+  lead_a1::ProcessorLinks links(gpio,
+                                dsps,
+                                std::vector<lead_a1::ProcessorWire>{
+                                    {.bank = 0, .pin = 1, .dsp = 0, .flag = 1, .pull = true}});
+  links.sample();
+  require(links.snapshot().levels[0] == (lead_a1::ProcessorWireLevel{.level = true}));
+  auto bad = links.snapshot();
+  bad.wires[0].pull = false;
+  rejected([&] { const lead_a1::ProcessorLinks invalid(gpio, dsps, bad); }, "resolution snapshot");
+  bad = links.snapshot();
+  bad.sampled = false;
+  rejected([&] { const lead_a1::ProcessorLinks invalid(gpio, dsps, bad); }, "resolution snapshot");
+  lead_a1::Gpio separate_gpio(gpio.state());
+  lead_a1::SharcMemory separate_memory;
+  lead_a1::Sharc separate_dsp(separate_memory, dsp.state());
+  const std::array separate_dsps{&separate_dsp};
+  lead_a1::ProcessorLinks restored(separate_gpio, separate_dsps, links.snapshot());
+  constexpr std::array drivers{Drive::low, Drive::high, Drive::floating};
+  constexpr std::array<lead_a1::ProcessorWireLevel, 3> expected{
+      {{.low = 4, .level = false}, {.high = 4, .level = true}, {.level = true}}};
+  for (unsigned int index = 0; index < drivers.size(); ++index) {
+    links.external(0, drivers[index]);
+    restored.external(0, drivers[index]);
+    links.sample();
+    restored.sample();
+    require(links.snapshot().levels[0] == expected[index] &&
+            gpio.state().banks[0].input ==
+                (lead_a1::GpioSample{.value = static_cast<std::uint16_t>(index == 0 ? 0 : 2),
+                                     .known = 2}) &&
+            gpio.state() == separate_gpio.state() && dsp.state() == separate_dsp.state() &&
+            links.snapshot() == restored.snapshot());
   }
 }
 
@@ -198,7 +286,7 @@ void atomic_multi_processor_samples(bool acknowledge) {
   }
 }
 
-void late_sample_failure_and_guest_repair() {
+void late_sample_failure_and_guest_repair(bool weak) {
   auto initial = lead_a1::Gpio::reset_reference(pins);
   initial.banks[0].input = {.known = all_pins};
   initial.banks[1].input = {.known = all_pins};
@@ -213,11 +301,15 @@ void late_sample_failure_and_guest_repair() {
   lead_a1::Sharc first(first_memory, signal(Drive::high, 1));
   lead_a1::Sharc second(second_memory, signal(Drive::unresolved, 1));
   const std::array dsps{&first, &second};
-  lead_a1::ProcessorLinks links(
-      gpio,
-      dsps,
-      std::vector<lead_a1::ProcessorWire>{{.bank = 0, .pin = 1, .dsp = 0, .flag = 1},
-                                          {.bank = 1, .pin = 5, .dsp = 1, .flag = 1}});
+  lead_a1::ProcessorLinks links(gpio,
+                                dsps,
+                                std::vector<lead_a1::ProcessorWire>{
+                                    {.bank = 0, .pin = 1, .dsp = 0, .flag = 1},
+                                    {.bank = 1,
+                                     .pin = 5,
+                                     .dsp = 1,
+                                     .flag = 1,
+                                     .pull = weak ? std::optional<bool>{false} : std::nullopt}});
   const auto links_before = links.snapshot();
   const auto first_before = first.state();
   for (unsigned int attempt = 0; attempt < 2; ++attempt) {
@@ -346,9 +438,12 @@ void actual_arm_and_sharc_handshake(const std::filesystem::path &spec,
 int main(int argc, char **argv) try {
   if (argc != 3) { throw std::runtime_error("processor-links-test sleigh-spec owned-arm-program"); }
   resolution_truth_table();
+  actual_flag_drive_and_weak_pull();
+  weak_pull_snapshot_and_strong_external();
   atomic_multi_processor_samples(false);
   atomic_multi_processor_samples(true);
-  late_sample_failure_and_guest_repair();
+  late_sample_failure_and_guest_repair(false);
+  late_sample_failure_and_guest_repair(true);
   malformed_topology_and_snapshots();
   actual_arm_and_sharc_handshake(argv[1], read(argv[2]));
   std::cout

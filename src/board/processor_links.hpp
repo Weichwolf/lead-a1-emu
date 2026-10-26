@@ -18,6 +18,8 @@ struct ProcessorWire {
   unsigned int pin{};
   unsigned int dsp{};
   unsigned int flag{};
+  // Explicit weak level, used only when every real driver is HiZ.
+  std::optional<bool> pull{std::nullopt};
   bool operator==(const ProcessorWire &) const = default;
 };
 

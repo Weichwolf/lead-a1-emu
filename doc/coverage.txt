@@ -60,9 +60,13 @@ ID  State    Evidence / remaining work
              bank requests and byte/halfword/word register lanes have independent
              bus/ARM tests (gpio.txt). Physical wiring and timing remain open.
              A separate board component resolves caller-supplied GPIO/SHARC FLAG
-             wires from actual output drivers. Floating/conflicting/unresolved
-             nets stay unknown; all proposed input/edge changes validate before
-             atomic publication. No Nord pinout, unconnected-pad default or
+             wires from actual output drivers. An explicit optional per-wire
+             weak pull applies only when all real drivers are HiZ. Without that
+             input, floating nets remain unknown; unresolved/conflicting real
+             drives remain unknown with any pull. Snapshot topology retains the
+             pull and validates sampled levels without assigning it a strong
+             driver bit. All proposed input/edge changes validate before atomic
+             publication. No Nord pinout, unconnected-pad default or
              propagation clock is supplied (processor-links.txt).
              A separate SPI/SHARC connection now samples committed GPIO select,
              SCLK and MOSI into the real bootstrap/runtime receivers. Actual
@@ -640,6 +644,15 @@ ID  State    Evidence / remaining work
              proves neither continuous scheduling, physical pins/pulls nor the
              remainder upload, second DSP, final release or cold boot
              (processor-links.txt).
+             Two separate paired-input references connect the other, unexecuted
+             core's reset-input FLAG directions to bank3 pins0/1. Unconnected
+             samples cover only pads4..15. Without a pull the actual LDRH still
+             rejects the other unknown readiness bit (maskfffd). Explicit owned
+             LOW reference pulls then resolve only HiZ; the running kernel's real
+             HIGH overrides its pull and the same LDRH/TST/BEQ leaves the first
+             wait. The idle core changes only sampled inputs. Physical Nord pulls,
+             second kernel/boot activation and continuous uploader stay open
+             (processor-links.txt).
              Four additional original MCU first-kernel cases use the same
              programmable SPI port from its explicit initial slave-boot profile.
              Every transmitted halfword, all 384 per-word IOD0 writes and all 256
@@ -764,13 +777,19 @@ ID  State    Evidence / remaining work
              native LZO/SLEIGH/zlib instrumentation/object hooks and hardening
              checked. Complete CPU/boot/MIDI/audio/update, fuzz harnesses and
              performance remain pending.
-             Processor-link checks independently enumerate48 drive combinations,
+             Processor-link checks independently enumerate144 drive/pull cases,
              retain unrelated samples and check contention/unknown clearing,
              active-transaction and late edge-sample rollback, independent
              restores and actual owned ARM/SHARC readiness/release instructions.
              Two separately registered original uploader references additionally
              check the real first-kernel transfer and first readiness branch;
-             they retain the limitations above (processor-links.txt).
+             they retain the limitations above. Two additional paired-input
+             original cases check the unexecuted peer, missing full GPIO read,
+             explicit weak reference input and actual strong readiness output.
+             Real FLAG direction/SET/CLR/HiZ transitions, weak/strong independent
+             restores, changed pull/resolution snapshots and late unknown-source
+             edge failure retain literal data/knowledge/rollback expectations
+             (processor-links.txt).
              SPI/SHARC connection checks compare all 384 owned bootstrap words,
              failed last-bit memory delivery and same-boundary retry, foreign
              transactions, floating sources, active-HIGH select and malformed
