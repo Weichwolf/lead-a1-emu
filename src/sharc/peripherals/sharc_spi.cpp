@@ -170,7 +170,7 @@ void SharcSpi::check_external_event(const SharcMemory &memory) const {
   }
 }
 
-void SharcSpi::observe(SharcMemory &memory, SharcBootLines lines) try {
+SharcSpiState SharcSpi::observed(const SharcMemory &memory, SharcBootLines lines) const try {
   check_external_event(memory);
   auto next = current_;
   if (!lines.selected) {
@@ -194,7 +194,7 @@ void SharcSpi::observe(SharcMemory &memory, SharcBootLines lines) try {
       transmit_bit(next);
     }
   }
-  current_ = next;
+  return next;
 } catch (const std::exception &error) {
 
   std::ostringstream message;
@@ -202,6 +202,14 @@ void SharcSpi::observe(SharcMemory &memory, SharcBootLines lines) try {
           << current_.serial.next_word << std::dec << " bit=" << current_.serial.bits << ": "
           << error.what();
   throw std::runtime_error(message.str());
+}
+
+void SharcSpi::check_observe(const SharcMemory &memory, SharcBootLines lines) const {
+  static_cast<void>(observed(memory, lines));
+}
+
+void SharcSpi::observe(SharcMemory &memory, SharcBootLines lines) {
+  current_ = observed(memory, lines);
 }
 
 unsigned int SharcSpi::dma_request() const {

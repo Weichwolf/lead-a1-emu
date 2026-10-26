@@ -4,6 +4,7 @@
 #include "arm/peripherals/gpio.hpp"
 #include "arm/peripherals/spi.hpp"
 #include "board/processor_links.hpp"
+#include "board/spi_sharc_bus.hpp"
 #include "board/spi_sharc_link.hpp"
 #include "common/memory.hpp"
 #include "sharc/core/sharc.hpp"
@@ -197,6 +198,9 @@ struct Fixture {
   unsigned int dsp_channel{};
   lead_a1::Sharc *cooperative_dsp{};
   std::optional<lead_a1::SpiSharcLink> serial_link;
+  lead_a1::SharcMemory other_memory;
+  std::optional<lead_a1::SharcSpi> other_receiver;
+  std::optional<lead_a1::SpiSharcBus> shared_bus;
 
   Fixture(std::span<const std::byte> image, Placement placement) : reference_image(image) {
     constexpr std::uint32_t bin_bytes = 1040;
@@ -248,6 +252,22 @@ struct Fixture {
     return *serial_link;
   }
 
+  void connect_peer() {
+    if (!runtime || shared_bus || other_receiver || dsp_channel > 1) {
+      throw std::logic_error("Invalid shared original SPI receiver setup");
+    }
+    other_receiver.emplace(lead_a1::SharcSpiSlaveBootReference{});
+    const auto primary = connection().wiring();
+    auto secondary = primary;
+    secondary.select_pin = 11 + (1 - dsp_channel);
+    const std::array endpoints{
+        lead_a1::SpiSharcEndpoint{
+            .receiver = &runtime->device, .memory = &dsp_memory, .wiring = primary},
+        lead_a1::SpiSharcEndpoint{
+            .receiver = &*other_receiver, .memory = &other_memory, .wiring = secondary}};
+    shared_bus.emplace(spi0.device, gpio.device, endpoints);
+  }
+
   void service_serial_dma() {
     if (!runtime) { throw std::logic_error("Missing SPI DMA owner"); }
     auto &engine = runtime->device;
@@ -267,6 +287,7 @@ struct Fixture {
   }
 
   lead_a1::SpiInput serial_input() {
+    if (shared_bus) { return shared_bus->input(true); }
     auto &wires = connection();
     if (runtime) { return wires.input(runtime->device, true); }
     if (dsp) { return wires.input(*dsp, true); }
@@ -281,7 +302,11 @@ struct Fixture {
     constexpr std::uint16_t data_pin = 0x400;
     require((serial.enabled & (clock_pin | data_pin)) == (clock_pin | data_pin));
     if (runtime) {
-      wires.observe(runtime->device);
+      if (shared_bus) {
+        shared_bus->observe();
+      } else {
+        wires.observe(runtime->device);
+      }
       // Explicit functional owner grant between ARM instructions/serial edges.
       // Cooperative stepping below is an explicit functional reference,
       // not physical IOP bus timing or a measured processor-clock ratio.
@@ -1430,6 +1455,7 @@ void reset_kernel_transfer(std::span<const std::byte> image,
                                                       .clock_pin = 9,
                                                       .mosi_pin = 10,
                                                       .active_low = true});
+  fixture.connect_peer();
   auto &port = fixture.runtime->device;
   require(fixture.dsp_memory.read({.address = count_register}) == kernel_words &&
           port.state().serial.next_word == kernel_destination && !port.interrupt_request());
@@ -1469,10 +1495,16 @@ void reset_kernel_transfer(std::span<const std::byte> image,
           fixture.cooperative_dsp == nullptr);
   require(fixture.dsp_memory.read({.address = count_register}) == 0 &&
           fixture.dsp_memory.read({.address = control_register}) == 7 && port.interrupt_request());
+  if (!fixture.other_receiver) { throw std::logic_error("Missing original shared SPI peer"); }
+  const auto &peer = fixture.other_receiver->state();
+  require(peer.serial.remaining == kernel_words && peer.serial.next_word == kernel_destination &&
+          !peer.serial.selected && peer.serial.clock == true && peer.serial.bits == 0 &&
+          peer.serial.shift == 0 && peer.occupied == 0 && !peer.receive && !peer.overflow &&
+          !peer.interrupt_pending && !fixture.other_receiver->dma_word_request());
   std::cout << "Part " << part << " transport " << channel
             << ": one SPI slave-boot port received all768 original MCU halfwords, "
                "committed384 actual IOD0 words and retained initial completion IRQ; "
-               "no DSP activation/return-frame claim\n";
+               "shared peer unchanged, no DSP activation/return-frame claim\n";
 }
 
 enum class SpiCheckMode : std::uint8_t { all, controllers, kernel, uploader, reset_kernel };

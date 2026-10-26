@@ -55,7 +55,8 @@ SharcBootLines SpiSharcLink::lines() const {
   const auto select = std::uint32_t{1} << wiring_.select_pin;
   const auto driver = gpio_.drives()[wiring_.bank];
   const auto serial = master_.pins();
-  const auto clock = output(serial, wiring_.clock_pin);
+  const auto driven_clock = output(serial, wiring_.clock_pin);
+  const auto clock = driven_clock ? driven_clock : wiring_.clock_pull;
   if ((driver.enabled & select) == 0 || !clock) {
     std::ostringstream message;
     message << "Undriven SPI/SHARC " << ((driver.enabled & select) == 0 ? "select" : "clock")
@@ -75,6 +76,10 @@ void SpiSharcLink::observe(SharcSpiBoot &boot) const {
 
 void SpiSharcLink::observe(SharcSpi &runtime) const {
   runtime.observe(memory_, lines());
+}
+
+void SpiSharcLink::check_observe(const SharcSpi &runtime) const {
+  runtime.check_observe(memory_, lines());
 }
 
 SpiInput SpiSharcLink::input(const SharcSpiBoot &boot, std::optional<bool> miso_pull) const {

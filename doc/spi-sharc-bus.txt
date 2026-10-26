@@ -1,0 +1,57 @@
+Shared SPI master / programmable SHARC receivers
+
+SpiSharcBus composes the production SpiSharcLink for an explicit nonempty set
+of programmable receivers. Every endpoint names its receiver, memory and GPIO
+select wiring/polarity. SCLK and MOSI are shared master pins; MISO is the shared
+return. Missing endpoints, duplicate receivers and inconsistent shared pins
+reject at construction. Shared clock pulls must agree; an actual clock drive
+wins, otherwise only that explicit weak pull supplies a level. Missing clock
+and missing pull diagnose. Tied select pads may explicitly select multiple receivers.
+No Nord processor count, package assignment, pinout, reset state or clock is
+inferred. Devices outlive the bus on one owning emulation thread.
+
+observe() validates every serial transition before publishing any. The receiver's
+check_observe() uses exactly the same proposed-state computation as observe(),
+without changing FIFO/shift/count/IRQ or RAM. Every endpoint must be outside an
+instruction transaction. Runtime serial transitions touch only their own state;
+no DMA/RAM write, callback or external event occurs between validation and
+publication. A late endpoint failure therefore retains all receivers. Repair and
+retry at the same master boundary needs no extra event or guest instruction.
+A selected word's final bit cannot commit to the first FIFO while a later
+receiver rejects its select or input.
+
+input() checks each endpoint's actual observed selection/clock, even when that
+endpoint is inactive. Only a consuming external master event queries MISO.
+Equal actual drivers resolve to their common value; conflicting actual drivers
+reject with select and core-PC context. A selected unknown driver rejects before
+any pull can apply. The explicit weak pull is used only when every receiver is
+undriven. Idle/hold/launch and master internal-loopback events supply no external
+reply. TI SPRUH82C29.2.14.1 makes functional CLK/SIMO/SOMI high impedance in
+internal loopback. Without an explicit clock pull, observation rejects the
+undriven pad; with an idle-high pull the slave receives no fabricated clock
+edges. Bus observation and input allocate no storage on successful paths.
+
+Receivers retain their existing programmable SPI state from the explicit initial
+slave-boot profile. DMA requests, RAM grants, completion IRQ routing, processor
+execution and time remain owner operations. The bus supplies no synthesized
+readiness, source acknowledgement or initial core activation.
+
+Owned checks send two distinct complete 384-word kernels with explicit DMA grants
+and independently check destination/count/IRQ and an unchanged unselected peer.
+Two real 32-bit duplex exchanges check selected MISO and separate receive data.
+A failed final-bit observation of the second receiver preserves both before
+same-boundary repair. Further checks retain contention/selection repair, equal
+broadcast drivers, unknown driven data, unused external input, explicit pulls,
+active owners and malformed topology.
+
+The four optional original_arm_spi_reset_kernel cases now attach both candidate
+receivers to bank2 selects11/12. The original MCU block writer chooses the actual
+select. Every prior halfword, normal32/native48 payload, actual IOD0 grant and
+pending completion assertion remains. The unselected peer retains initial 384
+count/cursor, empty FIFO/shift, no DMA request and no IRQ. Initial core activation,
+full uploader/FLAG schedule, real pins/clocks and cold boot remain unqualified.
+The separate original uploader-handshake and legacy full-transfer profiles retain
+their earlier contracts; this change supplies no missing inputs for them.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(processor_shared_spi_sharc_bus|processor_spi_sharc_wires|sharc_spi_slave_boot_profile|original_arm_spi_reset_kernel_[01]_[01])$' --output-on-failure

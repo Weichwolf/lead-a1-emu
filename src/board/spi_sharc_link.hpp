@@ -17,6 +17,8 @@ struct SpiSharcWiring {
   unsigned int clock_pin{};
   unsigned int mosi_pin{};
   bool active_low{};
+  // Explicit weak board input, used only when the master's SCLK pad is HiZ.
+  std::optional<bool> clock_pull{std::nullopt};
   bool operator==(const SpiSharcWiring &) const = default;
 };
 
@@ -32,6 +34,7 @@ public:
 
   void observe(SharcSpiBoot &boot) const;
   void observe(SharcSpi &runtime) const;
+  void check_observe(const SharcSpi &runtime) const;
   // Returns samples for the master's next event; unused MISO is not queried.
   // An explicit weak MISO pull applies only when the actual slave is undriven.
   // Unknown driven data diagnoses in the slave; it never falls back to a pull.

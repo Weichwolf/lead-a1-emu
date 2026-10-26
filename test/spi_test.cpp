@@ -340,8 +340,8 @@ void explicit_previous_hold() {
   write(spi, control, loopback);
   write(spi, data0, marker);
   require(spi.next_event() == 3);
-  require((spi.pins().high & serial_clock) != 0);
-  require((spi.pins().enabled & serial_output) == 0);
+  constexpr std::uint16_t serial_pads = 0xe00;
+  require((spi.pins().enabled & serial_pads) == 0 && (spi.pins().high & serial_pads) == 0);
   drain(spi);
   require(read(spi, buffer) == marker);
 }

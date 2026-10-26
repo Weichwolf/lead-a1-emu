@@ -30,7 +30,9 @@ PGRrev2.4 4-29 lists the boot peripheral among nonmaskable categories, while
 the selected boot source. Neither statement establishes its actual initial
 MODE1/IMASK/IMASKP values or permits bypassing ordinary controls by assumption.
 HWR24-8/25 and the vendor loader comment establish boot-idle/vector/RTI ordering,
-but not a complete initial processor-control snapshot.
+but not a complete initial processor-control snapshot. PGR8-19 additionally
+describes a distinct boot-channel pipeline input feeding IDLE until the boot
+interrupt; it is not ordinary instruction-RAM fetch.
 
 Owned tests compare all 384 normal32 words and all 256 native48 aliases, retain
 the four-word FIFO threshold and literal count/request/event ordering through
@@ -41,7 +43,9 @@ and overflow without false completion. The bus phase is an explicit owned input.
 
 Four optional original cases execute the unchanged MCU factory/block writer for
 both bundle parts and both transport arguments against this initial profile.
-The full SPI port is mapped before the first bit; every transmitted halfword,
+Both candidate selects11/12 now share one production SPI bus. The unselected
+peer retains its initial count/cursor and empty FIFO without DMA or IRQ. The
+full selected SPI port is mapped before the first bit; every transmitted halfword,
 normal32 word and native48 instruction is compared with pinned original data.
 The 384 writes use actual IOD0 grants, and the real initial completion event is
 left pending. No DSP instruction executes or initial frame is assumed in those

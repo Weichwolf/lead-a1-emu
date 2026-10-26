@@ -138,7 +138,8 @@ add_library(lead_a1_sharc STATIC
 target_include_directories(lead_a1_sharc PUBLIC src)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
 
-add_library(lead_a1_board STATIC src/board/processor_links.cpp src/board/spi_sharc_link.cpp)
+add_library(lead_a1_board STATIC src/board/processor_links.cpp src/board/spi_sharc_link.cpp
+  src/board/spi_sharc_bus.cpp)
 target_include_directories(lead_a1_board PUBLIC src)
 target_link_libraries(lead_a1_board PUBLIC lead_a1_arm lead_a1_sharc)
 
@@ -146,6 +147,9 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-spi-sharc-bus-test test/spi_sharc_bus_test.cpp)
+  target_link_libraries(lead-a1-spi-sharc-bus-test PRIVATE lead_a1_board)
+  add_test(NAME processor_shared_spi_sharc_bus COMMAND lead-a1-spi-sharc-bus-test)
   add_executable(lead-a1-sharc-visa-interrupt-test test/sharc_visa_interrupt_test.cpp)
   target_link_libraries(lead-a1-sharc-visa-interrupt-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_visa_programmable_interrupts COMMAND lead-a1-sharc-visa-interrupt-test)
@@ -699,6 +703,7 @@ if(BUILD_TESTING)
     DEPENDS lead-a1-sharc-dma-fabric-test lead-a1-sharc-dma-arbiter-test lead-a1-sharc-idp-dma-bus-test lead-a1-sharc-idp-dma-test lead-a1-sharc-pcg-bus-test lead-a1-sharc-pcg-test lead-a1-sharc-picr-test lead-a1-sharc-picr-bus-test format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
       lead-a1-processor-links-test
       lead-a1-spi-sharc-link-test
+      lead-a1-spi-sharc-bus-test
       lead-a1-spi-slave-boot-test
       lead-a1-sharc-visa-interrupt-test
       lead-a1-original-visa-interrupt-test

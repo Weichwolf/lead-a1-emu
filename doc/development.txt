@@ -12,7 +12,7 @@ src/common/             Shared memory/device interfaces.
 src/firmware/           Container and image decoding.
 src/arm/core/           ARM execution, data/cache/MMU/system state.
 src/arm/peripherals/    AINTC, GPIO and SPI.
-src/board/              Explicit GPIO/FLAG and SPI/SHARC signal connections.
+src/board/              Explicit GPIO/FLAG, single and shared SPI/SHARC connections.
 src/sharc/board/        Bound peripheral DMA scheduling.
 src/sharc/core/         SHARC instruction execution and architectural state.
 src/sharc/memory/       Memory views, arbitration and IOP bridge.
@@ -51,8 +51,9 @@ Original checks verify bundle/section/kernel identities for every selected
 native group. CTest registers each native program independently; SPI has two
 controller cases, two first-uploader-handshake cases and all four part/transport
 kernel cases, plus four initial-profile kernel transfers with actual per-word
-RAM grants and no DSP activation. Each retains its complete assertions, guest
-instruction bounds and normal per-test time bound.
+RAM grants, a checked unselected peer on the shared bus and no DSP activation.
+Each retains its complete assertions, guest instruction bounds and normal
+per-test time bound.
 The original script's aggregate native interface remains available for manual
 runs. A separate original_sharc_visa_interrupts case qualifies isolated native
 P6I vectors and VISA ISR entries with explicit controls; it does not boot an

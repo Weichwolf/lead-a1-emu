@@ -52,8 +52,10 @@ MSB/LSB order, TI PHASE/POLARITY and optional even/odd parity. PHASE=0 outputs
 on the leading edge and samples on the trailing edge; PHASE=1 samples on the
 leading edge after the first bit has been driven. Data is right-justified and
 zero-padded. Transmit monitoring and receive parity can latch distinct errors.
-Internal master loopback uses the real shift path with inactive external clock
-and high-impedance data pins, not a scripted SPIBUF response.
+Internal master loopback uses the real shift path with high-impedance functional
+CLK/SIMO/SOMI pins (SPRUH82C29.2.14.1), not a scripted SPIBUF response. No idle
+clock drive is invented; a connected receiver needs an explicitly supplied clock
+pull/input when observing that undriven pad.
 
 The event reference uses symmetric half-periods of PRESCALE+1 half module
 clocks, C2T/T2C counters, CSHOLD continuity and WDEL/idle gaps. It preserves

@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <exception>
 #include <iostream>
+#include <optional>
 #include <source_location>
 #include <stdexcept>
 #include <string>
@@ -62,7 +63,7 @@ struct Fixture {
   lead_a1::SpiSharcLink link;
   lead_a1::SharcSpiBoot boot{lead_a1::SharcSpiBoot::slave_reference_214xx()};
 
-  explicit Fixture(bool active_low = true)
+  explicit Fixture(bool active_low = true, std::optional<bool> clock_pull = {})
       : link(master,
              gpio,
              memory,
@@ -70,7 +71,8 @@ struct Fixture {
               .select_pin = 7,
               .clock_pin = 9,
               .mosi_pin = 10,
-              .active_low = active_low}) {
+              .active_low = active_low,
+              .clock_pull = clock_pull}) {
     master.write({.address = 0, .size = 4}, 1);
     master.write({.address = serial_direction, .size = 4}, both_bits);
     master.write({.address = serial_output, .size = 4}, clock_bit);
@@ -234,7 +236,7 @@ void undriven_miso_and_missing_pull() {
 
 void unknown_driven_miso_and_loopback() {
   for (const bool internal : {false, true}) {
-    Fixture fixture;
+    Fixture fixture(true, internal ? std::optional<bool>{true} : std::nullopt);
     fixture.serial();
     constexpr std::uint32_t loopback = 0x01010003;
     if (internal) { fixture.master.write({.address = 4, .size = 4}, loopback); }

@@ -242,14 +242,15 @@ SpiPins Spi::pins() const {
     return result;
   }
   const auto selects = static_cast<std::uint16_t>(state.pin_function & state.chip_selects);
-  result.enabled |= selects | detail::spi_clock_pin;
-  result.high |= state.selected & selects;
   const bool loop = (state.control & detail::spi_loopback) != 0;
-  const auto format =
-      state.active ? state.active->format : state.formats[(state.data1 >> format_shift) & 3];
-  const bool clock = loop ? (format & detail::spi_polarity) != 0 : state.clock;
-  if (clock && (state.pin_function & detail::spi_clock_pin) != 0) {
-    result.high |= detail::spi_clock_pin;
+  result.enabled |= selects;
+  result.high |= state.selected & selects;
+  // TI SPRUH82C29.2.14.1: all three functional serial pads are HiZ in loopback.
+  if (!loop) {
+    result.enabled |= detail::spi_clock_pin;
+    if (state.clock && (state.pin_function & detail::spi_clock_pin) != 0) {
+      result.high |= detail::spi_clock_pin;
+    }
   }
   if (!loop && (state.pin_function & detail::spi_output_pin) != 0) {
     result.enabled |= detail::spi_output_pin;

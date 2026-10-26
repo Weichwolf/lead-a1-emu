@@ -4,8 +4,10 @@ SpiSharcLink binds one SPI master, one GPIO select driver and one DSP memory
 owner through caller-supplied bank/select/SCLK/MOSI pin numbers and polarity.
 There is no default Nord routing, processor count, pull or source frequency.
 Only committed pin drivers are sampled. Open master/GPIO/DSP transactions
-reject before a receiving device changes. Undriven select or SCLK diagnoses;
-an undriven MOSI stays unknown and is required only on an actual receive edge.
+reject before a receiving device changes. Undriven select diagnoses. Undriven
+SCLK requires the explicit optional clock_pull; absent pull diagnoses and an
+actual master drive takes precedence. Undriven MOSI stays unknown and is required
+only on an actual receive edge. No default pull or clock edge is supplied.
 This driven-clock contract does not qualify floating pins during board reset.
 
 observe() supplies the actual levels to the existing bootstrap or runtime SPI
@@ -15,7 +17,9 @@ owner must observe committed control changes before the next master event and
 observe again after it. input() rejects select/clock levels not yet seen by the
 receiver, preventing the next event from bypassing a failed observation. Repair
 the missing memory/input at that boundary and retry observe() without time or
-another guest instruction. Complete multi-endpoint scheduling remains separate.
+another guest instruction. check_observe() validates the runtime transition
+without publication; spi-sharc-bus.txt composes it across multiple receivers.
+Complete processor scheduling remains separate.
 
 input() samples actual runtime MISO only if the master's next event consumes
 external pad input. The same phase/edge predicate drives the master's actual
@@ -32,8 +36,9 @@ sampling event. Output monitoring comes from the actual MOSI driver.
 The link stores references and immutable wire configuration, not duplicate
 device or event state. Its devices must outlive it and all calls use one owning
 emulation thread. Success paths have no callbacks or allocations. General
-device snapshot restoration, weak select/SCLK sources, bus contention between
-multiple slaves, pinmux, synchronizers and complete board timing remain open.
+device snapshot restoration, weak select sources, pinmux, synchronizers and
+complete board timing remain open. Shared MISO contention and explicit clock
+pulls have the separate spi-sharc-bus.txt contract.
 
 Owned checks drive a full 384-word bootstrap through explicit pin writes and
 compare every RAM word. A failing last-bit write retains the exact master,
