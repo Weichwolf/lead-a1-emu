@@ -46,7 +46,7 @@
       "local_copy_bytes": 1223134,
       "local_copy_sha256": "f821f28a72f633f39f939c2f9a12a461ce26c2f95ee6eb831355809439cb899f",
       "provenance": "Direct manufacturer download, analysis-only; no manufacturer source or listing reused. Does not identify the Nord toolchain/version.",
-      "sections": "10-16/17 FINAL_INIT header packing and ADSP-214xx SPI vector0x8c030; 10-18/19 DMA completion, IDLE wake, completed delayed branch, mask clear, interrupt entry and return/self-modifying initialization. Illustrated ADSP-2126x listing is not an ADSP-21489 pipeline/layout/cycle-count oracle; reconcile with PGR4-23 and HWR24-25/27 before execution claims."
+      "sections": "10-3 ADSP-214xx reset8c004/IVT8c000; 10-16/17 FINAL_INIT header packing and ADSP-214xx SPI vector0x8c030; 10-18/19 DMA completion, IDLE wake, completed delayed branch, mask clear, interrupt entry and return/self-modifying initialization. Illustrated ADSP-2126x listing is not an ADSP-21489 pipeline/layout/cycle-count oracle; reconcile with PGR4-23 and HWR24-25/27 before execution claims."
     },
     {
       "author": "Analog Devices",
@@ -71,7 +71,7 @@
       "local_copy_bytes": 23249,
       "local_copy_sha256": "283b966e6f1f5238a2d019bf3517c0b3b9987be64163ac66db33f3d5d816927f",
       "provenance": "Direct official package/static extraction; manufacturer-shipped kernel explanation independently corroborates discussion. Source/listing stays ignored, no implementation reuse or original Nord toolchain attribution.",
-      "sections": "FINAL_INIT first-slot IDLE wake, final mask slot, completed DB target as IRQ return PC, temporary RTI and later self-modifying arithmetic-loop patch. Source-level ordering, not measured hardware/pipeline latency."
+      "sections": "SPI_ISR first RTI8c030 returns8c005; FINAL_INIT first-slot IDLE wake, final mask slot, completed DB target as IRQ return PC, temporary RTI and later self-modifying arithmetic-loop patch. Source-level ordering, not measured hardware/pipeline latency."
     },
     {
       "author": "Analog Devices",
@@ -903,5 +903,21 @@
     "limits": "Enabled mask-only writes require all raw/effective/pending latches known clear and no service. Possible overlaps, enabled latch mutation, pointer writes, nesting, nonprogrammable entry, automatic peripheral level sampling and physical timing remain unqualified. Older21161N anomaly04000030 is conditional evidence, not target-silicon qualification",
     "tests": "Independent19-route table,171 ordered priority pairs, real native handlers/RTI, immediate next-source entry,38 mask/IDLE cases,10 independently restored sequenced secondary handlers, software latch/mask latency and fault/snapshot checks;30 enabled mask-only changes, pending-write/event overlap rejection and same numerical bit in distinct banks; inherited pending knowledge before handoff across five write forms and false conditional register transfer; malformed multiple-source RTI pointer read view rejects before new entry",
     "original": "All4 original placements x2 serial cadences retain payload/vector/peripheral oracles and reach422/446 application instructions. Transport1 actual LIRPTL mask0x400, MODE1/FLAGS setup and NOTTF+1045 reject unknown FLAG0; transport0 retains+985. No fabricated source/clock/IRQ or complete boot claim"
+  },
+  "initial_spi_boot_input_reference": {
+    "primary": "PGRrev2.4 4-29/30,8-19,B-2;HWR24-25;CCES Loader Utilities2.9.0 10-3;official VisualDSP++5.1.2 489_spi SPI_ISR explanation",
+    "selection": "Explicit ADSP-214xx SPI slave; not detected Nord straps/reset/electrical timing",
+    "reset_vector": "0x8c004",
+    "hardware_input": "IDLE from dedicated boot channel, not instruction RAM",
+    "queued_return_pc": "0x8c005",
+    "initial_vector": "0x8c030",
+    "frame": "0x0208c005 computed at actual selected P1I recognition",
+    "unknown_control_effects": "MODE1.IRPTEN and IMASK.P1I raw/effective readback remain unknown until actual guest writes establish them; ordinary recognition is unchanged",
+    "original_retirement_counts": {
+      "clock_at_8c0b2": 8287,
+      "flags_at_8c0b4": 8289,
+      "clear_at_8c008": 171754
+    },
+    "limits": "Selected logical boot-input/IRQ/RTI reference only. Physical boot straps/clocks/FLAG latch/wiring,complete coupled uploader/application/instrument runtime and hardware comparison remain open."
   }
 }

@@ -265,6 +265,9 @@ SharcFetchEvent SharcFetch::advance_clock(Sharc &cpu,
   if (&cpu.memory_ != &memory_ || memory_.active()) {
     throw std::logic_error("SHARC cache fetch requires its idle bound memory");
   }
+  if (cpu.state_.spi_boot && cpu.state_.spi_boot != SharcSpiBootPhase::interrupt) {
+    throw std::runtime_error("SPI boot requires its boot-channel input, not RAM fetch");
+  }
   if (detail::sharc_fetched_arithmetic(cpu.state_) && !sequenced) {
     throw std::runtime_error("SHARC fetched arithmetic state requires its sequenced transport");
   }

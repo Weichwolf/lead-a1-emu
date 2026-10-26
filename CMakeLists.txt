@@ -56,6 +56,7 @@ add_library(lead_a1_sharc STATIC
   src/sharc/core/sharc.cpp
   src/sharc/core/sharc_arithmetic_loop.cpp
   src/sharc/core/sharc_bit_shift.cpp
+  src/sharc/core/sharc_boot_input.cpp
   src/sharc/core/sharc_cache.cpp
   src/sharc/core/sharc_calls.cpp
   src/sharc/core/sharc_compare.cpp
@@ -147,6 +148,9 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-boot-input-test test/sharc_boot_input_test.cpp)
+  target_link_libraries(lead-a1-sharc-boot-input-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_spi_initial_boot_channel COMMAND lead-a1-sharc-boot-input-test)
   add_executable(lead-a1-board-scheduler-test test/board_scheduler_test.cpp)
   target_link_libraries(lead-a1-board-scheduler-test PRIVATE lead_a1_board)
   add_test(NAME board_causal_event_scheduler COMMAND lead-a1-board-scheduler-test)
@@ -658,6 +662,8 @@ if(BUILD_TESTING)
     foreach(channel RANGE 0 1)
       lead_a1_add_original_check("original_arm_spi_reset_kernel_${part}_${channel}"
         "spi-reset-kernel-${part}-${channel}")
+      lead_a1_add_original_check("original_arm_spi_boot_entry_${part}_${channel}"
+        "spi-boot-entry-${part}-${channel}")
       lead_a1_add_original_check("original_arm_spi_kernel_${part}_${channel}"
         "spi-kernel-${part}-${channel}")
     endforeach()
@@ -714,6 +720,7 @@ if(BUILD_TESTING)
       lead-a1-spi-sharc-bus-test
       lead-a1-board-scheduler-test
       lead-a1-spi-slave-boot-test
+      lead-a1-sharc-boot-input-test
       lead-a1-sharc-visa-interrupt-test
       lead-a1-original-visa-interrupt-test
       lead-a1-sharc-lirptl-test

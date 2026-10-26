@@ -63,9 +63,11 @@ void sharc_begin_idle(SharcState &state, bool fetched) {
     throw std::runtime_error("SHARC IDLE native internal resume boundary not qualified");
   }
   state.idle_pc = state.pc;
+  if (state.spi_boot == SharcSpiBootPhase::input) { state.spi_boot = SharcSpiBootPhase::idle; }
 }
 
 bool sharc_wake_idle(SharcState &state) {
+  if (state.spi_boot) { throw std::runtime_error("SPI boot requires boot-channel recognition"); }
   if (!state.idle_pc) { return false; }
   sharc_interrupt_environment_guard(state);
   const auto source = sharc_pending_interrupt(state);

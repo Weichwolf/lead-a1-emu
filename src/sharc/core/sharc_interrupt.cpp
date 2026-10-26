@@ -130,6 +130,42 @@ recognition_boundary(const SharcState &state, SharcInterruptReference reference,
   return *state.depth;
 }
 
+SharcInterruptStep enter_interrupt(SharcState &state,
+                                   SharcInterruptReference reference,
+                                   SharcInterruptSource source,
+                                   bool fetched) {
+  const auto saved_depth = recognition_boundary(state, reference, fetched);
+  const auto vector = reference.vector_base + source.offset;
+  const auto return_pc = state.pc;
+  // PGR A-10: interrupt push sets bit25, with CALL bit24 clear.
+  state.pc_stack[saved_depth] = sharc_special_frame | return_pc;
+  state.depth = saved_depth + 1;
+  state.interrupt = SharcInterruptFrame{.source = source.mask,
+                                        .vector = vector,
+                                        .return_pc = return_pc,
+                                        .saved_depth = saved_depth,
+                                        .bank = source.bank};
+  if (state.arithmetic_loop) {
+    state.arithmetic_loop->phase = SharcArithmeticPhase::fetched_suspended;
+  }
+  settle_entry_effects(state);
+  state.system[imaskp] = {.value = source.bank == SharcInterruptBank::irptl ? source.mask : 0,
+                          .known = all_bits};
+  state.effective[imaskp] = state.system[imaskp];
+  secondary_pointer(state, pointer(source));
+  state.effective[sharc_lirptl] = state.system[sharc_lirptl];
+  clear_source(state, *state.interrupt);
+  state.pc = vector;
+  state.idle_pc.reset();
+  sharc_stack_status(state);
+  // PGR4-30/31 branch phase, after explicit latching/recognition boundary.
+  return SharcInterruptStep{.source = source.mask,
+                            .return_pc = return_pc,
+                            .vector = vector,
+                            .minimum_core_cycles = 4,
+                            .bank = source.bank};
+}
+
 }
 
 bool sharc_interrupt_deferred(const SharcState &state) {
@@ -181,6 +217,9 @@ void sharc_interrupt_service_guard(const SharcState &state) {
 std::optional<SharcInterruptStep>
 sharc_service_interrupt(SharcState &state, SharcInterruptReference reference, bool fetched) {
   sharc_interrupt_environment_guard(state);
+  if (state.spi_boot && state.spi_boot != SharcSpiBootPhase::interrupt) {
+    throw std::runtime_error("SPI boot requires boot-channel recognition");
+  }
   if (state.interrupt) {
     nonnesting(state);
     return {}; // NESTM0 masks all sources; other requests remain latched.
@@ -192,36 +231,29 @@ sharc_service_interrupt(SharcState &state, SharcInterruptReference reference, bo
     throw std::runtime_error("SHARC unknown/other interrupt source not qualified");
   }
   nonnesting(state);
-  const auto saved_depth = recognition_boundary(state, reference, fetched);
-  const auto vector = reference.vector_base + source->offset;
-  const auto return_pc = state.pc;
-  // PGR A-10: interrupt push sets bit25, with CALL bit24 clear.
-  state.pc_stack[saved_depth] = sharc_special_frame | return_pc;
-  state.depth = saved_depth + 1;
-  state.interrupt = SharcInterruptFrame{.source = source->mask,
-                                        .vector = vector,
-                                        .return_pc = return_pc,
-                                        .saved_depth = saved_depth,
-                                        .bank = source->bank};
-  if (state.arithmetic_loop) {
-    state.arithmetic_loop->phase = SharcArithmeticPhase::fetched_suspended;
+  return enter_interrupt(state, reference, *source, fetched);
+}
+
+std::optional<SharcInterruptStep> sharc_service_boot_interrupt(SharcState &state) {
+  sharc_validate_spi_boot(state);
+  if (state.spi_boot != SharcSpiBootPhase::idle) {
+    throw std::runtime_error("SPI boot recognition requires its retired boot-channel IDLE");
   }
-  settle_entry_effects(state);
-  state.system[imaskp] = {.value = source->bank == SharcInterruptBank::irptl ? source->mask : 0,
-                          .known = all_bits};
-  state.effective[imaskp] = state.system[imaskp];
-  secondary_pointer(state, pointer(*source));
-  state.effective[sharc_lirptl] = state.system[sharc_lirptl];
-  clear_source(state, *state.interrupt);
-  state.pc = vector;
-  state.idle_pc.reset();
-  sharc_stack_status(state);
-  // PGR4-30/31 branch phase, after explicit latching/recognition boundary.
-  return SharcInterruptStep{.source = source->mask,
-                            .return_pc = return_pc,
-                            .vector = vector,
-                            .minimum_core_cycles = 4,
-                            .bank = source->bank};
+  sharc_interrupt_environment_guard(state);
+  const auto source = sharc_programmable_source(1);
+  const auto latch = state.effective[sharc_irptl];
+  if ((latch.known & source.mask) == 0) {
+    throw std::runtime_error("Unknown selected SPI boot completion latch");
+  }
+  if ((latch.value & source.mask) == 0) { return {}; }
+  nonnesting(state);
+  // PGR4-29/30: the selected boot peripheral is automatically unmasked.
+  // Its initial request is independent of ordinary maskable eligibility;
+  // do not invent architectural MODE1/IMASK effects to force that path.
+  constexpr std::uint32_t vector_base = 0x8c000;
+  const auto event = enter_interrupt(state, {.vector_base = vector_base}, source, false);
+  state.spi_boot = SharcSpiBootPhase::interrupt;
+  return event;
 }
 
 std::optional<std::uint32_t>
@@ -255,6 +287,7 @@ sharc_return_interrupt(SharcState &state, std::uint64_t opcode, std::optional<bo
     state.pending[sharc_lirptl] = state.system[sharc_lirptl];
   }
   state.interrupt.reset();
+  state.spi_boot.reset();
   if (state.arithmetic_loop) { state.arithmetic_loop->phase = SharcArithmeticPhase::fetched; }
   // Programmable IRQs do not push/pop ASTATx/y or MODE1 (PGR4-28,9-45).
   return frame.return_pc;

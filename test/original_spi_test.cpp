@@ -70,6 +70,8 @@ constexpr std::uint32_t serial_pins = 0xe01;
 constexpr std::uint32_t delay_fields = 0x01010000;
 constexpr std::uint32_t gpio_clear = 0x44;
 constexpr std::uint32_t dsp_reset = 0x8c000;
+constexpr std::uint32_t dsp_boot_idle = 0x8c004;
+constexpr std::uint32_t dsp_boot_start = 0x8c005;
 constexpr std::uint32_t dsp_ready_return = 0x8c008;
 constexpr std::uint32_t uploader_status = 0xb80000df;
 constexpr std::uint32_t uploader_clear = 0x46;
@@ -587,7 +589,19 @@ void check_clock_transactions(const Fixture &fixture) {
   require(written == writes.size() && read == reads.size());
 }
 
-void flag_setup(Fixture &fixture, lead_a1::Sharc &cpu) {
+enum class KernelEntry : std::uint8_t { software, spi_boot };
+
+unsigned int kernel_entry_offset(KernelEntry entry) {
+  // A real initial RTI replaces five software-entry NOPs. No instruction is
+  // skipped: this changes only the independently expected retirement counts.
+  switch (entry) {
+    case KernelEntry::software: return 0;
+    case KernelEntry::spi_boot: return 4;
+    default: throw std::logic_error("Invalid original kernel entry reference");
+  }
+}
+
+void flag_setup(Fixture &fixture, lead_a1::Sharc &cpu, KernelEntry entry = KernelEntry::software) {
   constexpr std::uint32_t dag_entry = 0x8c0b4;
   constexpr unsigned int instruction_count = 8293;
   constexpr std::uint32_t flag1_output_select = 8;
@@ -597,7 +611,8 @@ void flag_setup(Fixture &fixture, lead_a1::Sharc &cpu) {
     static_cast<void>(cpu.step());
     ++fixture.dsp_steps;
   }
-  require(cpu.state().pc == dag_entry && fixture.dsp_steps == instruction_count);
+  require(cpu.state().pc == dag_entry &&
+          fixture.dsp_steps == instruction_count - kernel_entry_offset(entry));
   require(cpu.state().system[flags].known == core_directions &&
           cpu.state().system[flags].value == flag1_output_select);
   require(cpu.state().pending[flags] == cpu.state().system[flags]);
@@ -654,7 +669,7 @@ struct KernelClearReference {
   }
 };
 
-void clear_ram(Fixture &fixture, lead_a1::Sharc &cpu) {
+void clear_ram(Fixture &fixture, lead_a1::Sharc &cpu, KernelEntry entry = KernelEntry::software) {
   const KernelClearReference reference(fixture);
   constexpr std::uint32_t caller = 0x8c008;
   constexpr unsigned int limit = 200000;
@@ -663,7 +678,8 @@ void clear_ram(Fixture &fixture, lead_a1::Sharc &cpu) {
     ++fixture.dsp_steps;
   }
   constexpr unsigned int expected_instructions = 171758;
-  require(cpu.state().pc == caller && fixture.dsp_steps == expected_instructions);
+  require(cpu.state().pc == caller &&
+          fixture.dsp_steps == expected_instructions - kernel_entry_offset(entry));
   require(cpu.state().depth == 0 && cpu.state().loops_empty == true && !cpu.state().count_loop);
   constexpr std::uint32_t parent = 0x108c008;
   require(cpu.state().pc_stack[0] == parent); // Physical popped frame retained.
@@ -1202,14 +1218,17 @@ void kernel_clock_step(Fixture &fixture, lead_a1::Sharc &cpu) {
   }
 }
 
-void kernel_clock_setup(Fixture &fixture, lead_a1::Sharc &cpu) {
+void kernel_clock_setup(Fixture &fixture,
+                        lead_a1::Sharc &cpu,
+                        KernelEntry entry = KernelEntry::software) {
   constexpr std::uint32_t flags_entry = 0x8c0b2;
   constexpr unsigned int instruction_limit = 20000;
   constexpr unsigned int instruction_count = 8291;
   while (cpu.state().pc != flags_entry && fixture.dsp_steps < instruction_limit) {
     kernel_clock_step(fixture, cpu);
   }
-  require(cpu.state().pc == flags_entry && fixture.dsp_steps == instruction_count);
+  require(cpu.state().pc == flags_entry &&
+          fixture.dsp_steps == instruction_count - kernel_entry_offset(entry));
   require(cpu.state().depth == 1 && cpu.state().loops_empty == true && !cpu.state().count_loop);
   constexpr std::uint32_t call_frame = 0x108c008;
   require(cpu.state().pc_stack[0] == call_frame);
@@ -1640,9 +1659,47 @@ void original_uploader_handshake(std::span<const std::byte> image,
          "candidate logical wires, no full uploader or physical timing claim\n";
 }
 
+void initial_boot_kernel_execution(Fixture &fixture, lead_a1::Sharc &cpu) {
+  if (!fixture.runtime || !fixture.runtime->device.interrupt_request()) {
+    throw std::runtime_error("Initial original boot requires its real SPI completion event");
+  }
+  auto &port = fixture.runtime->device;
+  const auto completed = port.state();
+  constexpr std::uint32_t return_pc = 0x8c005;
+  constexpr std::uint32_t vector = 0x8c030;
+  constexpr std::uint32_t frame = 0x0208c005;
+  constexpr std::uint32_t partial_mask = 0xffffefff;
+  const auto held = cpu.state();
+  require(held.pc == return_pc && held.idle_pc == dsp_boot_idle &&
+          held.spi_boot == lead_a1::SharcSpiBootPhase::idle && held.depth == 0 && !held.interrupt);
+  cpu.latch_programmable_interrupt(1);
+  const auto entry = cpu.service_boot_interrupt();
+  require(entry && entry->source == 0x1000 && entry->return_pc == return_pc &&
+          entry->vector == vector && entry->minimum_core_cycles == 4 &&
+          cpu.state().pc_stack[0] == frame && cpu.state().depth == 1 && port.state() == completed &&
+          port.interrupt_request());
+  port.acknowledge_interrupt();
+  const auto first = cpu.step(); // The original received vector's RTI, not a fabricated frame/PC.
+  ++fixture.dsp_steps;
+  require(first.pc == vector && first.next_pc == return_pc && cpu.state().depth == 0 &&
+          !cpu.state().spi_boot && !cpu.state().interrupt && cpu.state().pc_stack[0] == frame &&
+          cpu.state().system[2].known == partial_mask &&
+          cpu.state().system[11].known == partial_mask);
+  kernel_clock_setup(fixture, cpu, KernelEntry::spi_boot);
+  flag_setup(fixture, cpu, KernelEntry::spi_boot);
+  clear_ram(fixture, cpu, KernelEntry::spi_boot);
+  constexpr std::uint32_t all_bits = 0xffffffff;
+  require(cpu.state().system[2].known == partial_mask &&
+          cpu.state().system[11] == (lead_a1::SharcKnown32{.value = 3, .known = all_bits}));
+  auto expected = completed;
+  expected.interrupt_pending = false;
+  require(port.state() == expected);
+}
+
 void reset_kernel_transfer(std::span<const std::byte> image,
                            const std::filesystem::path &spec,
-                           KernelCase selected) {
+                           KernelCase selected,
+                           KernelEntry entry = KernelEntry::software) {
   constexpr std::array<std::array<std::uint32_t, 2>, 2> offsets{
       {{0x2c6d78, 0x2ab0f8}, {0x71bc8, 0x701d8}}};
   constexpr unsigned int kernel_words = 384;
@@ -1675,6 +1732,18 @@ void reset_kernel_transfer(std::span<const std::byte> image,
                                                       .mosi_pin = 10,
                                                       .active_low = true});
   fixture.connect_peer();
+  std::optional<lead_a1::Sharc> cpu;
+  if (entry == KernelEntry::spi_boot) {
+    fixture.dsp_memory.map_io({.first_word = 0x2000, .words = 1}, fixture.clock);
+    fixture.dsp_memory.map_io({.first_word = dsp_sysctl, .words = 1}, fixture.control);
+    cpu.emplace(fixture.dsp_memory,
+                lead_a1::Sharc::spi_slave_boot_reference_214xx(),
+                &fixture.control.device);
+    const auto boot_input = cpu->step_boot_input();
+    require(boot_input.pc == dsp_boot_idle && boot_input.next_pc == dsp_boot_start &&
+            !cpu->state().interrupt);
+  }
+
   auto &port = fixture.runtime->device;
   require(fixture.dsp_memory.read({.address = count_register}) == kernel_words &&
           port.state().serial.next_word == kernel_destination && !port.interrupt_request());
@@ -1720,6 +1789,14 @@ void reset_kernel_transfer(std::span<const std::byte> image,
           !peer.serial.selected && peer.serial.clock == true && peer.serial.bits == 0 &&
           peer.serial.shift == 0 && peer.occupied == 0 && !peer.receive && !peer.overflow &&
           !peer.interrupt_pending && !fixture.other_receiver->dma_word_request());
+  if (cpu) {
+    initial_boot_kernel_execution(fixture, *cpu);
+    std::cout
+        << "Part " << part << " transport " << channel
+        << ": real initial boot DMA/P1I/original RTI, then171754 original instructions through "
+           "clock/FLAG/RAM initialization; partial automatic-unmask readback, no full boot claim\n";
+    return;
+  }
   std::cout << "Part " << part << " transport " << channel
             << ": one SPI slave-boot port received all768 original MCU halfwords, "
                "committed384 actual IOD0 words and retained initial completion IRQ; "
@@ -1733,7 +1810,8 @@ enum class SpiCheckMode : std::uint8_t {
   uploader,
   uploader_pulls,
   uploader_scheduled,
-  reset_kernel
+  reset_kernel,
+  boot_entry
 };
 
 struct SpiCheck {
@@ -1764,6 +1842,10 @@ SpiCheck check_mode(int argc, char **argv) {
                                                               : SpiCheckMode::uploader_pulls,
             .selected = {.part = check_index(argv[4])}};
   }
+  if (argc == 6 && std::string_view(argv[3]) == "--boot-entry") {
+    return {.mode = SpiCheckMode::boot_entry,
+            .selected = {.part = check_index(argv[4]), .channel = check_index(argv[5])}};
+  }
   if (argc == 6 &&
       (std::string_view(argv[3]) == "--kernel" || std::string_view(argv[3]) == "--reset-kernel")) {
     return {.mode = std::string_view(argv[3]) == "--kernel" ? SpiCheckMode::kernel
@@ -1773,7 +1855,8 @@ SpiCheck check_mode(int argc, char **argv) {
   throw std::runtime_error(
       "Usage: original-spi-test spec images "
       "[--controllers part | --kernel part channel | --uploader part | "
-      "--uploader-pulls part | --uploader-scheduled part | --reset-kernel part channel]");
+      "--uploader-pulls part | --uploader-scheduled part | --reset-kernel part channel | "
+      "--boot-entry part channel]");
 }
 
 void check_part(const SpiCheck &check,
@@ -1791,8 +1874,12 @@ void check_part(const SpiCheck &check,
     }
     if (check.mode == SpiCheckMode::uploader_scheduled) { return; }
   }
-  if (check.mode == SpiCheckMode::reset_kernel) {
-    reset_kernel_transfer(image, spec, check.selected);
+  if (check.mode == SpiCheckMode::reset_kernel || check.mode == SpiCheckMode::boot_entry) {
+    reset_kernel_transfer(image,
+                          spec,
+                          check.selected,
+                          check.mode == SpiCheckMode::boot_entry ? KernelEntry::spi_boot
+                                                                 : KernelEntry::software);
     return;
   }
   if (check.mode == SpiCheckMode::uploader || check.mode == SpiCheckMode::uploader_pulls ||
@@ -1816,6 +1903,7 @@ void check_part(const SpiCheck &check,
     if (check.mode == SpiCheckMode::kernel && channel != check.selected.channel) { continue; }
     if (check.mode == SpiCheckMode::all) {
       reset_kernel_transfer(image, spec, {.part = part, .channel = channel});
+      reset_kernel_transfer(image, spec, {.part = part, .channel = channel}, KernelEntry::spi_boot);
     }
     kernel_transfer(image, spec, {.part = part, .channel = channel});
   }

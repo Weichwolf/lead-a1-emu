@@ -129,6 +129,8 @@ struct SharcInterruptStep {
   bool operator==(const SharcInterruptStep &) const = default;
 };
 
+enum class SharcSpiBootPhase : std::uint8_t { input, idle, interrupt };
+
 struct SharcState {
   std::uint32_t pc{};
   // UREG 0x70..0x7f. Read views and effective controls are distinct.
@@ -157,6 +159,8 @@ struct SharcState {
   std::optional<std::uint32_t> idle_pc;
   // Actual captured final DB-slot word, retained while idle and after wake.
   std::optional<std::uint64_t> idle_delay_word;
+  // A selected hardware SPI boot input, distinct from ordinary instruction RAM.
+  std::optional<SharcSpiBootPhase> spi_boot;
   bool operator==(const SharcState &) const = default;
 };
 
@@ -186,6 +190,9 @@ public:
   // Documented reset registers with an explicitly supplied execution address.
   // This does not qualify the physical post-boot-DMA processor state.
   [[nodiscard]] static SharcState reset_reference_214xx(std::uint32_t entry);
+  // Explicit ADSP-214xx SPI boot selection, not detected Nord straps or timing.
+  // Unqualified automatic-unmask register effects remain unknown.
+  [[nodiscard]] static SharcState spi_slave_boot_reference_214xx();
 
   [[nodiscard]] const SharcState &state() const { return state_; }
 
@@ -203,6 +210,11 @@ public:
   // Qualified programmable IRQ wakes IDLE without servicing or consuming its latch.
   // A first-delay-slot IDLE keeps its captured final slot and pending branch.
   [[nodiscard]] bool wake_idle();
+  // Retire the hardware boot channel's IDLE, without fetching instruction RAM.
+  [[nodiscard]] SharcStep step_boot_input();
+  // Recognize the actual externally latched boot P1I independently of ordinary
+  // maskable eligibility. No peripheral event is generated or acknowledged here.
+  [[nodiscard]] std::optional<SharcInterruptStep> service_boot_interrupt();
 
   // Explicit recognition of a latched programmable IRQ at a qualified boundary.
   // Ordinary internal delayed branches defer delivery until both slots finish.
@@ -224,13 +236,15 @@ public:
 
 private:
   friend class SharcFetch;
+  enum class Input : std::uint8_t { program, boot };
   [[nodiscard]] SharcStep step_opcode(std::optional<std::uint64_t> captured,
                                       bool preserve_cache = false,
                                       std::optional<bool> branch_taken = std::nullopt,
                                       SharcLoopClock loop_clock = SharcLoopClock::functional,
                                       const SharcDagAddress *dag = nullptr,
                                       const SharcVisaInstruction *visa = nullptr,
-                                      bool clocked = false);
+                                      bool clocked = false,
+                                      Input input = Input::program);
   SharcMemory &memory_;
   SharcState state_;
   SharcControl *control_;

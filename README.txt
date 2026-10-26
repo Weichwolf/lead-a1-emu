@@ -30,6 +30,10 @@ scheduled references interleave actual MCU polls and kernel initialization with
 explicit initial-latch/cadence inputs; unknown driven output stops their common
 frontier. Continuous full upload and physical wiring remain unqualified
 (doc/processor-links.txt, doc/board-scheduler.txt).
+Separate initial SPI boot cases now execute hardware-channel IDLE, the real
+completion-driven P1I and the received original RTI before kernel clock/FLAG/RAM
+initialization. Automatic-unmask register effects stay explicitly unknown;
+physical Nord reset/straps/timing remain unqualified (doc/sharc-boot-input.txt).
 These explicit reference inputs do not establish a complete cold boot, physical
 processor/slot wiring, MHz or playable audio. Other profiles retain independent
 execution boundaries. See doc/sharc-iop-bridge.txt, doc/sharc-dai-data.txt and

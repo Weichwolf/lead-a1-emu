@@ -84,6 +84,7 @@ void lirptl_pending_guard(const SharcState &state, std::uint64_t opcode) {
 }
 
 void validate(const SharcState &state) {
+  detail::sharc_validate_spi_boot(state);
   detail::sharc_validate_registers(state);
   detail::sharc_validate_cache(state.cache);
   detail::sharc_validate_flag_inputs(state.flag_inputs);
@@ -428,11 +429,13 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
                              SharcLoopClock loop_clock,
                              const SharcDagAddress *dag,
                              const SharcVisaInstruction *visa,
-                             bool clocked) {
+                             bool clocked,
+                             Input input) {
   auto opcode = captured;
   bool transaction{};
   bool control_transaction{};
   try {
+    detail::sharc_boot_input_guard(state_, input == Input::boot);
     if (memory_.active()) {
       throw std::logic_error("SHARC core step during another memory transaction");
     }
@@ -447,6 +450,7 @@ SharcStep Sharc::step_opcode(std::optional<std::uint64_t> captured,
     if (!opcode) {
       opcode = memory_.read({.address = state_.pc, .width = SharcWidth::wide48}, AccessKind::fetch);
     }
+    detail::sharc_boot_opcode_guard(state_, *opcode);
     detail::sharc_cache_guard(state_, *opcode);
     lirptl_pending_guard(state_, *opcode);
     auto next = state_;

@@ -1,0 +1,76 @@
+Selected SPI boot-channel execution
+
+This is an explicit ADSP-214xx SPI-slave reference, not detection of Nord boot
+straps, reset/PLL/pad timing, chip revision or physical wiring. PGRrev2.4 8-19
+identifies the initial boot pipeline input as IDLE, separate from instruction
+RAM. PGR B-2 and CCES Loader Utilities2.9.0 10-3 identify reset at8c004 and
+IVT8c000. HWR24-25 requires initial peripheral-vector RTI; the official
+VisualDSP++5.1.2 ADSP-21489 SPI kernel independently identifies its first
+RTI at8c030 returning to8c005. Both local source identities are freshly checked
+against the already pinned references; no manufacturer implementation is reused.
+
+Sharc::spi_slave_boot_reference_214xx selects that boot input at reset8c004.
+step_boot_input executes its actual IDLE without reading/seeding instruction
+RAM, producing idle_pc8c004/queued PC8c005 and an empty stack. Ordinary CPU/
+fetch/wake/recognition cannot bypass this input. Repeated IDLE retirement is
+rejected; time, serial reception and DMA grants remain owner operations.
+
+PGR4-29/30 establishes automatic unmasking of the selected boot peripheral,
+but does not specify the resulting architectural MODE1.IRPTEN/IMASK.P1I
+readback/effective tuple. Those two bits remain unknown in this selected
+profile. Other reset knowledge follows the existing reference, including
+unknown data/DAG/PX/FLAG latches. No convenient mask value or readiness is
+invented. These raw unknowns survive entry/RTI until actual guest writes
+establish them; an attempted observer still diagnoses missing knowledge.
+
+A real externally routed selected P1I latch permits service_boot_interrupt.
+It uses the ordinary validated frame push/entry machinery with the current
+queued PC: frame0208c005, depth1, vector8c030 and pointer1000. Boot recognition
+uses the selected boot channel instead of ordinary maskable eligibility; it
+never fabricates mask-register contents. Branch4 internal clocks are the same
+explicitly represented entry bound as other programmable IRQs, not a complete
+physical reset/synchronization model. Peripheral acknowledgement is separate.
+
+The first received RAM instruction must be the qualified unconditional RTI.
+Unknown/unmapped/unsupported vector contents preserve its actual entry/frame
+for repair. The executed RTI pops that frame, returns to8c005 and closes the
+boot input. Subsequent instructions use ordinary program execution. Invalid
+phase/PC/stack/service snapshots reject; independent restores retain the real
+frame and unknown controls. Boot entry creates no return frame in advance of
+the interrupt and does not change original firmware.
+
+Owned checks use an actual SPI FIFO,384 normal32 RAM grants and all native48
+aliases. The held final grant cannot generate completion; only its successful
+write allows the real event to be routed. At767 explicit active/gap bus clocks,
+the resulting owned RTI returns and an owned immediate produces
+literal R7=42. The SPI event remains pending until separately acknowledged.
+Other tests exercise unmapped instruction RAM before boot, blocked alternate
+execution paths, controller ownership/failure/retry, bad initial-vector repair,
+independent RAM/core/controller restore and malformed phases.
+
+Original integration
+Four original_arm_spi_boot_entry_part_transport cases retain the unchanged
+ARM factory/block writer, full768 halfwords,384 individual grants,256 native48
+words, selected endpoint and untouched peer assertions of the existing initial
+profile tests. The core retires its boot-input IDLE before the first serial bit.
+Only the real received completion latch activates its initial P1I, then the
+original RAM RTI executes. No software entry or supplied return frame starts it.
+
+The same original clock/FLAG/RAM initialization follows. Its independent counts
+are8287 at8c0b2,8289 at8c0b4 and171754 at8c008: initial RTI replaces the five
+NOPs of the old software-entry reference. No instruction is skipped or counted
+as retired without execution. All original PMCTL transactions/rates, four clear
+spans, three tail guards and384 preserved kernel words remain checked. The guest
+IMASK write establishes3/all-known; MODE1 global readback remains unknown until
+its subsequent actual SET1000. The same SPI instance retains all state except
+its separately acknowledged initial event. The legacy four tests still leave
+their event pending and execute no DSP instruction.
+
+This closes the selected initial boot-input/RTI reference, not complete Nord
+cold boot. Physical boot straps/clocks/wiring/FLAG latch, full MCU uploader,
+both running DSP programs, final vector/application sequencing, instrument
+operation/audio/MIDI/USB/observed UI/persistence/recovery and hardware comparison
+remain required. The kernel's output-direction-before-level window still cannot
+be masked by a weak pull or promoted to a known physical reset latch.
+
+  ctest --preset strict -R '^(sharc_spi_initial_boot_channel|original_arm_spi_boot_entry_[01]_[01])$' --output-on-failure

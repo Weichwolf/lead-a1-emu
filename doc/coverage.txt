@@ -101,9 +101,14 @@ ID  State    Evidence / remaining work
              Explicit initial SPI-slave bootstrap loads 384 NW32 words through
              serial edges and exposes 256 NW48 instructions plus completion/base
              metadata. HWR24-25 requires the initial boot IRQ and vector RTI;
-             all four pinned kernels have that RTI at8c030. Initial interrupt,
-             return-frame/reset sequencing remain open. Existing software-entry
-             fixtures at8c000 do not qualify this hardware activation (sharc.txt).
+             all four pinned kernels have that RTI at8c030. A separate selected
+             SPI boot input now retires hardware-channel IDLE at reset8c004,
+             recognizes the real routed P1I and creates frame0208c005. The actual
+             received RTI returns to8c005. MODE1.IRPTEN/IMASK.P1I automatic-
+             unmask readback stays unknown; ordinary eligibility is unchanged.
+             Physical Nord straps/reset/timing remain open. Existing software-
+             entry fixtures at8c000 retain their separate profile (sharc.txt,
+             sharc-boot-input.txt).
              The programmable SPI also accepts an explicit initial slave-boot
              profile with 384 pending words. Its real FIFO and IOD0 RAM grants
              lead to a pending completion event; the same port accepts subsequent
@@ -255,7 +260,8 @@ ID  State    Evidence / remaining work
              IVT jumps can enter VISA handlers; compact and uncompressed immediate
              RTI share the real source/pointer/pop semantics. Bound fetch retains
              Address decisions and revalidates the frame at Execute. Native RTI
-             also returns to VISA. Initial boot interrupt/control state, nesting,
+             also returns to VISA. Initial boot input/RTI is qualified separately;
+             complete boot-control readback, nesting,
              delayed VISA recognition/RTI and VISA loops remain separate gaps
              (sharc-visa-interrupts.txt).
              The same reference now supports all19 programmable priorities,
@@ -785,6 +791,16 @@ ID  State    Evidence / remaining work
              explicit HIGH exits before initialization. Neither software entry
              nor these instruction cadences establish complete hardware boot
              or a physical initial latch value (board-scheduler.txt).
+             Four additional MCU/SPI cases now retire a dedicated boot-channel
+             IDLE before serial reception, retain all768 halfwords/384 grants/
+             256 instructions and the unchanged peer, then recognize the real
+             initial SPI event. The original RAM RTI uses its computed frame,
+             returns to8c005 and continues through the original clock/FLAG/RAM
+             prefix. Literal8287/8289/171754 instruction counts, full PMCTL and
+             clear/kernel/tail expectations pass. Unknown global boot-unmask
+             readback survives; actual guest IMASK initialization establishes
+             known3. Neither physical straps/FLAG/reset timing nor whole cold
+             boot is established (sharc-boot-input.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
 5   partial  Native SPORT word-buffer/DMA reference now transfers owned32-bit
              words through actual RAM grants, with chaining and distinct internal/
@@ -803,6 +819,17 @@ ID  State    Evidence / remaining work
              native LZO/SLEIGH/zlib instrumentation/object hooks and hardening
              checked. Complete CPU/boot/MIDI/audio/update, fuzz harnesses and
              performance remain pending.
+             Initial SPI boot tests use a real384-word FIFO/DMA transfer with
+             767 explicit bus clocks. A held last grant cannot signal completion;
+             only its committed word permits the actual selected event/entry.
+             Literal IDLE/PC/frame/RTI/R7=42 expectations, still-pending peripheral
+             acknowledgement, blocked alternate execution, malformed phases,
+             unknown/unmapped/bad-vector repair, active controller failure and
+             independent core/control/RAM restore are checked. Four additional
+             original MCU/SPI entry cases retain every prior transfer assertion
+             and independent clock/FLAG/clear oracles without supplied frames.
+             Full physical boot and instrument acceptance remain open
+             (sharc-boot-input.txt).
              Board-calendar checks independently specify mixed-cadence/tie
              order, retained execution/publication phases, restored continuation,
              parked-source rearm, stale tickets and malformed/uint64 boundaries.

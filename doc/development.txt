@@ -54,6 +54,10 @@ references, two interleaved first-wait groups (unknown/HIGH/LOW initial latch an
 two LOW instruction cadences; board-scheduler.txt) and all four part/transport
 kernel cases, plus four initial-profile kernel transfers with actual per-word
 RAM grants, a checked unselected peer on the shared bus and no DSP activation.
+Four separate boot-entry cases retain those assertions, then execute the
+selected boot-channel IDLE/initial P1I/original RTI and complete kernel clock/
+FLAG/RAM initialization. Unknown automatic-unmask readback and physical
+reset/straps/FLAG timing remain explicit (sharc-boot-input.txt).
 Each retains its complete assertions, guest instruction bounds and normal
 per-test time bound.
 The original script's aggregate native interface remains available for manual

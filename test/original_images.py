@@ -12,6 +12,10 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 SPI_CASES = {
+    "spi-boot-entry-0-0": ("--boot-entry", "0", "0"),
+    "spi-boot-entry-0-1": ("--boot-entry", "0", "1"),
+    "spi-boot-entry-1-0": ("--boot-entry", "1", "0"),
+    "spi-boot-entry-1-1": ("--boot-entry", "1", "1"),
     "spi-uploader-scheduled-0": ("--uploader-scheduled", "0"),
     "spi-uploader-scheduled-1": ("--uploader-scheduled", "1"),
     "spi-uploader-pulls-0": ("--uploader-pulls", "0"),

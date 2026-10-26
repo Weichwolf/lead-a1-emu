@@ -57,7 +57,9 @@ of the scheduler. Every actual GPIO read and timestamp is checked. Original
 PMCTL transactions, unexecuted peer state and serialized payload remain checked.
 
 No initial-latch scenario establishes a physical Nord reset value. Physical
-pulls, boot-channel activation/return frame, clocks and wiring remain unresolved.
+pulls, clocks and wiring remain unresolved. The separate selected initial SPI
+boot-channel/RTI reference is now qualified in sharc-boot-input.txt; these older
+scheduled cases retain their explicit software-entry profile.
 This reference ends at the first wait exit or missing-input frontier. Complete
 continuous upload, both executing DSPs, final FLAG-clear/release, cold boot,
 application operation and original audio remain mandatory open work.

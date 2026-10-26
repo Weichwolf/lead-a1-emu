@@ -22,13 +22,16 @@ A failed RAM write retains the request and all real FIFO/count/event state;
 retry at that same grant advances no time.
 
 No core, readiness GPIO, initial boot IRQ recognition, return frame or reset
-sequencer is synthesized. HWR24-25's initial vector RTI and the associated
-processor-control state remain board work (sharc.txt). A completion event is
-neither a qualified first Execute PC nor a completed instrument boot.
+sequencer is synthesized by this peripheral. The separate selected core boot
+input now executes its IDLE, recognizes a real routed completion and executes
+the initial RAM RTI (sharc-boot-input.txt). A completion event alone remains
+distinct from core recognition or a completed instrument boot.
 PGRrev2.4 4-29 lists the boot peripheral among nonmaskable categories, while
 4-30 says only RESET/EMU cannot be masked and describes automatic unmasking of
 the selected boot source. Neither statement establishes its actual initial
-MODE1/IMASK/IMASKP values or permits bypassing ordinary controls by assumption.
+MODE1/IMASK readback tuple. The selected initial boot channel now recognizes
+its P1I without inventing those register effects; the affected bits stay unknown.
+Ordinary maskable recognition retains its existing controls and guards.
 HWR24-8/25 and the vendor loader comment establish boot-idle/vector/RTI ordering,
 but not a complete initial processor-control snapshot. PGR8-19 additionally
 describes a distinct boot-channel pipeline input feeding IDLE until the boot
@@ -51,6 +54,11 @@ The 384 writes use actual IOD0 grants, and the real initial completion event is
 left pending. No DSP instruction executes or initial frame is assumed in those
 cases. The 200 MHz MCU input, functional serial/memory scheduling, GPIO selection
 and MISO pull remain explicit reference inputs, not physical clock/wiring proof.
+Four additional boot-entry cases retain the same transfer/peer assertions, then
+route that event into the actual boot-input core, execute the original RTI and
+continue through clock/FLAG/RAM initialization. The same programmable SPI
+instance survives; no caller-supplied return frame or software entry is used.
+Physical reset/clock/pad/FLAG inputs and complete cold boot remain open.
 
   cmake --build --preset strict
   ctest --preset strict -R '^(sharc_spi_slave_boot_profile|original_arm_spi_reset_kernel_[01]_[01])$' --output-on-failure

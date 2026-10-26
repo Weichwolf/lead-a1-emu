@@ -48,8 +48,11 @@ the loaded kernel/IVT base 0x8c000. Existing instruction fixtures initialize an
 explicit software-entry state there. HWR24-25 requires the boot peripheral's
 interrupt vector and its RTI before kernel execution. All four pinned kernels
 contain the unconditional native RTI at 0x8c030; their first five words are NOPs.
-Initial boot-IRQ delivery, return-frame state and reset-to-kernel sequencing
-remain unimplemented. The reported base is not a qualified first Execute PC.
+The separate selected SPI boot-input reference now executes the hardware-channel
+IDLE at8c004, recognizes the actual routed completion and executes that RAM RTI
+with its computed0208c005 return frame (sharc-boot-input.txt). The reported
+kernel base remains distinct from the first RAM Execute PC8c030. Physical Nord
+straps/reset timing and automatic-unmask register readback remain unqualified.
 No readiness GPIO or physical reset/interrupt timing follows from completion.
 This limited initial loader is not a programmable SPI register facade. Further
 selected clock edges require an explicit runtime SPI/core handoff and fail
@@ -57,7 +60,8 @@ on this bootstrap object. SharcSpi supplies that separate programmable RX DMA
 continuation (sharc-spi.txt). Its explicit SharcSpiSlaveBootReference profile
 also supports the initial reception through the ordinary FIFO and actual
 per-word RAM grants without replacing the programmable receiver; see
-spi-slave-boot.txt. Neither path supplies the initial core interrupt frame.
+spi-slave-boot.txt. Neither receiver supplies a core frame; the new boot-channel
+core path creates it only at actual interrupt recognition.
 Midword deselection remains unqualified and fails; aligned gaps
 preserve the DMA cursor. FIFO occupancy, arbitration, DMA/core interrupt and
 electrical reset delays remain pending. Core-instruction transactions and
