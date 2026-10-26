@@ -138,8 +138,8 @@ add_library(lead_a1_sharc STATIC
 target_include_directories(lead_a1_sharc PUBLIC src)
 target_link_libraries(lead_a1_sharc PUBLIC lead_a1_quality)
 
-add_library(lead_a1_board STATIC src/board/processor_links.cpp src/board/spi_sharc_link.cpp
-  src/board/spi_sharc_bus.cpp)
+add_library(lead_a1_board STATIC src/board/processor_links.cpp src/board/scheduler.cpp
+  src/board/spi_sharc_link.cpp src/board/spi_sharc_bus.cpp)
 target_include_directories(lead_a1_board PUBLIC src)
 target_link_libraries(lead_a1_board PUBLIC lead_a1_arm lead_a1_sharc)
 
@@ -147,6 +147,9 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-board-scheduler-test test/board_scheduler_test.cpp)
+  target_link_libraries(lead-a1-board-scheduler-test PRIVATE lead_a1_board)
+  add_test(NAME board_causal_event_scheduler COMMAND lead-a1-board-scheduler-test)
   add_executable(lead-a1-spi-sharc-bus-test test/spi_sharc_bus_test.cpp)
   target_link_libraries(lead-a1-spi-sharc-bus-test PRIVATE lead_a1_board)
   add_test(NAME processor_shared_spi_sharc_bus COMMAND lead-a1-spi-sharc-bus-test)
@@ -648,6 +651,7 @@ if(BUILD_TESTING)
     lead_a1_add_original_check("original_arm_spi_controls_${part}" "spi-controls-${part}")
     lead_a1_add_original_check("original_arm_spi_uploader_${part}" "spi-uploader-${part}")
     lead_a1_add_original_check("original_arm_spi_uploader_pulls_${part}" "spi-uploader-pulls-${part}")
+    lead_a1_add_original_check("original_arm_spi_uploader_scheduled_${part}" "spi-uploader-scheduled-${part}")
     foreach(channel RANGE 0 1)
       lead_a1_add_original_check("original_arm_spi_reset_kernel_${part}_${channel}"
         "spi-reset-kernel-${part}-${channel}")
@@ -705,6 +709,7 @@ if(BUILD_TESTING)
       lead-a1-processor-links-test
       lead-a1-spi-sharc-link-test
       lead-a1-spi-sharc-bus-test
+      lead-a1-board-scheduler-test
       lead-a1-spi-slave-boot-test
       lead-a1-sharc-visa-interrupt-test
       lead-a1-original-visa-interrupt-test

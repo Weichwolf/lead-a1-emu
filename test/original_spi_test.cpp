@@ -4,6 +4,7 @@
 #include "arm/peripherals/gpio.hpp"
 #include "arm/peripherals/spi.hpp"
 #include "board/processor_links.hpp"
+#include "board/scheduler.hpp"
 #include "board/spi_sharc_bus.hpp"
 #include "board/spi_sharc_link.hpp"
 #include "common/memory.hpp"
@@ -608,28 +609,53 @@ void flag_setup(Fixture &fixture, lead_a1::Sharc &cpu) {
   require(cpu.state().flag_inputs.known == 0); // No ARM connection/pull-up invented.
 }
 
-void clear_ram(Fixture &fixture, lead_a1::Sharc &cpu) {
-  constexpr std::uint32_t kernel = 0x92000;
-  constexpr unsigned int kernel_words = 384;
-  std::array<std::uint32_t, kernel_words> preserved{};
-  for (unsigned int index = 0; index < preserved.size(); ++index) {
-    preserved[index] =
-        static_cast<std::uint32_t>(fixture.dsp_memory.read({.address = kernel + index}));
-  }
-
+struct KernelClearReference {
   struct ClearSpan {
     std::uint32_t address;
     unsigned int words;
   };
 
-  constexpr std::array<ClearSpan, 4> spans{{{.address = 0x92180, .words = 0xbe80},
-                                            {.address = 0xb2000, .words = 0xbfff},
-                                            {.address = 0xc0000, .words = 0x7fff},
-                                            {.address = 0xe0000, .words = 0x7fff}}};
-  constexpr std::uint32_t tail_marker = 0x6e5d4c3b;
-  for (unsigned int index = 1; index < spans.size(); ++index) {
-    fixture.dsp_memory.write({.address = spans[index].address + spans[index].words}, tail_marker);
+  static constexpr std::uint32_t kernel = 0x92000;
+  static constexpr unsigned int kernel_words = 384;
+  static constexpr std::array<ClearSpan, 4> spans{{{.address = 0x92180, .words = 0xbe80},
+                                                   {.address = 0xb2000, .words = 0xbfff},
+                                                   {.address = 0xc0000, .words = 0x7fff},
+                                                   {.address = 0xe0000, .words = 0x7fff}}};
+  static constexpr std::uint32_t tail_marker = 0x6e5d4c3b;
+  std::array<std::uint32_t, kernel_words> preserved{};
+
+  explicit KernelClearReference(Fixture &fixture) {
+    for (unsigned int index = 0; index < preserved.size(); ++index) {
+      preserved[index] =
+          static_cast<std::uint32_t>(fixture.dsp_memory.read({.address = kernel + index}));
+    }
+    for (unsigned int index = 1; index < spans.size(); ++index) {
+      fixture.dsp_memory.write({.address = spans[index].address + spans[index].words}, tail_marker);
+    }
   }
+
+  void check(const Fixture &fixture) const {
+    for (const auto span : spans) {
+      for (unsigned int index = 0; index < span.words; ++index) {
+        require(fixture.dsp_memory.read({.address = span.address + index}) == 0);
+      }
+    }
+    check_preserved(fixture);
+  }
+
+  void check_preserved(const Fixture &fixture) const {
+    for (unsigned int index = 1; index < spans.size(); ++index) {
+      require(fixture.dsp_memory.read({.address = spans[index].address + spans[index].words}) ==
+              tail_marker);
+    }
+    for (unsigned int index = 0; index < preserved.size(); ++index) {
+      require(fixture.dsp_memory.read({.address = kernel + index}) == preserved[index]);
+    }
+  }
+};
+
+void clear_ram(Fixture &fixture, lead_a1::Sharc &cpu) {
+  const KernelClearReference reference(fixture);
   constexpr std::uint32_t caller = 0x8c008;
   constexpr unsigned int limit = 200000;
   while (cpu.state().pc != caller && fixture.dsp_steps < limit) {
@@ -641,18 +667,7 @@ void clear_ram(Fixture &fixture, lead_a1::Sharc &cpu) {
   require(cpu.state().depth == 0 && cpu.state().loops_empty == true && !cpu.state().count_loop);
   constexpr std::uint32_t parent = 0x108c008;
   require(cpu.state().pc_stack[0] == parent); // Physical popped frame retained.
-  for (const auto span : spans) {
-    for (unsigned int index = 0; index < span.words; ++index) {
-      require(fixture.dsp_memory.read({.address = span.address + index}) == 0);
-    }
-  }
-  for (unsigned int index = 1; index < spans.size(); ++index) {
-    require(fixture.dsp_memory.read({.address = spans[index].address + spans[index].words}) ==
-            tail_marker);
-  }
-  for (unsigned int index = 0; index < preserved.size(); ++index) {
-    require(fixture.dsp_memory.read({.address = kernel + index}) == preserved[index]);
-  }
+  reference.check(fixture);
   constexpr std::uint32_t final_index = 0xe7fff;
   constexpr std::uint64_t all_data_bits = 0xffffffffff;
   require(cpu.state().dag[0][0][0].value == final_index);
@@ -1172,23 +1187,27 @@ void runtime_header(Fixture &fixture,
   runtime_code_record(fixture, cpu, spec, input);
 }
 
+void kernel_clock_step(Fixture &fixture, lead_a1::Sharc &cpu) {
+  constexpr std::uint32_t bypass = 0x8000;
+  const auto events = fixture.clock.events.size();
+  const auto step = cpu.step();
+  ++fixture.dsp_steps;
+  if (fixture.clock.events.size() == events) {
+    const bool bypassed = (fixture.clock.device.state().control & bypass) != 0;
+    // Owned lower-bound clock reference: internal instructions retire at least
+    // one core clock; pure short-loop bubbles are included. In settled bypass
+    // those clocks also guarantee CLKIN time. Skip the PMCTL access itself.
+    fixture.clock.device.advance({.core_cycles = step.minimum_core_cycles,
+                                  .clkin_cycles = bypassed ? step.minimum_core_cycles : 0});
+  }
+}
+
 void kernel_clock_setup(Fixture &fixture, lead_a1::Sharc &cpu) {
   constexpr std::uint32_t flags_entry = 0x8c0b2;
   constexpr unsigned int instruction_limit = 20000;
   constexpr unsigned int instruction_count = 8291;
-  constexpr std::uint32_t bypass = 0x8000;
   while (cpu.state().pc != flags_entry && fixture.dsp_steps < instruction_limit) {
-    const auto events = fixture.clock.events.size();
-    const auto step = cpu.step();
-    ++fixture.dsp_steps;
-    if (fixture.clock.events.size() == events) {
-      const bool bypassed = (fixture.clock.device.state().control & bypass) != 0;
-      // Owned lower-bound clock reference: internal instructions retire at least
-      // one core clock; pure short-loop bubbles are included. In settled bypass
-      // those clocks also guarantee CLKIN time. Skip the PMCTL access itself.
-      fixture.clock.device.advance({.core_cycles = step.minimum_core_cycles,
-                                    .clkin_cycles = bypassed ? step.minimum_core_cycles : 0});
-    }
+    kernel_clock_step(fixture, cpu);
   }
   require(cpu.state().pc == flags_entry && fixture.dsp_steps == instruction_count);
   require(cpu.state().depth == 1 && cpu.state().loops_empty == true && !cpu.state().count_loop);
@@ -1395,10 +1414,166 @@ void uploader_flag_handshake(
   if (paired) { require(idle.state() == idle_expected); }
 }
 
+struct ScheduledReference {
+  // Explicit owned software-entry latch and instruction-order cadence inputs.
+  // Neither is a qualified physical reset/clock reference.
+  std::optional<bool> latch;
+  std::uint64_t dsp_period{1};
+};
+
+struct ScheduledUploader {
+  Fixture &fixture;
+  lead_a1::Arm &arm;
+  lead_a1::Sharc &dsp;
+  lead_a1::ProcessorLinks &links;
+  ScheduledReference reference;
+  lead_a1::BoardScheduler scheduler{{.sources = {{.next = 0, .priority = 1}, {.next = 0}}}};
+  std::uint64_t arm_steps{};
+
+  bool dispatch(std::uint32_t poll) {
+    const auto claimed = scheduler.claim();
+    if (!claimed || claimed->retired) {
+      throw std::runtime_error("Missing unretired uploader event");
+    }
+    const auto event = claimed->event;
+    if (event.source == 0) {
+      if (!reference.latch && arm.state().registers[15] == poll &&
+          fixture.gpio.device.state().banks[3].input.known != all_gpio_bits) {
+        const auto before = scheduler.state();
+        const auto ticks = fixture.ticks;
+        static_cast<void>(uploader_wait(fixture, arm, poll)); // Execute and diagnose the real LDRH.
+        require(scheduler.state() == before && scheduler.claim() == claimed &&
+                fixture.ticks == ticks);
+        return false; // No later DSP/MCU event may pass this unresolved causal frontier.
+      }
+      require(!arm.step().exception);
+      ++arm_steps;
+      scheduler.retire(event);
+      fixture.progress();
+    } else {
+      constexpr unsigned int clock_prefix = 8291;
+      if (fixture.dsp_steps < clock_prefix) {
+        kernel_clock_step(fixture, dsp);
+      } else {
+        static_cast<void>(dsp.step());
+        ++fixture.dsp_steps;
+      }
+      scheduler.retire(event);
+    }
+    links.sample();
+    scheduler.complete(event, event.timestamp + (event.source == 0 ? 1 : reference.dsp_period));
+    return true;
+  }
+};
+
+void check_scheduled_polls(const ScheduledUploader &run, std::size_t first, std::uint64_t ticks) {
+  constexpr std::uint32_t gpio_input_halfword = 0x4a;
+  constexpr std::uint64_t direction_effect = 8294;
+  constexpr std::uint64_t ready_effect = 171758;
+  const auto effect = run.reference.latch == false ? ready_effect : direction_effect;
+  const auto arrival = (effect - 1) * run.reference.dsp_period;
+  const auto read_time = ((arrival + 2) / 3) * 3; // Actual LDRH/TST/BEQ loop, ARM period1.
+  const bool stopped = !run.reference.latch;
+  const auto frontier = read_time + (stopped ? 0 : 2);
+  const auto reads = (read_time / 3) + (stopped ? 0 : 1);
+  require(run.scheduler.state().frontier == frontier &&
+          run.fixture.dsp_steps == (frontier / run.reference.dsp_period) + 1 &&
+          run.arm_steps == frontier + (stopped ? 0 : 1));
+  constexpr std::uint32_t unknown_pc = 0x8c0b7;
+  constexpr std::uint32_t early_high_pc = 0x8c0b8;
+  constexpr std::array<std::uint32_t, 2> initialized_pcs{0x8c00c, 0x8c009};
+  auto expected_pc = unknown_pc;
+  if (run.reference.latch) {
+    expected_pc =
+        *run.reference.latch ? early_high_pc : initialized_pcs[run.reference.dsp_period - 1];
+  }
+  require(run.dsp.state().pc == expected_pc);
+  require(run.fixture.gpio.events.size() == first + reads &&
+          run.fixture.ticks == ticks + run.arm_steps);
+  for (std::uint64_t index = 0; index < reads; ++index) {
+    const auto &event = run.fixture.gpio.events[first + index];
+    require(!event.write && event.width == 2 && event.offset == gpio_input_halfword &&
+            event.value == (!stopped && index + 1 == reads ? 8 : 0) &&
+            event.instruction == ticks + (index * 3));
+  }
+  if (stopped) {
+    const auto &state = run.scheduler.state();
+    require(state.active && !state.active->retired && state.active->event.source == 0 &&
+            state.active->event.timestamp == frontier && state.sources[1].next > frontier);
+    constexpr std::uint16_t missing_ready = 0xfff7;
+    require(run.fixture.gpio.device.state().banks[3].input ==
+            (lead_a1::GpioSample{.known = missing_ready}));
+  } else {
+    constexpr std::uint32_t zero_flag = 0x40000000;
+    require(!run.scheduler.state().active && run.arm.state().registers[1] == 8 &&
+            (run.arm.state().cpsr & zero_flag) == 0);
+  }
+}
+
+void scheduled_uploader_handshake(Fixture &fixture,
+                                  lead_a1::Arm &arm,
+                                  lead_a1::Sharc &dsp,
+                                  std::uint32_t poll,
+                                  ScheduledReference reference) {
+  const KernelClearReference clear_reference(fixture);
+  lead_a1::SharcMemory idle_memory;
+  lead_a1::Sharc idle(idle_memory, lead_a1::Sharc::reset_reference_214xx(dsp_reset));
+  auto idle_expected = idle.state();
+  const std::array dsps{&dsp, &idle};
+  lead_a1::ProcessorLinks links(fixture.gpio.device,
+                                dsps,
+                                {{.bank = 3, .pin = 2, .dsp = 0, .flag = 0},
+                                 {.bank = 3, .pin = 3, .dsp = 0, .flag = 1, .pull = false},
+                                 {.bank = 3, .pin = 0, .dsp = 1, .flag = 0},
+                                 {.bank = 3, .pin = 1, .dsp = 1, .flag = 1, .pull = false}});
+  constexpr std::uint16_t unconnected = 0xfff0;
+  fixture.gpio.device.sample(3, {.known = unconnected});
+  links.sample();
+  require(fixture.gpio.device.state().banks[3].input ==
+              (lead_a1::GpioSample{.known = all_gpio_bits}) &&
+          !fixture.spi0.device.next_event() && !fixture.due);
+  const auto ticks = fixture.ticks;
+  const auto first = fixture.gpio.events.size();
+  ScheduledUploader run{
+      .fixture = fixture, .arm = arm, .dsp = dsp, .links = links, .reference = reference};
+  constexpr unsigned int limit = 600000;
+  unsigned int dispatched{};
+  while (arm.state().registers[15] != poll + 12 && dispatched < limit) {
+    if (!run.dispatch(poll)) { break; }
+    ++dispatched;
+  }
+  require(dispatched < limit &&
+          (reference.latch.has_value() == (arm.state().registers[15] == poll + 12)));
+  check_scheduled_polls(run, first, ticks);
+  check_clock_transactions(fixture);
+  idle_expected.flag_inputs = {.known = 3};
+  require(idle.state() == idle_expected && fixture.control.events.empty() &&
+          fixture.control.device.state().effective == 4);
+  const auto nets = links.snapshot();
+  if (reference.latch) {
+    require(nets.levels[1] == (lead_a1::ProcessorWireLevel{.high = 2, .level = true}));
+  } else {
+    require(nets.levels[1] ==
+            (lead_a1::ProcessorWireLevel{.unresolved = 2, .level = std::nullopt}));
+  }
+  clear_reference.check_preserved(fixture);
+  if (reference.latch == false) { clear_reference.check(fixture); }
+  std::string_view latch = "unknown";
+  if (reference.latch) { latch = *reference.latch ? "HIGH" : "LOW"; }
+  std::cout << "Scheduled software-entry reference: initial FLAG1=" << latch
+            << " DSP period=" << reference.dsp_period << " DSP instructions=" << fixture.dsp_steps
+            << " ARM instructions=" << run.arm_steps
+            << " frontier=" << run.scheduler.state().frontier << " DSP PC=" << std::hex
+            << dsp.state().pc << std::dec
+            << (reference.latch ? " first wait exited" : " missing-input frontier retained")
+            << '\n';
+}
+
 void original_uploader_handshake(std::span<const std::byte> image,
                                  const std::filesystem::path &spec,
                                  unsigned int part,
-                                 bool paired = false) {
+                                 bool paired = false,
+                                 std::optional<ScheduledReference> scheduled = {}) {
   constexpr std::array<std::uint32_t, 2> entries{0xc01348b8, 0xc00051cc};
   constexpr std::array<std::uint32_t, 2> polls{0xc0134948, 0xc000525c};
   Fixture fixture(image, placements[part]);
@@ -1440,14 +1615,24 @@ void original_uploader_handshake(std::span<const std::byte> image,
   require(clears == std::vector<std::uint64_t>{4, 1});
   fixture.dsp_memory.map_io({.first_word = 0x2000, .words = 1}, fixture.clock);
   fixture.dsp_memory.map_io({.first_word = dsp_sysctl, .words = 1}, fixture.control);
-  lead_a1::Sharc dsp(fixture.dsp_memory,
-                     lead_a1::Sharc::reset_reference_214xx(dsp_reset),
-                     &fixture.control.device);
-  kernel_clock_setup(fixture, dsp);
-  flag_setup(fixture, dsp);
-  clear_ram(fixture, dsp);
-  uploader_flag_handshake(fixture, arm, dsp, polls[part], paired);
+  auto dsp_initial = lead_a1::Sharc::reset_reference_214xx(dsp_reset);
+  if (scheduled && scheduled->latch) {
+    constexpr std::uint32_t flag1_level = 4;
+    dsp_initial.system[5].known |= flag1_level;
+    if (*scheduled->latch) { dsp_initial.system[5].value |= flag1_level; }
+    dsp_initial.effective[5] = dsp_initial.system[5];
+  }
+  lead_a1::Sharc dsp(fixture.dsp_memory, dsp_initial, &fixture.control.device);
+  if (scheduled) {
+    scheduled_uploader_handshake(fixture, arm, dsp, polls[part], *scheduled);
+  } else {
+    kernel_clock_setup(fixture, dsp);
+    flag_setup(fixture, dsp);
+    clear_ram(fixture, dsp);
+    uploader_flag_handshake(fixture, arm, dsp, polls[part], paired);
+  }
   uploader_kernel_words(fixture, part);
+  if (scheduled) { return; }
   std::cout
       << "Part " << part << (paired ? " paired reference pulls" : " legacy single peer")
       << ": original uploader initialized bank3, sent all768 kernel halfwords, "
@@ -1547,6 +1732,7 @@ enum class SpiCheckMode : std::uint8_t {
   kernel,
   uploader,
   uploader_pulls,
+  uploader_scheduled,
   reset_kernel
 };
 
@@ -1569,6 +1755,9 @@ SpiCheck check_mode(int argc, char **argv) {
   if (argc == 5 && std::string_view(argv[3]) == "--controllers") {
     return {.mode = SpiCheckMode::controllers, .selected = {.part = check_index(argv[4])}};
   }
+  if (argc == 5 && std::string_view(argv[3]) == "--uploader-scheduled") {
+    return {.mode = SpiCheckMode::uploader_scheduled, .selected = {.part = check_index(argv[4])}};
+  }
   if (argc == 5 && (std::string_view(argv[3]) == "--uploader" ||
                     std::string_view(argv[3]) == "--uploader-pulls")) {
     return {.mode = std::string_view(argv[3]) == "--uploader" ? SpiCheckMode::uploader
@@ -1581,9 +1770,10 @@ SpiCheck check_mode(int argc, char **argv) {
                                                             : SpiCheckMode::reset_kernel,
             .selected = {.part = check_index(argv[4]), .channel = check_index(argv[5])}};
   }
-  throw std::runtime_error("Usage: original-spi-test spec images "
-                           "[--controllers part | --kernel part channel | --uploader part | "
-                           "--uploader-pulls part | --reset-kernel part channel]");
+  throw std::runtime_error(
+      "Usage: original-spi-test spec images "
+      "[--controllers part | --kernel part channel | --uploader part | "
+      "--uploader-pulls part | --uploader-scheduled part | --reset-kernel part channel]");
 }
 
 void check_part(const SpiCheck &check,
@@ -1591,6 +1781,16 @@ void check_part(const SpiCheck &check,
                 const std::filesystem::path &spec,
                 unsigned int part) {
   const auto placement = placements[part];
+  if (check.mode == SpiCheckMode::uploader_scheduled || check.mode == SpiCheckMode::all) {
+    constexpr std::array<ScheduledReference, 4> references{{{.latch = std::nullopt},
+                                                            {.latch = true},
+                                                            {.latch = false},
+                                                            {.latch = false, .dsp_period = 2}}};
+    for (const auto reference : references) {
+      original_uploader_handshake(image, spec, part, true, reference);
+    }
+    if (check.mode == SpiCheckMode::uploader_scheduled) { return; }
+  }
   if (check.mode == SpiCheckMode::reset_kernel) {
     reset_kernel_transfer(image, spec, check.selected);
     return;

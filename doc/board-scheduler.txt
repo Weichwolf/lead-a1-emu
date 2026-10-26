@@ -1,0 +1,65 @@
+Deterministic board event calendar
+
+BoardScheduler has one owning thread and caller-supplied sources/timestamps in
+an explicit common unit. Earliest time wins, then lower priority, then source
+index. It supplies no CPU rates, processor count, boot activation, peripheral
+events or signal values. Successful runtime operations do not allocate.
+
+claim() retains one active event and moves the causal frontier to its time.
+The owner executes the guest action, calls retire(), publishes its resulting
+signals and calls complete() with a strictly later timestamp or no next work.
+A failed guest action retains the unretired event; a failed publication retains
+the retired phase. The owner must repair/retry the actual failing operation,
+without rerunning committed guest execution or advancing another source past
+the unresolved frontier. Peripheral subphases remain their owner's responsibility.
+
+Snapshots contain source times/priorities/sequences, frontier and active phase.
+They require corresponding independent CPU, RAM, peripheral and link snapshots.
+Invalid/past events and mismatching active tickets reject. Completed sequences
+invalidate old tickets. rearm() accepts only parked sources outside a dispatch,
+at or after the current frontier; a newly caused event can share that time.
+Sequence exhaustion and nonfuture completion reject without changing state.
+
+Owned checks cover literal mixed-cadence order/ties, execution versus publication
+failure phases, restored continuation, parking/rearm, stale tickets, malformed
+snapshots and uint64 boundaries. No native worker concurrency is introduced.
+
+Original reference integration
+original_arm_spi_uploader_scheduled_0/1 use the original allocation/GPIO/SPI
+uploader and its complete 768-halfword first-kernel transfer. Only after the
+real first readiness LDRH diagnoses missing input is the received kernel given
+the existing explicit software entry, not an invented hardware boot frame.
+The event calendar then interleaves genuine MCU LDRH/TST/BEQ iterations and
+the kernel's real clock setup, direction writes and RAM initialization.
+
+Candidate four-wire GPIO/FLAG connections, LOW weak pulls and unconnected-pad
+maskfff0 are explicit reference inputs. A second core-input reference remains
+unexecuted. The MCU period is1 and DSP periods are1/2 instruction-order units;
+they are not physical processor clocks. PMCTL retains its separately qualified
+minimum-core/CLKIN aging rule for the original8291-instruction clock prefix.
+Subsequent instruction scheduling establishes ordering, not cycle accuracy.
+
+Three initial FLAG1 latch scenarios remain distinct:
+- Unknown: direction becomes effective after instruction8294; its unresolved
+  actual output overrides the pull. The next original GPIO LDRH diagnoses and
+  holds the common causal frontier. Later DSP events cannot silently pass it.
+- Explicit HIGH: the original wait exits as soon as the output is enabled,
+  before RAM initialization. This demonstrates why an arbitrary initial latch
+  cannot be promoted to correct Nord startup.
+- Explicit LOW: repeated real polls see0 until the original level write/RTS
+  makes HIGH effective at instruction171758. Both cadences then leave the
+  original wait. All four complete clear spans, three tail guards and384
+  preserved kernel words retain the legacy independent memory expectations.
+
+Literal direction/ready instruction counts and the three-instruction MCU loop
+determine expected event times, poll counts, values and final PCs independently
+of the scheduler. Every actual GPIO read and timestamp is checked. Original
+PMCTL transactions, unexecuted peer state and serialized payload remain checked.
+
+No initial-latch scenario establishes a physical Nord reset value. Physical
+pulls, boot-channel activation/return frame, clocks and wiring remain unresolved.
+This reference ends at the first wait exit or missing-input frontier. Complete
+continuous upload, both executing DSPs, final FLAG-clear/release, cold boot,
+application operation and original audio remain mandatory open work.
+
+  ctest --preset strict -R '^(board_causal_event_scheduler|original_arm_spi_uploader_scheduled_[01])$' --output-on-failure

@@ -68,6 +68,17 @@ ID  State    Evidence / remaining work
              driver bit. All proposed input/edge changes validate before atomic
              publication. No Nord pinout, unconnected-pad default or
              propagation clock is supplied (processor-links.txt).
+             A single-owner board event calendar retains explicit source time,
+             priority, sequence and execution/publication phase. A missing input
+             holds its active causal frontier; no later source may pass it.
+             Sources supply their own time unit/rate and peripheral work; no
+             processor clocks, boot frames or signal levels are invented.
+             Separate original first-wait references interleave actual MCU polls
+             and kernel initialization with unknown/HIGH/LOW initial FLAG1
+             latches and two LOW instruction cadences. Only explicit LOW reaches
+             actual RAM-clear readiness; unknown diagnoses and HIGH exits early.
+             These owned inputs do not establish Nord reset values, complete
+             continuous upload, physical timing or cold boot (board-scheduler.txt).
              A separate SPI/SHARC connection now samples committed GPIO select,
              SCLK and MOSI into the real bootstrap/runtime receivers. Actual
              slave MISO is queried only on a consuming master event, with explicit
@@ -759,6 +770,13 @@ ID  State    Evidence / remaining work
              frame/PC/operand expectations. These isolated entries establish no
              application register snapshot, source acknowledgement or boot advance
              (sharc-visa-interrupts.txt).
+             Additional scheduled first-wait references run genuine MCU
+             LDRH/TST/BEQ alongside kernel initialization. Explicit LOW latch
+             references preserve all four RAM-clear spans, tail guards and384
+             kernel words; unknown output retains the failed MCU event, while
+             explicit HIGH exits before initialization. Neither software entry
+             nor these instruction cadences establish complete hardware boot
+             or a physical initial latch value (board-scheduler.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
 5   partial  Native SPORT word-buffer/DMA reference now transfers owned32-bit
              words through actual RAM grants, with chaining and distinct internal/
@@ -777,6 +795,17 @@ ID  State    Evidence / remaining work
              native LZO/SLEIGH/zlib instrumentation/object hooks and hardening
              checked. Complete CPU/boot/MIDI/audio/update, fuzz harnesses and
              performance remain pending.
+             Board-calendar checks independently specify mixed-cadence/tie
+             order, retained execution/publication phases, restored continuation,
+             parked-source rearm, stale tickets and malformed/uint64 boundaries.
+             Both original scheduled uploader groups check every actual GPIO
+             poll value/time/count, literal direction/ready instruction counts,
+             causal failure retention and final PCs at two LOW cadences.
+             Full PMCTL and preserved kernel expectations remain active; LOW
+             additionally retains the complete legacy RAM-clear oracle.
+             These are deterministic single-owner reference tests, not native
+             concurrency, full boot, physical timing or performance evidence
+             (board-scheduler.txt).
              Processor-link checks independently enumerate144 drive/pull cases,
              retain unrelated samples and check contention/unknown clearing,
              active-transaction and late edge-sample rollback, independent

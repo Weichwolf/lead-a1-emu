@@ -25,9 +25,11 @@ setup, including transport1 LIRPTL/MODE1. Both next FLAG0 waits have unknown
 input (doc/sharc-lirptl.txt).
 Separate original MCU-uploader references execute the first kernel transfer and
 consume its genuine readiness output through explicit candidate GPIO/FLAG wires.
-They use owned unconnected-pad inputs and pause MCU execution while DSP readiness
-is established; continuous full upload and physical wiring remain unqualified
-(doc/processor-links.txt).
+Legacy cases pause MCU execution while DSP readiness is established. Additional
+scheduled references interleave actual MCU polls and kernel initialization with
+explicit initial-latch/cadence inputs; unknown driven output stops their common
+frontier. Continuous full upload and physical wiring remain unqualified
+(doc/processor-links.txt, doc/board-scheduler.txt).
 These explicit reference inputs do not establish a complete cold boot, physical
 processor/slot wiring, MHz or playable audio. Other profiles retain independent
 execution boundaries. See doc/sharc-iop-bridge.txt, doc/sharc-dai-data.txt and

@@ -12,7 +12,7 @@ src/common/             Shared memory/device interfaces.
 src/firmware/           Container and image decoding.
 src/arm/core/           ARM execution, data/cache/MMU/system state.
 src/arm/peripherals/    AINTC, GPIO and SPI.
-src/board/              Explicit GPIO/FLAG, single and shared SPI/SHARC connections.
+src/board/              Event calendar, GPIO/FLAG and single/shared SPI connections.
 src/sharc/board/        Bound peripheral DMA scheduling.
 src/sharc/core/         SHARC instruction execution and architectural state.
 src/sharc/memory/       Memory views, arbitration and IOP bridge.
@@ -50,7 +50,8 @@ Builds are offline and do not need originals or private GitHub access.
 Original checks verify bundle/section/kernel identities for every selected
 native group. CTest registers each native program independently; SPI has two
 controller cases, two first-uploader-handshake cases, two paired-input weak-pull
-references and all four part/transport
+references, two interleaved first-wait groups (unknown/HIGH/LOW initial latch and
+two LOW instruction cadences; board-scheduler.txt) and all four part/transport
 kernel cases, plus four initial-profile kernel transfers with actual per-word
 RAM grants, a checked unselected peer on the shared bus and no DSP activation.
 Each retains its complete assertions, guest instruction bounds and normal

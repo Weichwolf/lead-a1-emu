@@ -114,7 +114,10 @@ does not establish Nord pull levels or partial-bit ARM propagation. ARM is held
 at its diagnosed missing-input boundary while the kernel runs. Sampling begins
 after the producer becomes known. There is no claim of continuous parallel
 uploader execution, completed streams, FLAG-clear/release, physical timing,
-cold boot, synth/audio or acceptance under objective.txt.
+cold boot, synth/audio or acceptance under objective.txt. Separate scheduled
+references now interleave the original first wait and kernel initialization
+under explicit latch/cadence inputs; their narrower evidence and retained
+unknown-input frontier are documented in board-scheduler.txt.
 
   cmake --build --preset strict
   ctest --preset strict -R '^(processor_gpio_sharc_links|gpio_mmio_cpu|sharc_flags|original_arm_spi_uploader(_pulls)?_[01])$' --output-on-failure
