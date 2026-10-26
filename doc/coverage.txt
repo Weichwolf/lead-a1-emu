@@ -476,6 +476,14 @@ ID  State    Evidence / remaining work
              consume exact per-word IO0 grants after the existing group threshold;
              cursor/count/FIFO/IRQ advance only after each successful RAM word.
              Partial-transfer failure preserves earlier committed words.
+             A pending uncached native F2 response can now consume its exact
+             PM/native48/fetch RAM grant. The real read and grant/fetch commit
+             are atomic; mismatching/foreign/denied grants, active owners and
+             failed reads retain both states without another clock. Captured
+             words cannot refresh after later DMA/RAM changes. Request issue,
+             CPU memory-port holds and complete clock coupling remain owner
+             work; this does not select the original physical response phase
+             (sharc-fetch-memory.txt).
              Full native Fetch coupling, shadow-write FIFOs, PM-data selection,
              peripheral channel arbitration and physical timing remain open
              (sharc-memory-bus.txt). Existing original fixtures keep their
@@ -924,6 +932,17 @@ ID  State    Evidence / remaining work
              rejection. An owned relocated self-modifying loop also composes
              actual dual SYSCTL/PM stores, quiet-width maturation, a native48
              PX end, its new cache miss and the native frame pop.
+             Actual serial SPI DMA and native fetch requests now contend on
+             one RAM bus under both explicit launch phases. Independent literal
+             R7=42/7 outcomes follow DMA-before-fetch versus fetch-before-DMA,
+             retaining captured words after later RAM replacement with99.
+             Independent-block grants, mismatching address/width/operation,
+             stale/foreign/active owners and failed-read repair preserve exact
+             bus/fetch/native/control state. Separate RAM/control/core/fetch/bus
+             owners restore and consume the repaired grant without a new clock.
+             The original candidate late-response path additionally consumes
+             an actual checked PM/native48 grant; its selected phase remains
+             an explicit reference, not physical timing or boot qualification.
              Type15a tests add literal read/write encodings,768 directed
              DM/PM/direction/register-bank/width/index/offset combinations,
              actual PM/cache and I-producer stalls, complement/count2/3/5

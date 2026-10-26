@@ -13,6 +13,7 @@
 namespace lead_a1 {
 
 class SharcIopBridge;
+class SharcMemoryBus;
 
 struct SharcFetchIopAccess {
   std::uint32_t pc{};
@@ -174,6 +175,9 @@ public:
   // RAM. This is an owner memory-response event, not a processor clock. A ready
   // fetched word cannot be refreshed, and failure retains the pending read.
   void complete_fetch2(const Sharc &cpu);
+  // Consume only this exact pending native48 request's actual PM RAM grant.
+  // No clock advances; validation/read failures retain both grant and fetch.
+  void complete_fetch2(const Sharc &cpu, SharcMemoryBus &bus);
 
   // One granted transport clock. nullopt injects a bubble, never a guest NOP.
   // Captures the previous F1 word in F2; later phases retain its actual data.
@@ -197,6 +201,7 @@ public:
 
 private:
   friend class Sharc;
+  void complete_fetch2(const Sharc &cpu, SharcMemoryBus *bus);
   [[nodiscard]] SharcFetchEvent advance_clock(Sharc &cpu,
                                               std::optional<std::uint32_t> next_address,
                                               SharcFetchBus bus,

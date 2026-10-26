@@ -57,6 +57,7 @@ public:
   [[nodiscard]] std::uint64_t execute(SharcMemoryMaster master);
 
 private:
+  friend class SharcFetch;
   SharcMemory &memory_;
   SharcMemoryBusState state_;
 };

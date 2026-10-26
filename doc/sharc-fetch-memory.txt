@@ -14,6 +14,16 @@ unknown/unmapped/non-executable read or foreign/active resource fails with
 PC, pending address, fetch operation and width; the pending read survives.
 CPU and memory ownership follows the existing bound transport contract.
 
+complete_fetch2(cpu, bus) binds the same response to an actual SharcMemoryBus
+PM/native48/fetch grant for that exact pending address and the same RAM owner.
+The granted operation performs the real executable RAM read exactly once.
+Grant consumption is staged with the fetched word until all actual transport
+invariants validate, then both states publish without throwing. Missing,
+denied, foreign, wrong-address/width/operation grants and read/ownership faults
+retain the complete bus and fetch state. Other grants, pending requests,
+phase and clocks remain untouched. No instruction, clock or IRQ is supplied.
+The owner must still submit/arbitrate requests and choose the response boundary.
+
 A pending response can remain absent through the existing cache-miss
 partial stall: F1/F2/Decode hold while Address advances to Execute. Before
 Decode advances again, the owner must complete the real read. Missing data
@@ -31,6 +41,13 @@ A relocated backward DO/PCSTK/DB loop uses different registers, data bank,
 SYSCTL width and replacement operands from the original fixture. Its actual
 dual store replaces its own end; explicit late completion executes a real
 native48 PX PM store through the marked-end cache miss and native pop.
+Additional owned SPI/F2 cases contend for the same physical RAM block under
+both explicit I/O launch phases. A real serial word and IOD0 write precede
+the fetch in one case; the fetch precedes DMA in the other. Actual execution
+returns literal R7=42 or7 respectively, despite later RAM replacement with99.
+They also check independent-block grant retention, stale/foreign/mismatching
+responses, active owners, failed executable reads and independent RAM/core/
+controller/fetch/bus continuation after repair without another bus clock.
 
 The optional original_sharc_deferred_f2 fixture freshly verifies the entire
 OS1.36 bundle, all six decoded sections and four kernels, then runs all four
@@ -40,6 +57,9 @@ leave its response pending through the actual dual-store partial stall,
 complete from RAM after that store commits. No bytes are injected into the
 response or refreshed after capture. The immediate original_sharc_images
 fixture and its width-guard expectation remain separate and unchanged.
+The candidate completion now consumes a checked actual PM/native48 grant;
+its local bus clock and active launch phase are explicit inputs, not a coupled
+physical CPU/DMA schedule. The same original data, counters and bounds remain.
 All eight candidate runs retire the actual NOP/dual/NOP/PX sequence, restore
 the saved SPI vector from unchanged PX, pop the native arithmetic frame and
 reach PC8c005 with SYSCTL read/effective4 and no pending response/effect.
@@ -58,5 +78,5 @@ fixture. A passing explicitly selected order cannot qualify physical timing,
 a complete board schedule or a successful original boot. The working stock
 firmware remains the reference; resolving that phase is emulator/input work.
 
-  cmake --build --preset strict --target lead-a1-sharc-fetch-memory-test lead-a1-original-sharc-test lead-a1-emu
-  ctest --preset strict -R '^(sharc_f2_memory_responses|sharc_fetched_arithmetic_cache|original_sharc_deferred_f2|original_sharc_images)$' --output-on-failure
+  cmake --build --preset strict --target lead-a1-sharc-fetch-memory-test lead-a1-sharc-fetch-bus-test lead-a1-original-sharc-test lead-a1-emu
+  ctest --preset strict -R '^(sharc_f2_memory_responses|sharc_fetch_ram_grants|sharc_fetched_arithmetic_cache|original_sharc_deferred_f2|original_sharc_images)$' --output-on-failure

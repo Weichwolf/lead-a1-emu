@@ -35,6 +35,10 @@ single-word write prevalidates all cells and then commits. Foreign native
 instruction transactions reject without being consumed or aborted. The
 owner must bind grants to the correct real requester and consume all of
 them before advancing any next cycle.
+SharcFetch::complete_fetch2(cpu,bus) now consumes an exact PM/native48 fetch
+grant for its pending response, with joint read/transport/grant publication.
+It cannot consume a different grant or refresh an already captured instruction.
+Unknown RAM or late validation leaves both owners unchanged for repair/retry.
 
 Typed bus snapshots retain pending and unconsumed grants, the carried IO1
 request, next launch phase and clock counter. Independent memory rebinding
@@ -83,7 +87,7 @@ failure/repair, exact grant rejection, pause/resume, transaction ownership,
 signed address wrap and zero stride. These are deterministic owned inputs,
 not fuzz or physical hardware traces.
 
-This component does not yet drive SharcFetch or advance a processor,
+The explicit F2 completion above does not request/grant clocks or advance a processor,
 PMCTL/SYSCTL or interrupt controller. It does not select between PM data
 and instruction fetch, define full pipeline partial stalls, retire a CPU
 instruction or resolve mixed loop/DAG/cache hazards. IOP-register arbitration

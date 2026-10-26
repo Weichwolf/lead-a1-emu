@@ -273,6 +273,9 @@ if(BUILD_TESTING)
   add_executable(lead-a1-sharc-fetch-memory-test test/sharc_fetch_memory_test.cpp)
   target_link_libraries(lead-a1-sharc-fetch-memory-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_f2_memory_responses COMMAND lead-a1-sharc-fetch-memory-test)
+  add_executable(lead-a1-sharc-fetch-bus-test test/sharc_fetch_bus_test.cpp)
+  target_link_libraries(lead-a1-sharc-fetch-bus-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_fetch_ram_grants COMMAND lead-a1-sharc-fetch-bus-test)
   add_executable(lead-a1-sharc-immediate-indexed-test test/sharc_immediate_indexed_test.cpp)
   target_link_libraries(lead-a1-sharc-immediate-indexed-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_immediate_indexed_moves COMMAND lead-a1-sharc-immediate-indexed-test)
@@ -745,6 +748,7 @@ if(BUILD_TESTING)
       lead-a1-sharc-fetch-arithmetic-cache-test
       lead-a1-sharc-immediate-indexed-test
       lead-a1-sharc-fetch-memory-test
+      lead-a1-sharc-fetch-bus-test
       lead-a1-sharc-visa-test
       lead-a1-sharc-visa-cpu-test
       lead-a1-sharc-power-test

@@ -7,6 +7,7 @@
 #include "sharc/core/sharc.hpp"
 #include "sharc/memory/sharc_iop_bridge.hpp"
 #include "sharc/memory/sharc_memory.hpp"
+#include "sharc/memory/sharc_memory_bus.hpp"
 #include "sharc/peripherals/sharc_boot.hpp"
 #include "sharc/peripherals/sharc_clock.hpp"
 #include "sharc/peripherals/sharc_control.hpp"
@@ -611,7 +612,17 @@ void complete_foreground_response(lead_a1::SharcMemory &memory,
   require(memory.read({.address = self_modify, .width = lead_a1::SharcWidth::wide48}) == patch);
   const auto before = cpu.state();
   const auto controller = control.snapshot();
-  fetch.complete_fetch2(cpu); // Explicit candidate response order; reads RAM, not patch bytes.
+  // Explicit candidate response order, now through an actual native48 RAM grant.
+  // This local bus supplies no physical phase or coupled CPU/DMA clock claim.
+  lead_a1::SharcMemoryBus bus(memory, lead_a1::SharcPeripheralPhase::active);
+  const lead_a1::SharcMemoryRequest request{
+      .access = {.address = self_modify, .width = lead_a1::SharcWidth::wide48},
+      .kind = lead_a1::AccessKind::fetch};
+  bus.request(lead_a1::SharcMemoryMaster::pm, request);
+  bus.advance();
+  require(bus.grant(lead_a1::SharcMemoryMaster::pm) == request);
+  fetch.complete_fetch2(cpu, bus);
+  require(!bus.grant(lead_a1::SharcMemoryMaster::pm) && bus.state().clocks == 1);
   const auto word = fetch.state().fetch2;
   require(word && word->address == self_modify && word->opcode == patch && cpu.state() == before &&
           control.snapshot() == controller);
