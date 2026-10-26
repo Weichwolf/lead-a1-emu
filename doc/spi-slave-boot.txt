@@ -25,10 +25,12 @@ No core, readiness GPIO, initial boot IRQ recognition, return frame or reset
 sequencer is synthesized. HWR24-25's initial vector RTI and the associated
 processor-control state remain board work (sharc.txt). A completion event is
 neither a qualified first Execute PC nor a completed instrument boot.
-PGRrev2.4 4-29 categorizes the boot peripheral interrupt as nonmaskable; the
-ordinary programmable IRQ mask/recognition path does not establish this initial
-entry. HWR24-8/25 and the vendor loader comment establish boot-idle/vector/RTI
-ordering, but not a complete initial processor-control snapshot.
+PGRrev2.4 4-29 lists the boot peripheral among nonmaskable categories, while
+4-30 says only RESET/EMU cannot be masked and describes automatic unmasking of
+the selected boot source. Neither statement establishes its actual initial
+MODE1/IMASK/IMASKP values or permits bypassing ordinary controls by assumption.
+HWR24-8/25 and the vendor loader comment establish boot-idle/vector/RTI ordering,
+but not a complete initial processor-control snapshot.
 
 Owned tests compare all 384 normal32 words and all 256 native48 aliases, retain
 the four-word FIFO threshold and literal count/request/event ordering through

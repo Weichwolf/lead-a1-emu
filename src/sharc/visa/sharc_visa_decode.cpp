@@ -58,13 +58,14 @@ std::uint64_t short_word(std::uint64_t raw) {
   if ((head >> nibble_shift) == short_compute_prefix) { return short_compute(raw); }
   if (head == 1) { return 0; } // Type21c NOP.
   const auto type = raw >> class_shift;
-  if (type == 10) {
-    if ((head & 1U) != 0) { throw std::runtime_error("SHARC VISA RTS loop reentry not qualified"); }
+  if (type == 10 || type == 11) {
+    if ((head & 1U) != 0) {
+      throw std::runtime_error("SHARC VISA return loop reentry/reserved bit not qualified");
+    }
     constexpr std::uint64_t condition = 0x3e00000000;
     constexpr std::uint64_t delayed = 0x4000000000;
     constexpr unsigned int delay_shift = 12;
-    return (std::uint64_t{10} << class_shift) | (raw & condition) |
-           ((raw & delayed) >> delay_shift);
+    return (type << class_shift) | (raw & condition) | ((raw & delayed) >> delay_shift);
   }
   constexpr std::uint64_t dm_compact = 0x900000000000;
   constexpr std::uint64_t nibble_mask = 0xf00000000000;
@@ -138,8 +139,8 @@ std::uint64_t sharc_visa_decode(SharcVisaInstruction instruction) {
 }
 
 void sharc_visa_execution_guard(const SharcState &state, SharcVisaInstruction instruction) {
-  if (state.pc != instruction.address || state.arithmetic_loop || state.interrupt) {
-    throw std::runtime_error("SHARC VISA PC/arithmetic/interrupt context not qualified");
+  if (state.pc != instruction.address || state.arithmetic_loop) {
+    throw std::runtime_error("SHARC VISA PC/arithmetic context not qualified");
   }
   if (state.count_loop &&
       (state.count_loop->body != state.count_loop->end || instruction.words != 3)) {
@@ -154,8 +155,8 @@ void sharc_visa_execution_guard(const SharcState &state, SharcVisaInstruction in
     }
   }
   constexpr std::uint64_t idle = 0x008000000000;
-  if (type == 11 || type == 14 || instruction.opcode == idle) {
-    throw std::runtime_error("SHARC VISA RTI/arithmetic-loop/IDLE timing not qualified");
+  if (type == 14 || instruction.opcode == idle) {
+    throw std::runtime_error("SHARC VISA arithmetic-loop/IDLE timing not qualified");
   }
 }
 

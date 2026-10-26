@@ -54,7 +54,10 @@ kernel cases, plus four initial-profile kernel transfers with actual per-word
 RAM grants and no DSP activation. Each retains its complete assertions, guest
 instruction bounds and normal per-test time bound.
 The original script's aggregate native interface remains available for manual
-runs. Synthetic checks require no manufacturer inputs.
+runs. A separate original_sharc_visa_interrupts case qualifies isolated native
+P6I vectors and VISA ISR entries with explicit controls; it does not boot an
+application (sharc-visa-interrupts.txt). Synthetic checks require no manufacturer
+inputs.
 
 The quality target runs format, CTest and Python bootstrap regressions. Optional
 reference identity checks skip explicitly if local originals are absent.

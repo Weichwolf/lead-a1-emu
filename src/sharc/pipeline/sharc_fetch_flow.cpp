@@ -73,9 +73,6 @@ std::optional<SharcFetchBranch> branch(const SharcState &cpu, const SharcFetchWo
   constexpr unsigned int rti = 11;
   const auto type = word.opcode >> class_shift;
   if (sharc_fetch_branch_encoding(word.opcode)) {
-    if (word.visa && type == rti) {
-      throw std::runtime_error("SHARC clocked VISA RTI timing not qualified");
-    }
     if (word.visa && (word.opcode & delayed) != 0) {
       throw std::runtime_error("SHARC clocked VISA delayed branch timing not qualified");
     }

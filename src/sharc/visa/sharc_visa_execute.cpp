@@ -20,7 +20,7 @@ bool redirects(const SharcState &state, std::uint64_t opcode) {
   if (state.branch && state.branch->slots == 1) { return true; }
   constexpr unsigned int class_shift = 40;
   const auto type = opcode >> class_shift;
-  if (type != 6 && type != 7 && type != 10) { return false; }
+  if (type != 6 && type != 7 && type != 10 && type != 11) { return false; }
   constexpr std::uint64_t delayed = 0x4000000;
   if ((opcode & delayed) != 0) { return false; }
   constexpr unsigned int condition_shift = 33;

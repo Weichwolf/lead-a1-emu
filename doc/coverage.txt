@@ -228,6 +228,14 @@ ID  State    Evidence / remaining work
              frame/IMASKP, holds its own latch clear and preserves other latches.
              Immediate conditional RTI preserves ISR results without borrowing
              IRQx/timer status-stack/MMASK behavior (sharc-interrupts.txt).
+             Qualified ordinary programmable entry now accepts internal VISA
+             foreground PCs with their exact short-address return frames. Native
+             IVT jumps can enter VISA handlers; compact and uncompressed immediate
+             RTI share the real source/pointer/pop semantics. Bound fetch retains
+             Address decisions and revalidates the frame at Execute. Native RTI
+             also returns to VISA. Initial boot interrupt/control state, nesting,
+             delayed VISA recognition/RTI and VISA loops remain separate gaps
+             (sharc-visa-interrupts.txt).
              The same reference now supports all19 programmable priorities,
              with explicit bank metadata and LIRPTL latch/mask/effect/pointer
              read views. Interleaved IRPTL/LIRPTL arbitration rejects unknown
@@ -720,6 +728,15 @@ ID  State    Evidence / remaining work
              No source
              SCLK/serial data,
              full cold boot or manual-function acceptance (sharc-sport.txt).
+             Separate original P6I ISR references now execute all four actual
+             native vectors and first VISA operations with explicit test IRQ/
+             SYSCTL inputs. Both transport 0 compact RTIs return; both transport 1
+             first DM reads reject unknown cells at93fe1/924f9 without
+             consuming service.
+             Instruction-order and bound-fetch paths agree with independent
+             frame/PC/operand expectations. These isolated entries establish no
+             application register snapshot, source acknowledgement or boot advance
+             (sharc-visa-interrupts.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
 5   partial  Native SPORT word-buffer/DMA reference now transfers owned32-bit
              words through actual RAM grants, with chaining and distinct internal/
@@ -759,6 +776,15 @@ ID  State    Evidence / remaining work
              through the same mapped port. Missing RAM/no-time retry, withheld
              grants/overflow, active parameter writes and invalid completed-boot
              handoff reject without false completion (spi-slave-boot.txt).
+             VISA IRQ checks add 16 independent native/VISA foreground, compact/
+             full RTI, primary/secondary and functional/clocked combinations;
+             four native-RTI-to-VISA returns, eight SIMD predicates and 20
+             independently rebound ISR continuations. Literal PC frames, pointer/
+             latch transitions, data and retirement widths accompany immutable
+             captured input, same-sequential flush, changed Address-target failure
+             and unsupported return/boundary guards. Optional original ISR checks
+             reverify the bundle/sections/kernels before all four actual entries
+             in both execution paths (sharc-visa-interrupts.txt).
              Programmable IRQ checks independently list all19 routes and171
              ordered priority pairs,38 mask/IDLE cases and ten restored fetched
              secondary handlers. Thirty enabled mask changes, inherited pending
@@ -1132,6 +1158,11 @@ ID  State    Evidence / remaining work
              The conditional first-handshake reference uses newly written emulator
              code and explicit candidate wires, not private reconstruction code
              or measured physical connections (processor-links.txt).
+             Original P6I vector/target metadata previously cross-checked with
+             private6404487093/6404963368 now also drives the isolated executed
+             entries described above. Only factual placements and newly written
+             emulator/test code are public; no private implementation or original
+             program bytes are imported (sharc-visa-interrupts.txt).
 10  pending  No hardware comparison, timing measurement or flashing performed.
 
 Quality and UI checks validate only the named bootstrap behavior. Unknown values

@@ -413,7 +413,7 @@ void bad_vector_and_failed_handler() {
   cpu.latch_interrupt(p1i);
   const auto before = cpu.state();
   rejected([&] { static_cast<void>(cpu.service_interrupt({.vector_base = base + 1})); },
-           "explicit internal native IVT/PC");
+           "explicit internal native IVT/program PC");
   require(cpu.state() == before);
   constexpr std::uint64_t unmapped_iop = 0x100000002004;
   code(memory, vector, unmapped_iop);

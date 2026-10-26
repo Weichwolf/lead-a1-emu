@@ -1,0 +1,61 @@
+Programmable IRQ entry and return across native/VISA code
+
+The existing explicit programmable IRQ owner operation now accepts an unlooped
+internal native or VISA foreground PC. The IVT remains an explicit aligned
+native base. PGRrev2.4 4-5..9 selects encoding by program address; a saved VISA
+PC is its actual short-word address, without native-word conversion. Existing
+source priority, masks, known stack, nonnesting and interrupt-frame guards apply.
+This is ordinary programmable IRQ behavior, not the unresolved initial boot
+interrupt or a physical PICR/board connection.
+
+A native IVT JUMP can enter a VISA ISR. Its supported instructions execute with
+the real active frame and controller pointer. Type 11c immediate conditional RTI
+normalizes the documented compact condition fields into the existing RTI
+operation; Type 11a uncompressed immediate RTI uses its actual three short words.
+Both pop the real interrupt frame, clear the selected source/pointer and preserve
+programmable-ISR arithmetic results/status. Native RTI can likewise return to
+VISA foreground. Raw encoding and actual instruction length remain observable.
+Delayed/parallel RTI, RTI's reserved low compact bit, nesting, external programs,
+VISA delayed-branch recognition and active/suspended VISA loops remain guarded.
+
+Instruction-order execution stages IAB consumption before CPU/memory commit.
+A taken RTI flushes speculative input even when its return equals the sequential
+address. The caller supplies the matching IAB; only the bound fetch API owns
+and flushes a complete foreground fetch pipeline during recognition.
+
+In the bound fetch path, explicit recognition discards the old foreground
+pipeline/IAB and directs actual fetch to the native vector. ISR JUMP and RTI
+retain Address decisions, cancel wrong-path input and fetch their real targets.
+Execute rechecks the captured return against the actual frame before commit.
+A failed retirement retains the core, Execute word and all buffers. Checkpoint
+validation accepts a valid short-address return while retaining native IVT and
+source/pointer consistency checks. No additional synchronization/physical timing
+or automatic peripheral-source acknowledgement is inferred.
+
+Owned tests independently check 16 native/VISA, compact/full, primary/secondary,
+instruction-order/clocked combinations, literal frames/pointers/data/retired PCs,
+SIMD conditional outcomes, captured-RAM replacement and same-sequential flush.
+Native-vector-only RTI returns and independently rebound ISR continuations use
+separate memory/core/fetch objects. Unsupported returns and a changed captured
+Address target reject without mutation; the valid retained return still executes.
+
+The optional original_sharc_visa_interrupts check revalidates the pinned bundle,
+six sections and kernels, then loads only the actual P6I vector and 32 target
+short words from each original CODE placement. It is an isolated ISR check,
+not original startup or a full stream upload. Explicit reference inputs enable
+P6I and global IRQ and select SYSCTL=4; no application register snapshot is claimed.
+Both transport 0 entries execute their real native JUMP and compact RTI and
+return to an owned interrupted short address. Both transport 1 entries execute
+the real JUMP and reject their actual first DM read at 0x93fe1/0x924f9 because those
+cells are unknown. CPU/controller/transport/IAB remain intact and service stays
+active. Each case runs in instruction order and through bound fetch. No missing
+DM value, peripheral acknowledgement, FLAG0 release or boot input is fabricated.
+
+Primary constraints: PGRrev2.4 4-5..9,4-28..35,9-44..46,10-17/18,A-10,A-33;
+reference/sharc.json pins document provenance. Original vector/target placement
+facts are independently checked against pinned CODE identities and privately
+corroborated in lead-a1-src issue1, comments6404487093/6404963368. No private
+implementation or manufacturer program bytes are distributed.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_visa_programmable_interrupts|original_sharc_visa_interrupts|sharc_p1i_interrupts|sharc_lirptl_programmable_interrupts|sharc_clocked_visa_fetch|sharc_visa_instruction_execution)$' --output-on-failure

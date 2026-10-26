@@ -24,14 +24,16 @@ CPU/memory/device transactions. Ready bytes are never reread from RAM.
 Failures retain CPU, transport and IAB; snapshots validate both encodings,
 cursor continuity, delay occupancy and aborted requests.
 
-Immediate JUMP/CALL/RTS may cross native/VISA address spaces. Address
+Immediate JUMP/CALL/RTS/RTI may cross native/VISA address spaces. Address
 discards the old IAB epoch and cancels its speculative short-word request;
 the target first enters F1 with branch Execute. Wrong-path bytes do not
 undergo semantic Decode. CALL return frames use actual short-word lengths.
 Native delayed slots retain their native behavior. Clocked single-body VISA
 counter loops have the separate sharc-visa-loops.txt contract. VISA delayed
-branches, other loops/RTI/IDLE, PM/cache/deferred-response combinations and block arbitration
-still need qualification. These are emulator gaps, not accepted instrument
+branches, other loops/IDLE, PM/cache/deferred-response combinations and block
+arbitration still need qualification. Programmable IRQ entry, native vectors,
+VISA handlers and compact/full immediate RTI have the separate
+sharc-visa-interrupts.txt contract. These are emulator gaps, not accepted instrument
 limitations or permission to change firmware.
 
 Owned tests transcribe Tables4-2/3, check mixed16/32/48-bit execution,

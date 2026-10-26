@@ -4,6 +4,7 @@
 #include "sharc/core/sharc_interrupt_source.hpp"
 #include "sharc/memory/sharc_memory.hpp"
 #include "sharc/peripherals/sharc_control.hpp"
+#include "sharc/visa/sharc_visa_internal.hpp"
 
 #include <bit>
 #include <cstdint>
@@ -30,6 +31,10 @@ bool selected(SharcKnown32 value, std::uint32_t mask) {
 
 bool internal(std::uint32_t address) {
   return address >= native_begin && address < native_end;
+}
+
+bool internal_program(std::uint32_t address) {
+  return internal(address) || sharc_visa_address(address);
 }
 
 void nonnesting(const SharcState &state) {
@@ -97,8 +102,8 @@ unsigned int
 recognition_boundary(const SharcState &state, SharcInterruptReference reference, bool fetched) {
   constexpr std::uint32_t vector_alignment = 255;
   if (!internal(reference.vector_base) || (reference.vector_base & vector_alignment) != 0 ||
-      !internal(state.pc)) {
-    throw std::runtime_error("SHARC interrupt requires an explicit internal native IVT/PC");
+      !internal_program(state.pc)) {
+    throw std::runtime_error("SHARC interrupt requires an explicit internal native IVT/program PC");
   }
   if (state.branch) {
     throw std::runtime_error("SHARC delayed-branch/loop interrupt entry not qualified");
@@ -142,9 +147,9 @@ void sharc_validate_interrupt(const SharcState &state) {
   const SharcInterruptSource source{
       .bank = frame.bank, .mask = frame.source, .offset = frame.vector & vector_low};
   const auto primary_pointer = frame.bank == SharcInterruptBank::irptl ? frame.source : 0;
-  if (!sharc_programmable_source(source) || !internal(frame.vector) || !internal(frame.return_pc) ||
-      frame.saved_depth >= before_almost_full || !state.depth ||
-      *state.depth <= frame.saved_depth ||
+  if (!sharc_programmable_source(source) || !internal(frame.vector) ||
+      !internal_program(frame.return_pc) || frame.saved_depth >= before_almost_full ||
+      !state.depth || *state.depth <= frame.saved_depth ||
       state.pc_stack[frame.saved_depth] != (sharc_special_frame | frame.return_pc) ||
       state.system[imaskp] != (SharcKnown32{.value = primary_pointer, .known = all_bits}) ||
       state.effective[imaskp] != state.system[imaskp]) {

@@ -21,9 +21,11 @@ retain their original two native slots and may target the VISA reference.
 Qualified compact forms: Type1b/3b/4b/5b data-only forms; Type2b packed
 compute; Type17b signed16 immediate; Type2c short integer add/sub/pass/compare/
 not/inc/dec/and/or/xor and floating add/sub/multiply; Type3c DM transfer;
-Type11c plain/delayed conditional RTS; Type21c NOP. Corresponding native
-operand/mode/memory/rounding guards remain. Other compact operations, RTI,
-IDLE and arithmetic-loop entry remain explicit gaps. The bounded VISA
+Type11c plain/delayed conditional RTS and immediate conditional RTI; Type21c
+NOP. Programmable ISR execution and native/VISA returns retain the existing
+qualified frame/latch semantics (sharc-visa-interrupts.txt). Corresponding native
+operand/mode/memory/rounding guards remain. Other compact operations, delayed/
+parallel RTI, IDLE and arithmetic-loop entry remain explicit gaps. The bounded VISA
 counter-loop form is a single uncompressed48-bit body: PGR4-54/55 requires
 short-loop bodies to remain uncompressed. Begin/end increments use the real
 short-word length; native counter behavior retains its one-word default.

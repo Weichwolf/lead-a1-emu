@@ -146,6 +146,11 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-sharc-visa-interrupt-test test/sharc_visa_interrupt_test.cpp)
+  target_link_libraries(lead-a1-sharc-visa-interrupt-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_visa_programmable_interrupts COMMAND lead-a1-sharc-visa-interrupt-test)
+  add_executable(lead-a1-original-visa-interrupt-test test/original_visa_interrupt_test.cpp)
+  target_link_libraries(lead-a1-original-visa-interrupt-test PRIVATE lead_a1_sharc)
   add_executable(lead-a1-spi-slave-boot-test test/spi_slave_boot_test.cpp)
   target_link_libraries(lead-a1-spi-slave-boot-test PRIVATE lead_a1_sharc)
   add_test(NAME sharc_spi_slave_boot_profile COMMAND lead-a1-spi-slave-boot-test)
@@ -650,6 +655,10 @@ if(BUILD_TESTING)
     "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>
     --sharc-only $<TARGET_FILE:lead-a1-original-sharc-test>)
   set_tests_properties(original_sharc_images PROPERTIES SKIP_RETURN_CODE 77)
+  add_test(NAME original_sharc_visa_interrupts COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>
+    --sharc-only $<TARGET_FILE:lead-a1-original-visa-interrupt-test>)
+  set_tests_properties(original_sharc_visa_interrupts PROPERTIES SKIP_RETURN_CODE 77)
   add_test(NAME original_sharc_deferred_f2 COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/test/original_images.py" $<TARGET_FILE:lead-a1-emu>
     --sharc-only $<TARGET_FILE:lead-a1-original-sharc-test> --sharc-deferred-f2)
@@ -691,6 +700,8 @@ if(BUILD_TESTING)
       lead-a1-processor-links-test
       lead-a1-spi-sharc-link-test
       lead-a1-spi-slave-boot-test
+      lead-a1-sharc-visa-interrupt-test
+      lead-a1-original-visa-interrupt-test
       lead-a1-sharc-lirptl-test
       lead-a1-sharc-sport-test
       lead-a1-sharc-sport-bus-test

@@ -1,8 +1,9 @@
 Programmable interrupt recognition and immediate RTI reference
 
 An explicit owner operation recognizes a latched, enabled programmable IRQ at a
-qualified native internal instruction boundary. The owner supplies an aligned
-internal IVT base; P0..18 use offsets2c..74 (P1I is30). This is a core programmable-interrupt
+qualified native or VISA internal instruction boundary. The owner supplies an
+aligned internal IVT base; P0..18 use offsets2c..74 (P1I is30). This is a core
+programmable-interrupt
 reference, not proof of the Nord board's PICR routing, IVT/reset selection,
 interrupt synchronization, SPI acknowledgement or complete pipeline timing.
 Other core sources, ambiguous priority, nonmaskable state, active/unknown timer,
@@ -38,7 +39,8 @@ and both repaired fixture slots execute on retry. The further bound fetched
 first-slot IDLE wake and retained final slot are in sharc-delayed-idle.txt.
 This functional placement does
 not model an earlier physical recognition/pipeline latch or establish pin timing.
-Loop reentry and non-native boundaries remain guarded.
+VISA delayed-branch delivery, loop reentry and external boundaries remain
+guarded. Immediate VISA handler/return transport is in sharc-visa-interrupts.txt.
 
 P1I does not automatically push/pop ASTATx/y or MODE1, nor apply MMASK. Those
 status actions belong to IRQ2-0/timer or explicit status-stack instructions.
@@ -49,8 +51,9 @@ also covers pending IRPTL effects. Peripheral-source acknowledgement remains
 a separate owner/device action; a core latch clear is not a fabricated SPI
 acknowledgement or readiness reply.
 
-Native immediate conditional RTI returns through the bank-qualified interrupt frame,
-pops its PC resource, clears the mask pointer/source and retains ISR results.
+Native or VISA immediate conditional RTI returns through the bank-qualified
+interrupt frame, pops its PC resource, clears the mask pointer/source and retains
+ISR results.
 The physical popped PC-stack entry remains observable. SIMD uses the normal
 AND of both PE conditions. False RTI conditions preserve service state; RTS
 does not treat the interrupt frame as a CALL. Delayed/parallel RTI, status
