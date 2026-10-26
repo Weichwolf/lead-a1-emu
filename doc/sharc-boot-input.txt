@@ -31,6 +31,16 @@ never fabricates mask-register contents. Branch4 internal clocks are the same
 explicitly represented entry bound as other programmable IRQs, not a complete
 physical reset/synchronization model. Peripheral acknowledgement is separate.
 
+The service_boot_interrupt(fetch) overload binds recognition to the existing
+instruction transport. It accepts only the same idle RAM owner and an empty
+frontend, optionally sequenced at the reset or queued IDLE address. Every live
+word, pending F2 response, cache phase, loop, suppression mask or multiplier
+wait rejects; nothing is silently flushed. With no actual event, both owners
+stay unchanged. Successful recognition redirects F1 to the computed vector in
+the same commit as core entry. Controller clock failure preserves the original
+core latch, frame frontier and entire frontend. The nonsequenced empty transport
+remains nonsequenced and still requires explicit addresses from its owner.
+
 The first received RAM instruction must be the qualified unconditional RTI.
 Unknown/unmapped/unsupported vector contents preserve its actual entry/frame
 for repair. The executed RTI pops that frame, returns to8c005 and closes the
@@ -47,14 +57,28 @@ literal R7=42. The SPI event remains pending until separately acknowledged.
 Other tests exercise unmapped instruction RAM before boot, blocked alternate
 execution paths, controller ownership/failure/retry, bad initial-vector repair,
 independent RAM/core/controller restore and malformed phases.
+The same actual384-word transfer now also exercises the bound frontend from
+before boot IDLE through recognition, native RTI and literal R7=42. Independent
+transport expectations place RTI in Address on clock4, retirement on clock5,
+and the returned immediate on clock9; these are granted transport clocks after
+recognition, not Nord reset time. Snapshots after entry and after the first F1
+request resume in independently mapped RAM. Foreign/active memory, live frontend
+states, wrong cursors and controller ownership failures retain both owners.
+An unmapped F2 read preserves the actual F1 request for repaired-input retry.
 
 Original integration
 Four original_arm_spi_boot_entry_part_transport cases retain the unchanged
 ARM factory/block writer, full768 halfwords,384 individual grants,256 native48
-words, selected endpoint and untouched peer assertions of the existing initial
+words, selected endpoint and peer-state assertions of the existing initial
 profile tests. The core retires its boot-input IDLE before the first serial bit.
 Only the real received completion latch activates its initial P1I, then the
 original RAM RTI executes. No software entry or supplied return frame starts it.
+The same empty frontend now exists before boot IDLE, redirects at real P1I
+recognition and retains every fetch/branch/loop stage through the original RTI
+and complete initialization below. No new frontend is created at kernel entry
+or across its callees. Address-stage PM requests select the existing cache path;
+only actual Execute words retire. An unretired instruction cannot become a
+successful budget exit.
 
 The same original clock/FLAG/RAM initialization follows. Its independent counts
 are8287 at8c0b2,8289 at8c0b4 and171754 at8c008: initial RTI replaces the five
@@ -65,6 +89,11 @@ IMASK write establishes3/all-known; MODE1 global readback remains unknown until
 its subsequent actual SET1000. The same SPI instance retains all state except
 its separately acknowledged initial event. The legacy four tests still leave
 their event pending and execute no DSP instruction.
+The existing PMCTL reference still advances its documented instruction-cycle
+lower bounds per retirement; frontend bubbles are not additional PMCTL clock
+inputs in this fixture. Peripheral accesses remain the existing direct model,
+not a newly qualified IOP-bridge/board phase. This preserves all independent
+clock transaction/count/rate oracles without claiming physical elapsed time.
 
 This closes the selected initial boot-input/RTI reference, not complete Nord
 cold boot. Physical boot straps/clocks/wiring/FLAG latch, full MCU uploader,

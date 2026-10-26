@@ -16,6 +16,7 @@
 #include "sharc/peripherals/sharc_control.hpp"
 #include "sharc/peripherals/sharc_spi.hpp"
 #include "sharc/peripherals/sharc_spi_port.hpp"
+#include "sharc/pipeline/sharc_fetch.hpp"
 
 #include <array>
 #include <charconv>
@@ -601,14 +602,29 @@ unsigned int kernel_entry_offset(KernelEntry entry) {
   }
 }
 
-void flag_setup(Fixture &fixture, lead_a1::Sharc &cpu, KernelEntry entry = KernelEntry::software) {
+lead_a1::SharcStep kernel_instruction(lead_a1::Sharc &cpu, lead_a1::SharcFetch *fetch) {
+  if (fetch == nullptr) { return cpu.step(); }
+  constexpr unsigned int clock_limit = 256;
+  for (unsigned int clock = 0; clock < clock_limit; ++clock) {
+    const auto bus = fetch->address_pm_request(cpu) ? lead_a1::SharcFetchBus::pm_data
+                                                    : lead_a1::SharcFetchBus::available;
+    static_cast<void>(fetch->advance_sequenced(cpu, bus));
+    if (fetch->state().execute) { return cpu.step(*fetch); }
+  }
+  throw std::runtime_error("Original kernel instruction did not reach fetched Execute");
+}
+
+void flag_setup(Fixture &fixture,
+                lead_a1::Sharc &cpu,
+                KernelEntry entry = KernelEntry::software,
+                lead_a1::SharcFetch *fetch = nullptr) {
   constexpr std::uint32_t dag_entry = 0x8c0b4;
   constexpr unsigned int instruction_count = 8293;
   constexpr std::uint32_t flag1_output_select = 8;
   constexpr std::uint32_t core_directions = 0xaa;
   constexpr unsigned int flags = 5;
   for (unsigned int index = 0; index < 2; ++index) {
-    static_cast<void>(cpu.step());
+    static_cast<void>(kernel_instruction(cpu, fetch));
     ++fixture.dsp_steps;
   }
   require(cpu.state().pc == dag_entry &&
@@ -669,12 +685,15 @@ struct KernelClearReference {
   }
 };
 
-void clear_ram(Fixture &fixture, lead_a1::Sharc &cpu, KernelEntry entry = KernelEntry::software) {
+void clear_ram(Fixture &fixture,
+               lead_a1::Sharc &cpu,
+               KernelEntry entry = KernelEntry::software,
+               lead_a1::SharcFetch *fetch = nullptr) {
   const KernelClearReference reference(fixture);
   constexpr std::uint32_t caller = 0x8c008;
   constexpr unsigned int limit = 200000;
   while (cpu.state().pc != caller && fixture.dsp_steps < limit) {
-    static_cast<void>(cpu.step());
+    static_cast<void>(kernel_instruction(cpu, fetch));
     ++fixture.dsp_steps;
   }
   constexpr unsigned int expected_instructions = 171758;
@@ -1203,10 +1222,12 @@ void runtime_header(Fixture &fixture,
   runtime_code_record(fixture, cpu, spec, input);
 }
 
-void kernel_clock_step(Fixture &fixture, lead_a1::Sharc &cpu) {
+void kernel_clock_step(Fixture &fixture,
+                       lead_a1::Sharc &cpu,
+                       lead_a1::SharcFetch *fetch = nullptr) {
   constexpr std::uint32_t bypass = 0x8000;
   const auto events = fixture.clock.events.size();
-  const auto step = cpu.step();
+  const auto step = kernel_instruction(cpu, fetch);
   ++fixture.dsp_steps;
   if (fixture.clock.events.size() == events) {
     const bool bypassed = (fixture.clock.device.state().control & bypass) != 0;
@@ -1220,12 +1241,13 @@ void kernel_clock_step(Fixture &fixture, lead_a1::Sharc &cpu) {
 
 void kernel_clock_setup(Fixture &fixture,
                         lead_a1::Sharc &cpu,
-                        KernelEntry entry = KernelEntry::software) {
+                        KernelEntry entry = KernelEntry::software,
+                        lead_a1::SharcFetch *fetch = nullptr) {
   constexpr std::uint32_t flags_entry = 0x8c0b2;
   constexpr unsigned int instruction_limit = 20000;
   constexpr unsigned int instruction_count = 8291;
   while (cpu.state().pc != flags_entry && fixture.dsp_steps < instruction_limit) {
-    kernel_clock_step(fixture, cpu);
+    kernel_clock_step(fixture, cpu, fetch);
   }
   require(cpu.state().pc == flags_entry &&
           fixture.dsp_steps == instruction_count - kernel_entry_offset(entry));
@@ -1659,7 +1681,9 @@ void original_uploader_handshake(std::span<const std::byte> image,
          "candidate logical wires, no full uploader or physical timing claim\n";
 }
 
-void initial_boot_kernel_execution(Fixture &fixture, lead_a1::Sharc &cpu) {
+void initial_boot_kernel_execution(Fixture &fixture,
+                                   lead_a1::Sharc &cpu,
+                                   lead_a1::SharcFetch &fetch) {
   if (!fixture.runtime || !fixture.runtime->device.interrupt_request()) {
     throw std::runtime_error("Initial original boot requires its real SPI completion event");
   }
@@ -1673,21 +1697,21 @@ void initial_boot_kernel_execution(Fixture &fixture, lead_a1::Sharc &cpu) {
   require(held.pc == return_pc && held.idle_pc == dsp_boot_idle &&
           held.spi_boot == lead_a1::SharcSpiBootPhase::idle && held.depth == 0 && !held.interrupt);
   cpu.latch_programmable_interrupt(1);
-  const auto entry = cpu.service_boot_interrupt();
+  const auto entry = cpu.service_boot_interrupt(fetch);
   require(entry && entry->source == 0x1000 && entry->return_pc == return_pc &&
           entry->vector == vector && entry->minimum_core_cycles == 4 &&
           cpu.state().pc_stack[0] == frame && cpu.state().depth == 1 && port.state() == completed &&
           port.interrupt_request());
   port.acknowledge_interrupt();
-  const auto first = cpu.step(); // The original received vector's RTI, not a fabricated frame/PC.
+  const auto first = kernel_instruction(cpu, &fetch); // The actual received vector's RTI.
   ++fixture.dsp_steps;
   require(first.pc == vector && first.next_pc == return_pc && cpu.state().depth == 0 &&
           !cpu.state().spi_boot && !cpu.state().interrupt && cpu.state().pc_stack[0] == frame &&
           cpu.state().system[2].known == partial_mask &&
           cpu.state().system[11].known == partial_mask);
-  kernel_clock_setup(fixture, cpu, KernelEntry::spi_boot);
-  flag_setup(fixture, cpu, KernelEntry::spi_boot);
-  clear_ram(fixture, cpu, KernelEntry::spi_boot);
+  kernel_clock_setup(fixture, cpu, KernelEntry::spi_boot, &fetch);
+  flag_setup(fixture, cpu, KernelEntry::spi_boot, &fetch);
+  clear_ram(fixture, cpu, KernelEntry::spi_boot, &fetch);
   constexpr std::uint32_t all_bits = 0xffffffff;
   require(cpu.state().system[2].known == partial_mask &&
           cpu.state().system[11] == (lead_a1::SharcKnown32{.value = 3, .known = all_bits}));
@@ -1733,12 +1757,16 @@ void reset_kernel_transfer(std::span<const std::byte> image,
                                                       .active_low = true});
   fixture.connect_peer();
   std::optional<lead_a1::Sharc> cpu;
+  std::optional<lead_a1::SharcFetch> fetch;
   if (entry == KernelEntry::spi_boot) {
     fixture.dsp_memory.map_io({.first_word = 0x2000, .words = 1}, fixture.clock);
     fixture.dsp_memory.map_io({.first_word = dsp_sysctl, .words = 1}, fixture.control);
     cpu.emplace(fixture.dsp_memory,
                 lead_a1::Sharc::spi_slave_boot_reference_214xx(),
                 &fixture.control.device);
+    lead_a1::SharcFetchState transport;
+    transport.flow = lead_a1::SharcFetchFlow{.next = dsp_boot_idle};
+    fetch.emplace(fixture.dsp_memory, transport);
     const auto boot_input = cpu->step_boot_input();
     require(boot_input.pc == dsp_boot_idle && boot_input.next_pc == dsp_boot_start &&
             !cpu->state().interrupt);
@@ -1790,7 +1818,8 @@ void reset_kernel_transfer(std::span<const std::byte> image,
           peer.serial.shift == 0 && peer.occupied == 0 && !peer.receive && !peer.overflow &&
           !peer.interrupt_pending && !fixture.other_receiver->dma_word_request());
   if (cpu) {
-    initial_boot_kernel_execution(fixture, *cpu);
+    if (!fetch) { throw std::logic_error("Missing original boot fetch owner"); }
+    initial_boot_kernel_execution(fixture, *cpu, *fetch);
     std::cout
         << "Part " << part << " transport " << channel
         << ": real initial boot DMA/P1I/original RTI, then171754 original instructions through "

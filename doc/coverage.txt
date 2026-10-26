@@ -106,6 +106,11 @@ ID  State    Evidence / remaining work
              recognizes the real routed P1I and creates frame0208c005. The actual
              received RTI returns to8c005. MODE1.IRPTEN/IMASK.P1I automatic-
              unmask readback stays unknown; ordinary eligibility is unchanged.
+             Bound boot recognition now redirects an existing empty reset/IDLE
+             frontend atomically with core entry. Live requests/words/cache/loop
+             phases reject without discarding work; missing events and failed
+             controller clocks preserve both owners. The same384-word owned
+             transfer continues through fetched RTI and its returned instruction.
              Physical Nord straps/reset/timing remain open. Existing software-
              entry fixtures at8c000 retain their separate profile (sharc.txt,
              sharc-boot-input.txt).
@@ -797,10 +802,12 @@ ID  State    Evidence / remaining work
              initial SPI event. The original RAM RTI uses its computed frame,
              returns to8c005 and continues through the original clock/FLAG/RAM
              prefix. Literal8287/8289/171754 instruction counts, full PMCTL and
-             clear/kernel/tail expectations pass. Unknown global boot-unmask
-             readback survives; actual guest IMASK initialization establishes
-             known3. Neither physical straps/FLAG/reset timing nor whole cold
-             boot is established (sharc-boot-input.txt).
+             clear/kernel/tail expectations pass. One bound frontend now spans
+             reset, actual interrupt redirection, RTI and this complete prefix;
+             PMCTL still uses explicit instruction-cycle lower-bound inputs.
+             Unknown global boot-unmask readback survives; actual guest IMASK
+             initialization establishes known3. Neither physical straps/FLAG/reset
+             timing nor whole cold boot is established (sharc-boot-input.txt).
 4   pending  No host MIDI, USB device, firmware descriptors or Sound Manager test.
 5   partial  Native SPORT word-buffer/DMA reference now transfers owned32-bit
              words through actual RAM grants, with chaining and distinct internal/
@@ -825,9 +832,18 @@ ID  State    Evidence / remaining work
              Literal IDLE/PC/frame/RTI/R7=42 expectations, still-pending peripheral
              acknowledgement, blocked alternate execution, malformed phases,
              unknown/unmapped/bad-vector repair, active controller failure and
-             independent core/control/RAM restore are checked. Four additional
-             original MCU/SPI entry cases retain every prior transfer assertion
-             and independent clock/FLAG/clear oracles without supplied frames.
+             independent core/control/RAM restore are checked.
+             Bound frontend checks retain actual F1/F2/Decode/Address/Execute
+             phases, independently expected RTI/return clocks, restored F1
+             requests, foreign/active RAM and eleven live transport rejections.
+             These component checks do not establish continuous original upload.
+             Four original MCU/SPI entry cases retain every prior transfer
+             assertion and independent clock/FLAG/clear oracles without
+             supplied frames.
+             Their original RTI and entire initialization now retain one bound
+             frontend from before IDLE through actual branch/loop retirement.
+             PMCTL keeps its explicit instruction-cycle lower-bound inputs;
+             physical clock/IOP/board composition is not newly qualified.
              Full physical boot and instrument acceptance remain open
              (sharc-boot-input.txt).
              Board-calendar checks independently specify mixed-cadence/tie

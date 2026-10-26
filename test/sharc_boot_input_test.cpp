@@ -6,6 +6,7 @@
 #include "sharc/peripherals/sharc_spi.hpp"
 #include "sharc/pipeline/sharc_fetch.hpp"
 
+#include <array>
 #include <bit>
 #include <cstdint>
 #include <exception>
@@ -32,6 +33,8 @@ constexpr std::uint32_t core_directions = 0xaa;
 constexpr std::uint64_t expected_r7 = 42;
 constexpr std::uint8_t invalid_phase = 255;
 constexpr std::uint32_t frame = 0x0208c005;
+constexpr std::uint32_t fetch_controls = 0x80010;
+constexpr std::uint64_t jump_if_mv = 0x060a0008c005;
 constexpr auto io0 = lead_a1::SharcMemoryMaster::io0;
 
 void require(bool condition, const std::source_location &where = std::source_location::current()) {
@@ -137,11 +140,51 @@ void finish_original_shape(lead_a1::Sharc &cpu) {
           cpu.state().system[11].known == partial_mask);
 }
 
+lead_a1::SharcFetchState sequenced(std::uint32_t cursor = reset) {
+  lead_a1::SharcFetchState state;
+  state.flow = lead_a1::SharcFetchFlow{.next = cursor};
+  return state;
+}
+
+void finish_fetched_shape(lead_a1::Sharc &cpu,
+                          lead_a1::SharcFetch &fetch,
+                          unsigned int elapsed = 0) {
+  constexpr unsigned int clocks = 9;
+  unsigned int retired{};
+  for (unsigned int clock = elapsed; clock < clocks; ++clock) {
+    require(fetch.advance_sequenced(cpu).address_accepted);
+    if (clock == 3) {
+      const auto &transport = fetch.state();
+      require(transport.address && transport.address->address == vector &&
+              transport.address->branch && transport.address->branch->taken &&
+              transport.address->branch->target == kernel_start && transport.flow &&
+              transport.flow->next == kernel_start && transport.flow->discard_decode == 3 &&
+              !transport.decode);
+    }
+    if (!fetch.state().execute) { continue; }
+    const auto step = cpu.step(fetch);
+    if (retired == 0) {
+      require(clock == 4 && step.pc == vector && step.opcode == rti &&
+              step.next_pc == kernel_start && !cpu.state().spi_boot && !cpu.state().interrupt &&
+              cpu.state().depth == 0 && cpu.state().pc_stack[0] == frame);
+    } else {
+      require(retired == 1 && clock == 8 && step.pc == kernel_start && step.opcode == move_r7);
+    }
+    ++retired;
+  }
+  require(retired == 2 && cpu.state().pc == kernel_start + 1 &&
+          cpu.state().data[0][7] ==
+              (lead_a1::SharcKnown40{.value = expected_r7 << 8, .known = full40}) &&
+          cpu.state().system[2].known == partial_mask &&
+          cpu.state().system[11].known == partial_mask);
+}
+
 void real_dma_completion_and_boot_rti() {
   lead_a1::SharcMemory memory;
   memory.map_2148x_5mbit_ram();
   lead_a1::SharcControl control(true);
   lead_a1::Sharc cpu(memory, lead_a1::Sharc::spi_slave_boot_reference_214xx(), &control);
+  lead_a1::SharcFetch fetch(memory, sequenced());
   require(cpu.step_boot_input().opcode == idle);
   lead_a1::SharcSpi spi(lead_a1::SharcSpiSlaveBootReference{});
   lead_a1::SharcMemoryBus bus(memory, lead_a1::SharcPeripheralPhase::active);
@@ -155,9 +198,10 @@ void real_dma_completion_and_boot_rti() {
     }
   }
   require(granted == words - 1 && spi.state().serial.remaining == 1 && !spi.interrupt_request() &&
-          !cpu.service_boot_interrupt());
+          !cpu.service_boot_interrupt(fetch) && fetch.state() == sequenced());
   grant(spi, bus); // A granted but uncommitted last word must not activate the core.
-  require(!spi.interrupt_request() && !cpu.service_boot_interrupt());
+  require(!spi.interrupt_request() && !cpu.service_boot_interrupt(fetch) &&
+          fetch.state() == sequenced());
   spi.service_dma_word(bus);
   constexpr std::uint64_t actual_clocks = 767;
   require(bus.state().clocks == actual_clocks && spi.state().serial.remaining == 0 &&
@@ -168,22 +212,132 @@ void real_dma_completion_and_boot_rti() {
   }
   cpu.latch_programmable_interrupt(
       1); // Actual selected peripheral completion, not a software reply.
-  const auto event = cpu.service_boot_interrupt();
+  const auto event = cpu.service_boot_interrupt(fetch);
   require(event && event->source == 0x1000 && event->return_pc == kernel_start &&
           event->vector == vector && event->minimum_core_cycles == 4 && spi.state() == received &&
           spi.interrupt_request());
   check_entry(cpu);
+  require(fetch.state() == sequenced(vector));
   lead_a1::SharcMemory other_memory;
   map_owned_kernel(other_memory);
   auto other_control = lead_a1::SharcControl::from_snapshot(control.snapshot());
   lead_a1::Sharc other(other_memory, cpu.state(), &other_control);
+  lead_a1::SharcFetch other_fetch(other_memory, fetch.state());
   spi.acknowledge_interrupt();
   require(!spi.interrupt_request() && !spi.dma_word_request() && spi.state().occupied == 0 &&
           !spi.state().receive);
-  finish_original_shape(cpu);
-  finish_original_shape(other);
+  finish_fetched_shape(cpu, fetch);
+  finish_fetched_shape(other, other_fetch);
   require(cpu.state() == other.state() && control.snapshot() == other_control.snapshot() &&
-          bus.state().clocks == actual_clocks);
+          fetch.state() == other_fetch.state() && bus.state().clocks == actual_clocks);
+}
+
+void rejected_live_boot_transport() {
+  lead_a1::SharcMemory memory;
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, lead_a1::Sharc::spi_slave_boot_reference_214xx(), &control);
+  static_cast<void>(cpu.step_boot_input());
+  cpu.latch_programmable_interrupt(1);
+  const auto held = cpu.state();
+  const auto device = control.snapshot();
+  const lead_a1::SharcFetchWord word{.address = reset, .opcode = 0};
+  std::array<lead_a1::SharcFetchState, 11> live;
+  for (auto &state : live) { state = sequenced(); }
+  live[0].fetch1 = reset;
+  live[1].fetch2 = word;
+  live[2].decode = word;
+  live[3].address = word;
+  live[4].execute = word;
+  live[5].pending_fetch2 = reset;
+  live[6].flow = lead_a1::SharcFetchFlow{.next = reset, .discard_decode = 1};
+  live[7].flow = lead_a1::SharcFetchFlow{.next = reset, .multiplier_branch_wait = true};
+  live[7].decode = lead_a1::SharcFetchWord{.address = reset, .opcode = jump_if_mv};
+  live[8].fetch1 = reset;
+  live[8].lookup = lead_a1::SharcFetchLookup{.mode = {.known = fetch_controls}, .wait = true};
+  live[9].fetch2 = word;
+  live[9].fill = lead_a1::SharcFetchFill{.mode = {.known = fetch_controls}, .entry = 8};
+  live[10].flow = lead_a1::SharcFetchFlow{
+      .next = reset,
+      .loop = lead_a1::SharcFetchLoop{
+          .setup = reset,
+          .body = kernel_start,
+          .total = 2,
+          .fetch_remaining = 2,
+          .held = lead_a1::SharcFetchWord{.address = kernel_start, .opcode = 0}}};
+  for (const auto &state : live) {
+    lead_a1::SharcFetch fetch(memory, state);
+    rejected([&] { static_cast<void>(cpu.service_boot_interrupt(fetch)); },
+             "requires an empty fetch transport");
+    require(cpu.state() == held && fetch.state() == state && control.snapshot() == device);
+  }
+  lead_a1::SharcFetch wrong_cursor(memory, sequenced(vector));
+  rejected([&] { static_cast<void>(cpu.service_boot_interrupt(wrong_cursor)); },
+           "cursor must address reset/queued IDLE");
+  require(cpu.state() == held && wrong_cursor.state() == sequenced(vector));
+}
+
+void fetched_boot_failure_and_restore() {
+  lead_a1::SharcMemory memory;
+  lead_a1::SharcControl control(true);
+  lead_a1::Sharc cpu(memory, lead_a1::Sharc::spi_slave_boot_reference_214xx(), &control);
+  static_cast<void>(cpu.step_boot_input());
+  lead_a1::SharcFetch fetch(memory, sequenced());
+  const auto idle_state = cpu.state();
+  const auto device = control.snapshot();
+  require(!cpu.service_boot_interrupt(fetch) && cpu.state() == idle_state &&
+          fetch.state() == sequenced() && control.snapshot() == device);
+  cpu.latch_programmable_interrupt(1);
+  const auto held = cpu.state();
+  lead_a1::SharcMemory foreign;
+  lead_a1::SharcFetch foreign_fetch(foreign, sequenced());
+  rejected([&] { static_cast<void>(cpu.service_boot_interrupt(foreign_fetch)); },
+           "requires its idle bound memory");
+  memory.begin_instruction();
+  rejected([&] { static_cast<void>(cpu.service_boot_interrupt(fetch)); },
+           "requires its idle bound memory");
+  require(memory.active() && cpu.state() == held && fetch.state() == sequenced());
+  memory.abort_instruction();
+  control.begin_instruction();
+  rejected([&] { static_cast<void>(cpu.service_boot_interrupt(fetch)); },
+           "clock advance during a transaction");
+  require(cpu.state() == held && fetch.state() == sequenced());
+  control.abort_instruction();
+  require(control.snapshot() == device && foreign_fetch.state() == sequenced());
+  require(cpu.service_boot_interrupt(fetch).has_value());
+  check_entry(cpu);
+  require(fetch.state() == sequenced(vector));
+  require(fetch.advance_sequenced(cpu).address_accepted);
+  const auto requested = fetch.state();
+  const auto entered = cpu.state();
+  const auto controller = control.snapshot();
+  rejected([&] { static_cast<void>(fetch.advance_sequenced(cpu)); },
+           "Unmapped SHARC physical RAM/ROM cell");
+  require(fetch.state() == requested && cpu.state() == entered &&
+          control.snapshot() == controller && !memory.active());
+  map_owned_kernel(memory);
+  lead_a1::SharcMemory restored_memory;
+  map_owned_kernel(restored_memory);
+  auto restored_control = lead_a1::SharcControl::from_snapshot(controller);
+  lead_a1::Sharc restored(restored_memory, entered, &restored_control);
+  lead_a1::SharcFetch restored_fetch(restored_memory, requested);
+  finish_fetched_shape(cpu, fetch, 1);
+  finish_fetched_shape(restored, restored_fetch, 1);
+  require(cpu.state() == restored.state() && fetch.state() == restored_fetch.state() &&
+          control.snapshot() == restored_control.snapshot());
+}
+
+void manual_boot_transport() {
+  for (const bool sequencer : {false, true}) {
+    lead_a1::SharcMemory memory;
+    lead_a1::Sharc cpu(memory, lead_a1::Sharc::spi_slave_boot_reference_214xx());
+    static_cast<void>(cpu.step_boot_input());
+    const auto initial = sequencer ? sequenced(kernel_start) : lead_a1::SharcFetchState{};
+    lead_a1::SharcFetch fetch(memory, initial);
+    cpu.latch_programmable_interrupt(1);
+    require(cpu.service_boot_interrupt(fetch).has_value());
+    check_entry(cpu);
+    require(fetch.state() == (sequencer ? sequenced(vector) : lead_a1::SharcFetchState{}));
+  }
 }
 
 void failed_input_and_initial_vector_repair() {
@@ -237,6 +391,9 @@ void malformed_boot_snapshots() {
 int main() try {
   no_program_fetch_while_booting();
   real_dma_completion_and_boot_rti();
+  rejected_live_boot_transport();
+  fetched_boot_failure_and_restore();
+  manual_boot_transport();
   failed_input_and_initial_vector_repair();
   malformed_boot_snapshots();
   std::cout << "Boot-channel IDLE, actual SPI completion, initial P1I/RTI and retained unknown "

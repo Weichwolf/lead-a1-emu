@@ -215,6 +215,9 @@ public:
   // Recognize the actual externally latched boot P1I independently of ordinary
   // maskable eligibility. No peripheral event is generated or acknowledged here.
   [[nodiscard]] std::optional<SharcInterruptStep> service_boot_interrupt();
+  // Atomically redirect an empty, bound reset/IDLE fetch transport on the real
+  // boot event. Live requests/words are rejected rather than discarded.
+  [[nodiscard]] std::optional<SharcInterruptStep> service_boot_interrupt(SharcFetch &fetch);
 
   // Explicit recognition of a latched programmable IRQ at a qualified boundary.
   // Ordinary internal delayed branches defer delivery until both slots finish.

@@ -14,6 +14,46 @@
 
 namespace lead_a1 {
 
+std::optional<SharcInterruptStep> Sharc::service_boot_interrupt(SharcFetch &fetch) try {
+  if (&fetch.memory_ != &memory_ || memory_.active()) {
+    throw std::logic_error("SHARC fetched boot interrupt requires its idle bound memory");
+  }
+  SharcFetchState empty;
+  if (fetch.state_.flow) {
+    const auto cursor = fetch.state_.flow->next;
+    if (cursor != state_.pc && cursor != state_.idle_pc) {
+      throw std::runtime_error("SHARC boot fetch cursor must address reset/queued IDLE");
+    }
+    empty.flow = SharcFetchFlow{.next = cursor};
+  }
+  if (fetch.state_ != empty) {
+    throw std::runtime_error("SHARC boot recognition requires an empty fetch transport");
+  }
+  auto core = state_;
+  const auto event = detail::sharc_service_boot_interrupt(core);
+  if (!event) { return {}; }
+  SharcFetchState redirected;
+  if (fetch.state_.flow) { redirected.flow = SharcFetchFlow{.next = core.pc}; }
+  detail::sharc_validate_spi_boot(core);
+  detail::sharc_validate_interrupt(core);
+  detail::sharc_validate_idle(core);
+  detail::sharc_validate_cache(core.cache);
+  detail::sharc_fetch_validate(redirected);
+  if (control_ != nullptr) { control_->advance_internal_clocks(event->minimum_core_cycles); }
+  static_assert(std::is_nothrow_copy_assignable_v<SharcState>);
+  static_assert(std::is_nothrow_copy_assignable_v<SharcFetchState>);
+  state_ = core;
+  fetch.state_ = redirected;
+  return event;
+} catch (const std::exception &error) {
+
+  std::ostringstream message;
+  message << "SHARC fetched SPI boot recognition pc=0x" << std::hex << state_.pc
+          << " operation=boot-interrupt IRPTL=0x" << state_.effective[10].value << "/0x"
+          << state_.effective[10].known << ": " << error.what();
+  throw std::runtime_error(message.str());
+}
+
 std::optional<SharcInterruptStep> Sharc::service_interrupt(SharcFetch &fetch,
                                                            SharcInterruptReference reference) try {
   if (&fetch.memory_ != &memory_ || memory_.active()) {
