@@ -12,6 +12,10 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 SPI_CASES = {
+    "spi-reset-kernel-0-0": ("--reset-kernel", "0", "0"),
+    "spi-reset-kernel-0-1": ("--reset-kernel", "0", "1"),
+    "spi-reset-kernel-1-0": ("--reset-kernel", "1", "0"),
+    "spi-reset-kernel-1-1": ("--reset-kernel", "1", "1"),
     "spi-uploader-0": ("--uploader", "0"),
     "spi-uploader-1": ("--uploader", "1"),
     "spi-controls-0": ("--controllers", "0"),

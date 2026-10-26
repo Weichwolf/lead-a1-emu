@@ -82,6 +82,11 @@ ID  State    Evidence / remaining work
              all four pinned kernels have that RTI at8c030. Initial interrupt,
              return-frame/reset sequencing remain open. Existing software-entry
              fixtures at8c000 do not qualify this hardware activation (sharc.txt).
+             The programmable SPI also accepts an explicit initial slave-boot
+             profile with 384 pending words. Its real FIFO and IOD0 RAM grants
+             lead to a pending completion event; the same port accepts subsequent
+             DMA configuration without replacing the receiver. No processor
+             activation/readiness is supplied (spi-slave-boot.txt).
              Native-48 SHARC sequencing/system-register execution has owned
              literal/frame/condition/rollback tests, including two delay slots,
              read-only interrupt bits and delayed control effects (sharc-core.txt).
@@ -620,6 +625,13 @@ ID  State    Evidence / remaining work
              proves neither continuous scheduling, physical pins/pulls nor the
              remainder upload, second DSP, final release or cold boot
              (processor-links.txt).
+             Four additional original MCU first-kernel cases use the same
+             programmable SPI port from its explicit initial slave-boot profile.
+             Every transmitted halfword, all 384 per-word IOD0 writes and all 256
+             native48 aliases match pinned original bytes; the initial completion
+             event remains pending with zero DSP instructions. This replaces no
+             reset/interrupt-frame input and establishes no core activation
+             (spi-slave-boot.txt).
              The same original first-kernel/handshake cases also pass through
              the production SPI/SHARC pin connection; clock cadence and DMA
              arbitration remain fixture-owned (spi-sharc-link.txt).
@@ -741,6 +753,12 @@ ID  State    Evidence / remaining work
              launch versus sampling edges and internal loopback have independent
              failure/data expectations; no DMA grant or IRQ acknowledgement is
              manufactured (spi-sharc-link.txt).
+             Initial-profile SPI checks independently verify 384 RAM grants and
+             literal 767 bus clocks under an explicit owner phase, native packing,
+             the final-write completion boundary and subsequent three-word DMA
+             through the same mapped port. Missing RAM/no-time retry, withheld
+             grants/overflow, active parameter writes and invalid completed-boot
+             handoff reject without false completion (spi-slave-boot.txt).
              Programmable IRQ checks independently list all19 routes and171
              ordered priority pairs,38 mask/IDLE cases and ten restored fetched
              secondary handlers. Thirty enabled mask changes, inherited pending

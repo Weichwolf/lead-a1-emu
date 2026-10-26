@@ -50,8 +50,9 @@ Builds are offline and do not need originals or private GitHub access.
 Original checks verify bundle/section/kernel identities for every selected
 native group. CTest registers each native program independently; SPI has two
 controller cases, two first-uploader-handshake cases and all four part/transport
-kernel cases. Each retains its
-complete assertions, guest instruction bounds and normal per-test time bound.
+kernel cases, plus four initial-profile kernel transfers with actual per-word
+RAM grants and no DSP activation. Each retains its complete assertions, guest
+instruction bounds and normal per-test time bound.
 The original script's aggregate native interface remains available for manual
 runs. Synthetic checks require no manufacturer inputs.
 

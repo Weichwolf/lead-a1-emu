@@ -54,7 +54,11 @@ No readiness GPIO or physical reset/interrupt timing follows from completion.
 This limited initial loader is not a programmable SPI register facade. Further
 selected clock edges require an explicit runtime SPI/core handoff and fail
 on this bootstrap object. SharcSpi supplies that separate programmable RX DMA
-continuation (sharc-spi.txt). Midword deselection remains unqualified and fails; aligned gaps
+continuation (sharc-spi.txt). Its explicit SharcSpiSlaveBootReference profile
+also supports the initial reception through the ordinary FIFO and actual
+per-word RAM grants without replacing the programmable receiver; see
+spi-slave-boot.txt. Neither path supplies the initial core interrupt frame.
+Midword deselection remains unqualified and fails; aligned gaps
 preserve the DMA cursor. FIFO occupancy, arbitration, DMA/core interrupt and
 electrical reset delays remain pending. Core-instruction transactions and
 external loader events cannot overlap. No ROM data or default RAM is invented.

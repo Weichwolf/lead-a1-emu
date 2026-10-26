@@ -8,10 +8,12 @@
 #include "common/memory.hpp"
 #include "sharc/core/sharc.hpp"
 #include "sharc/memory/sharc_memory.hpp"
+#include "sharc/memory/sharc_memory_bus.hpp"
 #include "sharc/peripherals/sharc_boot.hpp"
 #include "sharc/peripherals/sharc_clock.hpp"
 #include "sharc/peripherals/sharc_control.hpp"
 #include "sharc/peripherals/sharc_spi.hpp"
+#include "sharc/peripherals/sharc_spi_port.hpp"
 
 #include <array>
 #include <charconv>
@@ -188,8 +190,10 @@ struct Fixture {
       dsp_steps};
   Recorded<lead_a1::SharcControl> control{std::optional<bool>{true}, dsp_steps};
   std::optional<Recorded<lead_a1::SharcSpi>> runtime;
+  std::optional<lead_a1::SharcSpiPort> complete_spi_port;
   std::vector<unsigned int> dma_grants;
   lead_a1::SharcMemory dsp_memory;
+  std::optional<lead_a1::SharcMemoryBus> boot_memory_bus;
   unsigned int dsp_channel{};
   lead_a1::Sharc *cooperative_dsp{};
   std::optional<lead_a1::SpiSharcLink> serial_link;
@@ -244,8 +248,33 @@ struct Fixture {
     return *serial_link;
   }
 
+  void service_serial_dma() {
+    if (!runtime) { throw std::logic_error("Missing SPI DMA owner"); }
+    auto &engine = runtime->device;
+    if (boot_memory_bus) {
+      constexpr auto master = lead_a1::SharcMemoryMaster::io0;
+      const auto request = engine.dma_word_request();
+      if (!request) { return; }
+      boot_memory_bus->request(master, *request);
+      boot_memory_bus->advance();
+      if (!boot_memory_bus->grant(master)) { boot_memory_bus->advance(); }
+      engine.service_dma_word(*boot_memory_bus);
+      dma_grants.push_back(1);
+      return;
+    }
+    const auto count = engine.service_dma(dsp_memory);
+    if (count != 0) { dma_grants.push_back(count); }
+  }
+
+  lead_a1::SpiInput serial_input() {
+    auto &wires = connection();
+    if (runtime) { return wires.input(runtime->device, true); }
+    if (dsp) { return wires.input(*dsp, true); }
+    throw std::logic_error("Missing SPI input owner");
+  }
+
   void observe_dsp() {
-    if (!dsp) { return; }
+    if (!dsp && !runtime) { return; }
     auto &wires = connection();
     const auto serial = spi0.device.pins();
     constexpr std::uint16_t clock_pin = 0x200;
@@ -256,14 +285,13 @@ struct Fixture {
       // Explicit functional owner grant between ARM instructions/serial edges.
       // Cooperative stepping below is an explicit functional reference,
       // not physical IOP bus timing or a measured processor-clock ratio.
-      const auto count = runtime->device.service_dma(dsp_memory);
-      if (count != 0) { dma_grants.push_back(count); }
+      service_serial_dma();
       if (cooperative_dsp != nullptr && runtime->device.state().interrupt_pending) {
         constexpr std::uint32_t primary_spi = 0x1000;
         cooperative_dsp->latch_interrupt(primary_spi);
         runtime->device.acknowledge_interrupt();
       }
-    } else {
+    } else if (dsp) {
       wires.observe(*dsp);
     }
   }
@@ -279,11 +307,9 @@ struct Fixture {
     if (!due) { due = ticks + *interval; }
     while (due && *due <= ticks) {
       const auto before = spi0.device.state().active;
-      if (dsp) {
+      if (dsp || runtime) {
         // Explicit owned weak pull-up, used only when the real DSP output is undriven.
-        auto &wires = connection();
-        const auto input = runtime ? wires.input(runtime->device, true) : wires.input(*dsp, true);
-        spi0.device.advance(input);
+        spi0.device.advance(serial_input());
         observe_dsp();
       } else {
         spi0.device.advance();
@@ -1370,7 +1396,86 @@ void original_uploader_handshake(std::span<const std::byte> image,
          "candidate logical wires, no full uploader or physical timing claim\n";
 }
 
-enum class SpiCheckMode : std::uint8_t { all, controllers, kernel, uploader };
+void reset_kernel_transfer(std::span<const std::byte> image,
+                           const std::filesystem::path &spec,
+                           KernelCase selected) {
+  constexpr std::array<std::array<std::uint32_t, 2>, 2> offsets{
+      {{0x2c6d78, 0x2ab0f8}, {0x71bc8, 0x701d8}}};
+  constexpr unsigned int kernel_words = 384;
+  constexpr unsigned int halfwords = 768;
+  constexpr unsigned int native_words = 256;
+  constexpr unsigned int instruction_bytes = 6;
+  constexpr std::uint32_t kernel_destination = 0x92000;
+  constexpr std::uint32_t completed_cursor = 0x92180;
+  constexpr std::uint32_t port_base = 0x1000;
+  constexpr unsigned int port_words = 0x85;
+  constexpr std::uint32_t count_register = 0x1082;
+  constexpr std::uint32_t control_register = 0x1084;
+  const auto part = selected.part;
+  const auto channel = selected.channel;
+  Fixture fixture(image, placements[part]);
+  const auto endpoint = factory(fixture, spec, placements[part], false);
+  fixture.runtime.emplace(lead_a1::SharcSpiSlaveBootReference{}, fixture.dsp_steps);
+  fixture.complete_spi_port.emplace(fixture.runtime->device);
+  fixture.dsp_memory.map_2148x_5mbit_ram();
+  fixture.dsp_memory.map_io({.first_word = port_base, .words = port_words},
+                            *fixture.complete_spi_port);
+  fixture.boot_memory_bus.emplace(fixture.dsp_memory, lead_a1::SharcPeripheralPhase::active);
+  fixture.dsp_channel = channel;
+  fixture.serial_link.emplace(fixture.spi0.device,
+                              fixture.gpio.device,
+                              fixture.dsp_memory,
+                              lead_a1::SpiSharcWiring{.bank = 2,
+                                                      .select_pin = 11 + channel,
+                                                      .clock_pin = 9,
+                                                      .mosi_pin = 10,
+                                                      .active_low = true});
+  auto &port = fixture.runtime->device;
+  require(fixture.dsp_memory.read({.address = count_register}) == kernel_words &&
+          port.state().serial.next_word == kernel_destination && !port.interrupt_request());
+  fixture.transmitted.clear();
+  constexpr unsigned int limit = 200000;
+  static_cast<void>(call(fixture,
+                         spec,
+                         placements[part].endpoint + write_block_entry,
+                         {endpoint, channel, code + offsets[part][channel], kernel_words},
+                         limit));
+  require(fixture.transmitted.size() == halfwords && fixture.dma_grants.size() == kernel_words);
+  for (unsigned int index = 0; index < halfwords; ++index) {
+    require(fixture.transmitted[index] ==
+            reference_word(fixture, code + offsets[part][channel] + (index * 2), 2));
+  }
+  for (unsigned int index = 0; index < kernel_words; ++index) {
+    require(fixture.dma_grants[index] == 1 &&
+            fixture.dsp_memory.read({.address = kernel_destination + index}) ==
+                reference_word(fixture, code + offsets[part][channel] + (index * 4), 4));
+  }
+  for (unsigned int index = 0; index < native_words; ++index) {
+    std::uint64_t expected{};
+    for (unsigned int byte = 0; byte < instruction_bytes; ++byte) {
+      expected |= std::uint64_t{std::to_integer<unsigned int>(
+                      image[offsets[part][channel] + (index * instruction_bytes) + byte])}
+                  << (byte * 8);
+    }
+    require(fixture.dsp_memory.read(
+                {.address = dsp_reset + index, .width = lead_a1::SharcWidth::wide48}) == expected);
+  }
+  const auto &state = port.state();
+  require(state.serial.remaining == 0 && state.serial.next_word == completed_cursor &&
+          !state.serial.selected && state.serial.bits == 0 && state.occupied == 0 &&
+          !state.receive && !state.overflow && state.burst_remaining == 0 && state.control == 7 &&
+          state.port_control == lead_a1::sharc_spi_boot_control && state.interrupt_pending &&
+          port.interrupt_request() && fixture.dsp_steps == 0 && !fixture.dsp &&
+          fixture.cooperative_dsp == nullptr);
+  require(fixture.dsp_memory.read({.address = count_register}) == 0 &&
+          fixture.dsp_memory.read({.address = control_register}) == 7 && port.interrupt_request());
+  std::cout << "Part " << part << " transport " << channel
+            << ": one SPI slave-boot port received all768 original MCU halfwords, "
+               "committed384 actual IOD0 words and retained initial completion IRQ; "
+               "no DSP activation/return-frame claim\n";
+}
+
+enum class SpiCheckMode : std::uint8_t { all, controllers, kernel, uploader, reset_kernel };
 
 struct SpiCheck {
   SpiCheckMode mode{SpiCheckMode::all};
@@ -1394,12 +1499,48 @@ SpiCheck check_mode(int argc, char **argv) {
   if (argc == 5 && std::string_view(argv[3]) == "--uploader") {
     return {.mode = SpiCheckMode::uploader, .selected = {.part = check_index(argv[4])}};
   }
-  if (argc == 6 && std::string_view(argv[3]) == "--kernel") {
-    return {.mode = SpiCheckMode::kernel,
+  if (argc == 6 &&
+      (std::string_view(argv[3]) == "--kernel" || std::string_view(argv[3]) == "--reset-kernel")) {
+    return {.mode = std::string_view(argv[3]) == "--kernel" ? SpiCheckMode::kernel
+                                                            : SpiCheckMode::reset_kernel,
             .selected = {.part = check_index(argv[4]), .channel = check_index(argv[5])}};
   }
   throw std::runtime_error("Usage: original-spi-test spec images "
-                           "[--controllers part | --kernel part channel | --uploader part]");
+                           "[--controllers part | --kernel part channel | --uploader part | "
+                           "--reset-kernel part channel]");
+}
+
+void check_part(const SpiCheck &check,
+                std::span<const std::byte> image,
+                const std::filesystem::path &spec,
+                unsigned int part) {
+  const auto placement = placements[part];
+  if (check.mode == SpiCheckMode::reset_kernel) {
+    reset_kernel_transfer(image, spec, check.selected);
+    return;
+  }
+  if (check.mode == SpiCheckMode::uploader || check.mode == SpiCheckMode::all) {
+    original_uploader_handshake(image, spec, part);
+    if (check.mode == SpiCheckMode::uploader) { return; }
+  }
+  if (check.mode != SpiCheckMode::kernel) {
+    Fixture fixture(image, placement);
+    controllers(fixture, spec, placement);
+    static_cast<void>(factory(fixture, spec, placement, false));
+    const auto endpoint = factory(fixture, spec, placement, true);
+    transport(fixture, spec, placement, endpoint);
+    std::cout << "Part " << part
+              << ": original SPI controllers/format/factory/heap/GPIO and transport"
+                 " execute against clocked serial loopback and real buffer backpressure\n";
+  }
+  if (check.mode == SpiCheckMode::controllers) { return; }
+  for (unsigned int channel = 0; channel < 2; ++channel) {
+    if (check.mode == SpiCheckMode::kernel && channel != check.selected.channel) { continue; }
+    if (check.mode == SpiCheckMode::all) {
+      reset_kernel_transfer(image, spec, {.part = part, .channel = channel});
+    }
+    kernel_transfer(image, spec, {.part = part, .channel = channel});
+  }
 }
 
 }
@@ -1409,28 +1550,9 @@ int main(int argc, char **argv) {
     const auto check = check_mode(argc, argv);
     for (unsigned int part = 0; part < placements.size(); ++part) {
       if (check.mode != SpiCheckMode::all && part != check.selected.part) { continue; }
-      const auto placement = placements[part];
       const auto image =
           read_image(std::filesystem::path(argv[2]) / (std::to_string(part) + "-CODE.bin"));
-      if (check.mode == SpiCheckMode::uploader || check.mode == SpiCheckMode::all) {
-        original_uploader_handshake(image, argv[1], part);
-        if (check.mode == SpiCheckMode::uploader) { continue; }
-      }
-      if (check.mode != SpiCheckMode::kernel) {
-        Fixture fixture(image, placement);
-        controllers(fixture, argv[1], placement);
-        static_cast<void>(factory(fixture, argv[1], placement, false));
-        const auto endpoint = factory(fixture, argv[1], placement, true);
-        transport(fixture, argv[1], placement, endpoint);
-        std::cout << "Part " << part
-                  << ": original SPI controllers/format/factory/heap/GPIO and transport"
-                     " execute against clocked serial loopback and real buffer backpressure\n";
-      }
-      if (check.mode == SpiCheckMode::controllers) { continue; }
-      for (unsigned int channel = 0; channel < 2; ++channel) {
-        if (check.mode == SpiCheckMode::kernel && channel != check.selected.channel) { continue; }
-        kernel_transfer(image, argv[1], {.part = part, .channel = channel});
-      }
+      check_part(check, image, argv[1], part);
     }
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

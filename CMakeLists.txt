@@ -146,6 +146,9 @@ add_executable(lead-a1-emu src/app/main.cpp)
 target_link_libraries(lead-a1-emu PRIVATE lead_a1_core)
 
 if(BUILD_TESTING)
+  add_executable(lead-a1-spi-slave-boot-test test/spi_slave_boot_test.cpp)
+  target_link_libraries(lead-a1-spi-slave-boot-test PRIVATE lead_a1_sharc)
+  add_test(NAME sharc_spi_slave_boot_profile COMMAND lead-a1-spi-slave-boot-test)
   add_executable(lead-a1-spi-sharc-link-test test/spi_sharc_link_test.cpp)
   target_link_libraries(lead-a1-spi-sharc-link-test PRIVATE lead_a1_board)
   add_test(NAME processor_spi_sharc_wires COMMAND lead-a1-spi-sharc-link-test)
@@ -636,6 +639,8 @@ if(BUILD_TESTING)
     lead_a1_add_original_check("original_arm_spi_controls_${part}" "spi-controls-${part}")
     lead_a1_add_original_check("original_arm_spi_uploader_${part}" "spi-uploader-${part}")
     foreach(channel RANGE 0 1)
+      lead_a1_add_original_check("original_arm_spi_reset_kernel_${part}_${channel}"
+        "spi-reset-kernel-${part}-${channel}")
       lead_a1_add_original_check("original_arm_spi_kernel_${part}_${channel}"
         "spi-kernel-${part}-${channel}")
     endforeach()
@@ -685,6 +690,7 @@ if(BUILD_TESTING)
     DEPENDS lead-a1-sharc-dma-fabric-test lead-a1-sharc-dma-arbiter-test lead-a1-sharc-idp-dma-bus-test lead-a1-sharc-idp-dma-test lead-a1-sharc-pcg-bus-test lead-a1-sharc-pcg-test lead-a1-sharc-picr-test lead-a1-sharc-picr-bus-test format-check lead-a1-emu lead-a1-firmware-test lead-a1-image-test
       lead-a1-processor-links-test
       lead-a1-spi-sharc-link-test
+      lead-a1-spi-slave-boot-test
       lead-a1-sharc-lirptl-test
       lead-a1-sharc-sport-test
       lead-a1-sharc-sport-bus-test

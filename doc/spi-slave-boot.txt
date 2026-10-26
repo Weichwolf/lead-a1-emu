@@ -1,0 +1,50 @@
+One programmable SPI instance from the explicit slave-boot profile
+
+SharcSpiSlaveBootReference selects HWR24-15/16 Tables24-9/10: SPICTL 0x4d22,
+SPIDMAC 7, IISPI 0x92000, IMSPI 1 and CSPI 384. It describes the peripheral after
+the slave-boot configuration has been selected; it does not detect Nord straps
+or qualify physical reset/PLL timing. Initial clock knowledge stays unknown
+until a real supplied pin observation. Empty RX/TX data stays absent.
+
+The same SharcSpi object and SharcSpiPort mapping can receive the kernel and
+later accept the firmware's DMA configuration. There is no replacement of the
+receiver after 384 words. The existing completed-bootstrap constructor retains
+its stricter handoff validation. SharcSpiBoot remains a separate functional
+packing/edge reference; its per-word direct writes do not qualify bus timing.
+
+The ordinary RX FIFO, receive latch and DMA logic apply from the first bit.
+HWR16-28/29 specifies groups of four, with a shorter final group. Serial input
+does not decrement CSPI or write RAM without an explicit grant. The final
+completion event appears only after the final RAM write succeeds. FIFO overflow
+retains its actual error/data state; it never completes a shortened kernel.
+DMA requests can use the bound internal-memory bus and actual IOD0 word grants.
+A failed RAM write retains the request and all real FIFO/count/event state;
+retry at that same grant advances no time.
+
+No core, readiness GPIO, initial boot IRQ recognition, return frame or reset
+sequencer is synthesized. HWR24-25's initial vector RTI and the associated
+processor-control state remain board work (sharc.txt). A completion event is
+neither a qualified first Execute PC nor a completed instrument boot.
+PGRrev2.4 4-29 categorizes the boot peripheral interrupt as nonmaskable; the
+ordinary programmable IRQ mask/recognition path does not establish this initial
+entry. HWR24-8/25 and the vendor loader comment establish boot-idle/vector/RTI
+ordering, but not a complete initial processor-control snapshot.
+
+Owned tests compare all 384 normal32 words and all 256 native48 aliases, retain
+the four-word FIFO threshold and literal count/request/event ordering through
+384 actual IOD0 grants. The same mapped port then performs another three-word
+DMA using actual MMIO configuration. Other checks cover active parameter writes,
+invalid completed-bootstrap input, absent RAM and no-time retry, withheld grants
+and overflow without false completion. The bus phase is an explicit owned input.
+
+Four optional original cases execute the unchanged MCU factory/block writer for
+both bundle parts and both transport arguments against this initial profile.
+The full SPI port is mapped before the first bit; every transmitted halfword,
+normal32 word and native48 instruction is compared with pinned original data.
+The 384 writes use actual IOD0 grants, and the real initial completion event is
+left pending. No DSP instruction executes or initial frame is assumed in those
+cases. The 200 MHz MCU input, functional serial/memory scheduling, GPIO selection
+and MISO pull remain explicit reference inputs, not physical clock/wiring proof.
+
+  cmake --build --preset strict
+  ctest --preset strict -R '^(sharc_spi_slave_boot_profile|original_arm_spi_reset_kernel_[01]_[01])$' --output-on-failure

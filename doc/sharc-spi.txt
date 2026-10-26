@@ -1,19 +1,25 @@
 SHARC programmable SPI receive DMA reference
 
 SharcSpi is the runtime continuation of the explicit 214xx slave-bootstrap
-reference, not another hardcoded block loader. Its constructor requires a
-completed 384-word SharcSpiBoot state. Selection, clock baseline and word
-alignment survive the handoff; SPICTL initially is 0x4d22 (slave, LSB32, idle high,
-rising sample, DMISO, TIMOD DMA, GM discard). No physical wiring, latency,
+reference, not another hardcoded block loader. The completed-bootstrap
+constructor requires a completed 384-word SharcSpiBoot state. Selection, clock
+baseline and word alignment survive that handoff; SPICTL initially is 0x4d22
+(slave, LSB32, idle high, rising sample, DMISO, TIMOD DMA, GM discard). No physical wiring, latency,
 clock rate, historical core interrupt state or ready signal is implied.
 The shared functional control/buffer facade and its separate timing gaps are
 described in sharc-spi-port.txt; it preserves this same peripheral instance.
+Alternatively, SharcSpiSlaveBootReference starts the programmable peripheral
+with the documented initial 384-word slave-boot profile. Its FIFO, actual RAM
+grants and completion event apply from the first bit; the same object can then
+accept software DMA configuration. See spi-slave-boot.txt for that contract
+and its still-unqualified initial core interrupt/return/reset sequencing.
 
 Map IOP words0x1080..0x1084 to this device. IMSPI supplies a signed16 modifier;
 IISPI selects a normal-word internal address with offset0x80000 and a wrapped
 19-bit cursor. CSPI writes arm a transfer; writing zero requests65536 words,
 while a completed count of zero remains idle until another software write.
-The initial runtime count is the completed bootstrap count, not a new write.
+The completed-bootstrap constructor retains count zero without rearming; the
+explicit initial slave-boot profile starts with 384 pending words.
 The modifier/index may change after completion before the next count write.
 Active parameter changes fail until separately qualified.
 

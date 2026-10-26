@@ -144,6 +144,10 @@ void write_group(SharcMemory &memory, SharcSpiState &state, unsigned int count) 
 
 }
 
+SharcSpi::SharcSpi(SharcSpiSlaveBootReference /*reference*/) {
+  current_.serial = SharcSpiBoot::slave_reference_214xx().state();
+}
+
 SharcSpi::SharcSpi(const SharcBootState &completed_boot) {
   if (completed_boot.remaining != 0 || completed_boot.bits != 0 || completed_boot.shift != 0 ||
       completed_boot.next_word != boot_end || !completed_boot.clock) {

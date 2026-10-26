@@ -14,6 +14,9 @@ namespace lead_a1 {
 
 inline constexpr std::uint32_t sharc_spi_boot_control = 0x4d22;
 
+// Explicit HWR Tables24-9/10 slave-boot peripheral profile, not detected Nord straps.
+struct SharcSpiSlaveBootReference {};
+
 struct SharcSpiState {
   SharcBootState serial;
   std::uint16_t modifier{1};
@@ -36,7 +39,7 @@ struct SharcSpiState {
   bool operator==(const SharcSpiState &) const = default;
 };
 
-// Programmable receive DMA following the explicit 214xx SPI boot reference.
+// SPI receive DMA with an explicit slave-boot or completed-bootstrap profile.
 // This facade maps DMA words0x1080..0x1084. SharcSpiPort maps the complete
 // control/DMA aperture to this same state; see its functional reference contract.
 // Serial edges and memory arbitration grants are separate owner events. One
@@ -44,6 +47,7 @@ struct SharcSpiState {
 // on MMIO reads. Other SPI modes, register blocks and chaining remain guarded.
 class SharcSpi final : public MemoryDevice {
 public:
+  explicit SharcSpi(SharcSpiSlaveBootReference reference);
   explicit SharcSpi(const SharcBootState &completed_boot);
   [[nodiscard]] const SharcSpiState &state() const;
 
